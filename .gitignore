@@ -1,0 +1,28 @@
+# 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+dist/
+/server
+
+# 测试与覆盖率
+*.test
+*.out
+coverage.txt
+
+# 依赖备份文件
+*.bak
+
+# 日志
+logs/
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
