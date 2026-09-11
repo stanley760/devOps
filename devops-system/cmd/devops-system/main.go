@@ -6,7 +6,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"devops-system/cmd"
+	"devops-system/internal/cmd"
 )
 
 var version string

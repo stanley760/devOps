@@ -10,11 +10,19 @@ import (
 	"github.com/spf13/cobra"
 
 	infracfg "devops-infra/config"
+	"devops-infra/grpcx"
 	"devops-infra/httpx"
 	"devops-infra/logger"
 
+	"devops-id/pkg/idclient"
+
+	"devops-system/internal/auth"
 	"devops-system/internal/config"
+	"devops-system/internal/db"
+	"devops-system/internal/model"
 	"devops-system/internal/router"
+	"devops-system/internal/service"
+	"devops-system/internal/store"
 )
 
 var confFile string
@@ -68,7 +76,7 @@ func Execute(version string) {
 			panic(err)
 		}
 	})
-	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(serverCmd, migrateCmd)
 	if err := rootCmd.Execute(); err != nil {
 		cobra.CheckErr(err)
 	}
@@ -83,6 +91,34 @@ var serverCmd = &cobra.Command{
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
-		return httpx.Run(cfg.Server, router.Register())
+
+		// 装配链（方案 11.1）：db → store(Redis 会话) → idclient（发号）→ auth/service → httpx
+		if err := db.Init(cfg.Mysql); err != nil {
+			return err
+		}
+		if err := store.Init(cfg.Redis); err != nil {
+			return err
+		}
+		conn, err := grpcx.Dial(cmd.Context(), cfg.IDClient.Endpoint, cfg.IDClient.DialTimeout)
+		if err != nil {
+			return err
+		}
+		idc := idclient.New(conn, idclient.BufferConfig{
+			Batch:       cfg.IDClient.Batch,
+			LowWater:    cfg.IDClient.LowWater,
+			CallTimeout: cfg.IDClient.CallTimeout,
+		})
+		model.SetIDGenerator(idc)
+
+		authM := auth.New(cfg.JWT)
+		authSvc := service.NewAuth(cfg, authM)
+
+		err = httpx.Run(cfg.Server, router.Register(authM, authSvc))
+
+		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 idclient、store、db
+		_ = grpcx.Close(conn)
+		_ = store.Close()
+		_ = db.Close()
+		return err
 	},
 }

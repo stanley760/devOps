@@ -13,7 +13,6 @@ import (
 	"devops-infra/logger"
 
 	"devops-id/internal/config"
-	"devops-id/internal/server"
 )
 
 var confFile string
@@ -67,7 +66,7 @@ func Execute(version string) {
 			panic(err)
 		}
 	})
-	rootCmd.AddCommand(server.Cmd)
+	rootCmd.AddCommand(serverCmd, migrateCmd)
 	if err := rootCmd.Execute(); err != nil {
 		cobra.CheckErr(err)
 	}
