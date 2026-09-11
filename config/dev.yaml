@@ -1,0 +1,9 @@
+# 开发环境：仅覆盖与 config.yaml 不同的字段
+# 用法：APP_ENV=dev ./devops
+log:
+  # 切分粒度小一些，方便观察滚动效果
+  max_size: 50
+  max_backups: 10
+  max_age: 3
+  # 不压缩，方便直接查看历史文件
+  compress: none

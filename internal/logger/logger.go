@@ -127,14 +127,6 @@ func Close() error {
 	return errors.Join(errs...)
 }
 
-// Rotate 手动触发一次日志切分（例如收到信号时）。
-func Rotate() error {
-	if currentRolling == nil {
-		return nil
-	}
-	return currentRolling.Rotate()
-}
-
 func parseLevel(s string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":

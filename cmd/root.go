@@ -1,34 +1,37 @@
 // Package cmd 定义 devOps 的命令行入口。
 //
-// 初始化与收尾分别挂在 cobra 的 PersistentPreRunE / PersistentPostRunE 上，
-// 任何子命令执行前后都会自动完成，新增子命令时无需关心这些公共逻辑。
+// 配置管理：路径由 -f/--config-file 绑定，加载与读取封装在 internal/config，
+// cobra.OnInitialize 中完成加载，PersistentPreRunE 中完成组件初始化。
 package cmd
 
 import (
 	"log/slog"
-
 	"github.com/spf13/cobra"
-
 	"devOps/cmd/initialize"
+	"devOps/cmd/server"
+	"devOps/internal/config"
 )
 
 var (
-	initOpts   = initialize.NewOptions()
-	appVersion string
+	confFile string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "devops",
 	Short: "devOps 运维服务",
 
-	// 所有子命令执行前都会先跑这里：加载配置、初始化日志
+	// 所有子命令执行前都会先跑这里：初始化日志
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := initialize.Setup(initOpts)
+		cfg, err := initialize.Setup()
 		if err != nil {
 			return err
 		}
 		// 至此日志已就绪，可以放心使用 slog
-		slog.Debug("初始化完成", "config", initOpts.ConfigPath, "logLevel", cfg.Log.Level)
+		slog.Debug("初始化完成",
+			"config", config.Files(),
+			"env", config.Env(),
+			"logLevel", cfg.Log.Level,
+		)
 		return nil
 	},
 
@@ -38,22 +41,29 @@ var rootCmd = &cobra.Command{
 	},
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 演示不同级别的日志输出。配置 log.level 后可观察哪些会被过滤。
-		slog.Debug("调试信息：细粒度诊断，通常只在排查问题时开启", "module", "boot")
-		slog.Info("服务已就绪", "version", appVersion)
-		slog.Warn("配置告警：可继续工作但建议检查", "hint", "示例提示")
-		slog.Error("错误信息：发生了需要关注的问题", "err", "示例错误")
-		return nil
+		return cmd.Help()
 	},
 }
 
 func init() {
-	initialize.AddFlags(rootCmd, initOpts)
+	// confFile 绑定到 -f/--config-file，与 ecmdb 保持一致
+	rootCmd.PersistentFlags().StringVarP(
+		&confFile, "config-file", "f", "config/config.yaml", "the service config from file",
+	)
 }
 
 // Execute 执行根命令。version 用于 --version 输出。
-func Execute(version string) error {
-	appVersion = version
+func Execute(version string) {
 	rootCmd.Version = version
-	return rootCmd.Execute()
+
+	// cobra.OnInitialize 会在每个命令的 Run 之前执行，此处完成配置加载
+	cobra.OnInitialize(func() {
+		if err := config.Init(confFile); err != nil {
+			panic(err)
+		}
+	})
+	rootCmd.AddCommand(server.Cmd)
+	if err := rootCmd.Execute(); err != nil {
+		cobra.CheckErr(err)
+	}
 }

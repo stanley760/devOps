@@ -21,3 +21,17 @@ log:
   compress: gzip
   # 时间滚动间隔，到点即使没写满也切分，如 24h、12h；留空或 0 则仅按大小滚动
   rotation_interval: 24h
+
+# HTTP 服务
+server:
+  # 监听端口
+  port: 8080
+  # 读超时，0 表示不限制
+  read_timeout: 10s
+  # 写超时，0 表示不限制
+  write_timeout: 10s
+  # 可信反向代理 IP/CIDR；为空表示不信任任何代理
+  # 例如 nginx 在本机： [127.0.0.1, ::1]
+  trusted_proxies: 
+    - 127.0.0.1
+    - ::1

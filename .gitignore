@@ -6,7 +6,7 @@
 *.dylib
 dist/
 /server
-
+.*/
 # 测试与覆盖率
 *.test
 *.out

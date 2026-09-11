@@ -1,0 +1,12 @@
+# 测试环境：仅覆盖与 config.yaml 不同的字段
+# 用法：APP_ENV=test ./devops
+log:
+  # 只关注告警及以上
+  level: warn
+  # 独立目录，避免与 dev 日志混淆
+  dir: logs/test
+  # 测试日志保留期短
+  max_size: 20
+  max_backups: 5
+  max_age: 1
+  compress: none
