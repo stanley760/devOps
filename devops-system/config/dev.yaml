@@ -1,0 +1,6 @@
+# dev 环境差异：覆盖与基础配置不同的字段
+log:
+  max_size: 50
+  max_backups: 10
+  max_age: 3
+  compress: none

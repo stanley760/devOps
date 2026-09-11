@@ -1,0 +1,9 @@
+# prod 环境差异：级别收敛、JSON 结构化、大缓冲
+log:
+  level: info
+  console: false
+  format: json
+  buffer: 16384
+  max_size: 200
+  max_backups: 60
+  max_age: 15
