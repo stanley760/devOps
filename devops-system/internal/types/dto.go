@@ -59,17 +59,17 @@ type UserInfoResp struct {
 
 // RouterNode 前端路由节点（菜单树 type 1/2 转换）。
 type RouterNode struct {
-	ID           ID          `json:"id"`
-	Name         string      `json:"name"`
-	Path         string      `json:"path"`
-	Component    string      `json:"component"`
-	ComponentName string     `json:"componentName"`
-	Icon         string      `json:"icon"`
-	Sort         int         `json:"sort"`
-	Visible      bool        `json:"visible"`
-	KeepAlive    bool        `json:"keepAlive"`
-	AlwaysShow   bool        `json:"alwaysShow"`
-	Children     []RouterNode `json:"children"`
+	ID            ID           `json:"id"`
+	Name          string       `json:"name"`
+	Path          string       `json:"path"`
+	Component     string       `json:"component"`
+	ComponentName string       `json:"componentName"`
+	Icon          string       `json:"icon"`
+	Sort          int          `json:"sort"`
+	Visible       bool         `json:"visible"`
+	KeepAlive     bool         `json:"keepAlive"`
+	AlwaysShow    bool         `json:"alwaysShow"`
+	Children      []RouterNode `json:"children"`
 }
 
 // UpdateProfileReq PUT /auth/profile 入参。

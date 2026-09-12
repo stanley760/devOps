@@ -23,16 +23,16 @@ type Config struct {
 
 // MysqlConfig MySQL 连接配置
 type MysqlConfig struct {
-	Host              string        `mapstructure:"host"`
-	Port              int           `mapstructure:"port"`
-	Username          string        `mapstructure:"username"`
-	Password          string        `mapstructure:"password"`
-	Database          string        `mapstructure:"database"`
-	Charset           string        `mapstructure:"charset"`
-	MaxIdleConns      int           `mapstructure:"max_idle_conns"`
-	MaxOpenConns      int           `mapstructure:"max_open_conns"`
-	ConnMaxLifetime   time.Duration `mapstructure:"conn_max_lifetime"`
-	LogLevel          string        `mapstructure:"log_level"` // silent|error|warn|info
+	Host            string        `mapstructure:"host"`
+	Port            int           `mapstructure:"port"`
+	Username        string        `mapstructure:"username"`
+	Password        string        `mapstructure:"password"`
+	Database        string        `mapstructure:"database"`
+	Charset         string        `mapstructure:"charset"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	LogLevel        string        `mapstructure:"log_level"` // silent|error|warn|info
 }
 
 // RedisConfig Redis 连接配置
@@ -46,18 +46,18 @@ type RedisConfig struct {
 
 // JWTConfig JWT 双 token 配置
 type JWTConfig struct {
-	SigningKey     string        `mapstructure:"signing_key"`     // HS256 签名密钥，至少 32 位随机串
-	Issuer        string        `mapstructure:"issuer"`          // 签发者
-	AccessExpire  time.Duration `mapstructure:"access_expire"`    // access token 有效期
-	RefreshExpire time.Duration `mapstructure:"refresh_expire"`   // refresh token（会话）有效期
+	SigningKey    string        `mapstructure:"signing_key"`    // HS256 签名密钥，至少 32 位随机串
+	Issuer        string        `mapstructure:"issuer"`         // 签发者
+	AccessExpire  time.Duration `mapstructure:"access_expire"`  // access token 有效期
+	RefreshExpire time.Duration `mapstructure:"refresh_expire"` // refresh token（会话）有效期
 }
 
 // TenantConfig 多租户配置
 type TenantConfig struct {
 	Mode           string `mapstructure:"mode"`            // shared 共享Schema（默认）| schema 租户独立库
 	SchemaTemplate string `mapstructure:"schema_template"` // 模式B 库名模板，如 tenant_{code}
-	MaxPools       int    `mapstructure:"max_pools"`        // 模式B 租户连接池上限（LRU 淘汰）
-	DefaultCode    string `mapstructure:"default_code"`     // 登录未指定租户时的默认租户 code
+	MaxPools       int    `mapstructure:"max_pools"`       // 模式B 租户连接池上限（LRU 淘汰）
+	DefaultCode    string `mapstructure:"default_code"`    // 登录未指定租户时的默认租户 code
 }
 
 // IDClientConfig devops-id 发号服务接入配置（含客户端预取缓冲）

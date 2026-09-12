@@ -37,6 +37,17 @@ func Run(cfg config.ServerConfig, register Register) error {
 	r.Use(gin.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.AccessLog())
+	// CORS（方案 6.2 中间件链 Recovery → AccessLog → CORS）：
+	// 未配置 allow_origins 则不挂载（仅同源访问）
+	if len(cfg.CORS.AllowOrigins) > 0 {
+		r.Use(middleware.CORS(middleware.CORSConfig{
+			AllowOrigins:     cfg.CORS.AllowOrigins,
+			AllowMethods:     cfg.CORS.AllowMethods,
+			AllowHeaders:     cfg.CORS.AllowHeaders,
+			AllowCredentials: cfg.CORS.AllowCredentials,
+			MaxAge:           cfg.CORS.MaxAge,
+		}))
+	}
 
 	// 未匹配路由 / 未允许方法同样走统一信封
 	r.HandleMethodNotAllowed = true

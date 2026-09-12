@@ -1,4 +1,4 @@
-﻿// Package logger 基于标准库 log/slog 封装应用日志。
+// Package logger 基于标准库 log/slog 封装应用日志。
 //
 // 能力：
 //   - 日志级别通过配置读取（debug/info/warn/error）

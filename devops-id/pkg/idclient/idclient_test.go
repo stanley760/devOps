@@ -13,6 +13,8 @@ import (
 	"devops-id/pkg/idclient"
 )
 
+// dial 建立客户端连接并探活：gRPC 懒连接，dial 不触发真实连接，
+// 故以 Ping 失败（服务未启动）作为跳过条件。
 func dial(t *testing.T) *idclient.Client {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -23,20 +25,20 @@ func dial(t *testing.T) *idclient.Client {
 		t.Skipf("devops-id 服务未启动，跳过集成测试: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return idclient.New(conn, idclient.BufferConfig{
+	c := idclient.New(conn, idclient.BufferConfig{
 		Batch:       10,
 		LowWater:    0.2,
 		CallTimeout: 2 * time.Second,
 	})
+	if err := c.Ping(ctx); err != nil {
+		t.Skipf("devops-id 服务未启动，跳过集成测试: %v", err)
+	}
+	return c
 }
 
 func TestNextSequential(t *testing.T) {
 	c := dial(t)
 	ctx := context.Background()
-
-	if err := c.Ping(ctx); err != nil {
-		t.Fatalf("健康检查失败: %v", err)
-	}
 
 	var prev int64
 	for i := 0; i < 50; i++ {

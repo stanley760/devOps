@@ -53,7 +53,10 @@ func (s *Auth) Login(ctx context.Context, req types.LoginReq, clientIP string) (
 		return nil, errs.New(errs.CodeForbidden, "租户已过期")
 	}
 
-	u, err := dao.GetUserByUsername(ctx, t.ID, req.Username)
+	// 公开路由无 Tenant 中间件：解析出租户后显式注入 ctx（TenantPlugin/Resolver 依据）
+	ctx = tenantdb.With(ctx, t.ID, t.Code)
+
+	u, err := dao.GetUserByUsername(ctx, req.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +71,7 @@ func (s *Auth) Login(ctx context.Context, req types.LoginReq, clientIP string) (
 	if err != nil {
 		return nil, err
 	}
-	dao.TouchLogin(ctx, t.ID, u.ID, clientIP)
+	dao.TouchLogin(ctx, u.ID, clientIP)
 
 	return &types.LoginResp{
 		AccessToken:  access,
@@ -85,20 +88,22 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 		return nil, errs.New(errs.CodeUnauthorized, "刷新令牌无效或已过期")
 	}
 
-	u, err := dao.GetUserByID(ctx, tid, uid)
-	if err != nil {
-		return nil, errs.New(errs.CodeUnauthorized, "用户不存在或已删除")
-	}
-	if u.Status != 0 {
-		return nil, errs.New(errs.CodeForbidden, "用户已停用")
-	}
-
+	// 公开路由：先校验租户可用，再注入租户 ctx（含 code，模式B 切库依据）
 	var t model.Tenant
 	if err := tenantdb.DB(ctx).Where("id = ?", tid).First(&t).Error; err != nil || t.Status != 0 {
 		return nil, errs.New(errs.CodeForbidden, "租户不可用")
 	}
 	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) {
 		return nil, errs.New(errs.CodeForbidden, "租户已过期")
+	}
+	ctx = tenantdb.With(ctx, tid, t.Code)
+
+	u, err := dao.GetUserByID(ctx, uid)
+	if err != nil {
+		return nil, errs.New(errs.CodeUnauthorized, "用户不存在或已删除")
+	}
+	if u.Status != 0 {
+		return nil, errs.New(errs.CodeForbidden, "用户已停用")
 	}
 
 	access, refresh, expiresIn, err := s.authM.Rotate(
@@ -121,15 +126,15 @@ func (s *Auth) Logout(ctx context.Context, claims *auth.AccessClaims) {
 
 // Info 用户信息 + 租户 + 角色 + 权限标识。
 func (s *Auth) Info(ctx context.Context, claims *auth.AccessClaims) (*types.UserInfoResp, error) {
-	u, err := dao.GetUserByID(ctx, claims.TenantID, claims.UserID)
+	u, err := dao.GetUserByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
 	}
-	roles, err := dao.GetUserRoles(ctx, claims.TenantID, claims.UserID)
+	roles, err := dao.GetUserRoles(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
 	}
-	menus, err := dao.GetUserMenus(ctx, claims.TenantID, claims.UserID, nil)
+	menus, err := dao.GetUserMenus(ctx, claims.UserID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -150,17 +155,17 @@ func (s *Auth) Info(ctx context.Context, claims *auth.AccessClaims) (*types.User
 	}
 
 	dto := types.UserDTO{
-		ID:        types.ID(u.ID),
-		Username:  u.Username,
-		Nickname:  u.Nickname,
-		Email:     u.Email,
-		Mobile:    derefString(u.Mobile),
-		Sex:       u.Sex,
-		Avatar:    u.Avatar,
-		DeptID:    types.ID(u.DeptID),
-		PostIDs:   parsePostIDs(u.PostIDs),
-		Remark:    u.Remark,
-		LoginIP:   u.LoginIP,
+		ID:       types.ID(u.ID),
+		Username: u.Username,
+		Nickname: u.Nickname,
+		Email:    u.Email,
+		Mobile:   derefString(u.Mobile),
+		Sex:      u.Sex,
+		Avatar:   u.Avatar,
+		DeptID:   types.ID(u.DeptID),
+		PostIDs:  parsePostIDs(u.PostIDs),
+		Remark:   u.Remark,
+		LoginIP:  u.LoginIP,
 	}
 	if u.LoginDate != nil {
 		dto.LoginDate = *u.LoginDate
@@ -176,7 +181,7 @@ func (s *Auth) Info(ctx context.Context, claims *auth.AccessClaims) (*types.User
 
 // Routers 前端路由树（本租户可见菜单 type 1/2）。
 func (s *Auth) Routers(ctx context.Context, claims *auth.AccessClaims) ([]types.RouterNode, error) {
-	menus, err := dao.GetUserMenus(ctx, claims.TenantID, claims.UserID, []int8{1, 2})
+	menus, err := dao.GetUserMenus(ctx, claims.UserID, []int8{1, 2})
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +237,7 @@ func (s *Auth) UpdateProfile(ctx context.Context, claims *auth.AccessClaims, req
 	}
 
 	res := tenantdb.DB(ctx).Model(&model.User{}).
-		Where("tenant_id = ? AND id = ?", claims.TenantID, claims.UserID).
+		Where("id = ?", claims.UserID).
 		Updates(updates)
 	if res.Error != nil {
 		return errs.Wrap(res.Error, errs.CodeInternal, "更新个人信息失败")
@@ -245,7 +250,7 @@ func (s *Auth) UpdateProfile(ctx context.Context, claims *auth.AccessClaims, req
 
 // UpdatePassword 改密：校验旧密 → 更新 → 撤销全部会话（踢下线，重新登录）。
 func (s *Auth) UpdatePassword(ctx context.Context, claims *auth.AccessClaims, req types.UpdatePasswordReq) error {
-	u, err := dao.GetUserByID(ctx, claims.TenantID, claims.UserID)
+	u, err := dao.GetUserByID(ctx, claims.UserID)
 	if err != nil {
 		return err
 	}
@@ -258,7 +263,7 @@ func (s *Auth) UpdatePassword(ctx context.Context, claims *auth.AccessClaims, re
 		return errs.Wrap(err, errs.CodeInternal, "密码加密失败")
 	}
 	res := tenantdb.DB(ctx).Model(&model.User{}).
-		Where("tenant_id = ? AND id = ?", claims.TenantID, claims.UserID).
+		Where("id = ?", claims.UserID).
 		Updates(map[string]any{"password": string(hash), "updater": claims.Username})
 	if res.Error != nil {
 		return errs.Wrap(res.Error, errs.CodeInternal, "更新密码失败")

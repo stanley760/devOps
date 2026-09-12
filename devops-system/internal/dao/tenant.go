@@ -1,0 +1,104 @@
+// 租户管理 dao（P7）：t_tenant 为全局表（无 tenant_id，TenantPlugin 放行），
+// 平台路由 ctx 无租户亦可直接访问。
+package dao
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"time"
+
+	"gorm.io/gorm"
+
+	"devops-infra/errs"
+
+	"devops-system/internal/model"
+	"devops-system/internal/tenantdb"
+	"devops-system/internal/types"
+)
+
+// ListTenants 分页查询租户（筛选 name/code/status）。
+func ListTenants(ctx context.Context, q types.TenantPageQuery) ([]model.Tenant, int64, error) {
+	db := tenantdb.DB(ctx).Model(&model.Tenant{})
+	if q.Name != "" {
+		db = db.Where("name LIKE ?", "%"+q.Name+"%")
+	}
+	if q.Code != "" {
+		db = db.Where("code = ?", q.Code)
+	}
+	if q.Status != nil {
+		db = db.Where("status = ?", *q.Status)
+	}
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询租户总数失败")
+	}
+	pageNum, pageSize := pageOf(q.PageNum, q.PageSize)
+	var tenants []model.Tenant
+	if err := db.Order("id ASC").
+		Offset((pageNum - 1) * pageSize).Limit(pageSize).
+		Find(&tenants).Error; err != nil {
+		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询租户列表失败")
+	}
+	return tenants, total, nil
+}
+
+// GetTenantByID 按 ID 取租户。
+func GetTenantByID(ctx context.Context, tenantID int64) (*model.Tenant, error) {
+	var t model.Tenant
+	err := tenantdb.DB(ctx).Where("id = ?", tenantID).First(&t).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errs.New(errs.CodeNotFound, "租户不存在")
+		}
+		return nil, errs.Wrap(err, errs.CodeInternal, "查询租户失败")
+	}
+	return &t, nil
+}
+
+// TenantCodeExists 租户编码是否已占用（全局唯一）。
+func TenantCodeExists(ctx context.Context, code string, excludeID int64) (bool, error) {
+	db := tenantdb.DB(ctx).Model(&model.Tenant{}).Where("code = ?", code)
+	if excludeID > 0 {
+		db = db.Where("id != ?", excludeID)
+	}
+	var cnt int64
+	if err := db.Count(&cnt).Error; err != nil {
+		return false, errs.Wrap(err, errs.CodeInternal, "检查租户编码唯一性失败")
+	}
+	return cnt > 0, nil
+}
+
+// CreateTenant 创建租户（主键发号，biz_tag=tenant）。
+func CreateTenant(ctx context.Context, t *model.Tenant) error {
+	if err := tenantdb.DB(ctx).Create(t).Error; err != nil {
+		return errs.Wrap(err, errs.CodeInternal, "创建租户失败")
+	}
+	return nil
+}
+
+// UpdateTenant 更新租户字段。
+func UpdateTenant(ctx context.Context, tenantID int64, updates map[string]any) error {
+	res := tenantdb.DB(ctx).Model(&model.Tenant{}).
+		Where("id = ?", tenantID).Updates(updates)
+	if res.Error != nil {
+		return errs.Wrap(res.Error, errs.CodeInternal, "更新租户失败")
+	}
+	if res.RowsAffected == 0 {
+		return errs.New(errs.CodeNotFound, "租户不存在")
+	}
+	return nil
+}
+
+// SoftDeleteTenantTx 事务内软删租户：改写 code 绕开全局唯一索引（同 code 可重建）。
+func SoftDeleteTenantTx(tx *gorm.DB, tenantID int64, code string) error {
+	res := tx.Model(&model.Tenant{}).Where("id = ?", tenantID).Updates(map[string]any{
+		"code":       code + "_del_" + strconv.FormatInt(tenantID, 10),
+		"deleted_at": time.Now(),
+	})
+	if res.Error != nil {
+		return errs.Wrap(res.Error, errs.CodeInternal, "删除租户失败")
+	}
+	return nil
+}

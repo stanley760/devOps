@@ -7,3 +7,11 @@ log:
   max_size: 200
   max_backups: 60
   max_age: 15
+
+# prod 跨域收敛为具体前端域名（继承基础配置的 localhost 白名单不适用于生产）
+server:
+  cors:
+    allow_origins:
+      - "https://admin.example.com"   # TODO: 替换为实际前端域名
+    allow_credentials: true
+    max_age: 12h

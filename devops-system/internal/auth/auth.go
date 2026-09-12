@@ -2,9 +2,9 @@
 //
 //   - Access：HS256，claims 携带 user_id/username/sid/tenant_id/tenant_code，短期（2h）
 //   - Refresh：UUID（sid），Redis 持会话态（键空间租户分段，方案 6.5）：
-//       t{tid}:auth:refresh:{sid} = user_id，TTL = refresh_expire（7d）
-//       t{tid}:auth:sids:{uid}    = SET<sid>（RevokeAllSessions 用）
-//       auth:sid2uid:{sid}        = "tid:uid"（refresh 端点由 sid 定位会话归属）
+//     t{tid}:auth:refresh:{sid} = user_id，TTL = refresh_expire（7d）
+//     t{tid}:auth:sids:{uid}    = SET<sid>（RevokeAllSessions 用）
+//     auth:sid2uid:{sid}        = "tid:uid"（refresh 端点由 sid 定位会话归属）
 //   - 每个请求校验 EXISTS refresh:{sid} —— 踢下线（logout/改密/停用）后旧 access 立即 401
 //   - refresh 端点轮换 sid（旧删新建），对齐 refresh token rotation 最佳实践
 package auth
@@ -178,4 +178,33 @@ func (m *Manager) RevokeAllSessions(ctx context.Context, tenantID, userID int64)
 	}
 	pipe.Del(ctx, skey)
 	pipe.Exec(ctx)
+}
+
+// RevokeTenantSessions 撤销租户全部会话（停用租户 → 全员下线）。
+// 遍历键空间 t{tid}:auth:sids:*，逐用户撤销并清理 sid2uid 索引。
+func (m *Manager) RevokeTenantSessions(ctx context.Context, tenantID int64) {
+	pattern := fmt.Sprintf("t%d:auth:sids:*", tenantID)
+	var cursor uint64
+	for {
+		keys, next, err := m.rdb.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return
+		}
+		pipe := m.rdb.Pipeline()
+		for _, skey := range keys {
+			sids, err := m.rdb.SMembers(ctx, skey).Result()
+			if err != nil {
+				continue
+			}
+			for _, sid := range sids {
+				pipe.Del(ctx, refreshKey(tenantID, sid))
+				pipe.Del(ctx, sid2uidKey(sid))
+			}
+			pipe.Del(ctx, skey)
+		}
+		pipe.Exec(ctx)
+		if cursor = next; cursor == 0 {
+			return
+		}
+	}
 }

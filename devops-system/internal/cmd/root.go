@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/spf13/cobra"
@@ -17,12 +18,14 @@ import (
 	"devops-id/pkg/idclient"
 
 	"devops-system/internal/auth"
+	"devops-system/internal/authz"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
 	"devops-system/internal/model"
 	"devops-system/internal/router"
 	"devops-system/internal/service"
 	"devops-system/internal/store"
+	"devops-system/internal/tenantdb"
 )
 
 var confFile string
@@ -92,8 +95,20 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		// 装配链（方案 11.1）：db → store(Redis 会话) → idclient（发号）→ auth/service → httpx
+		// 装配链（方案 11.1）：db → TenantPlugin(fail-closed) → [模式B Resolver] → authz
+		//   → store(Redis 会话) → idclient（发号）→ auth/service → httpx
 		if err := db.Init(cfg.Mysql); err != nil {
+			return err
+		}
+		if err := tenantdb.RegisterPlugin(db.Get()); err != nil {
+			return fmt.Errorf("注册租户过滤插件失败: %w", err)
+		}
+		if cfg.Tenant.Mode == "schema" { // 模式B：按租户解析独立库连接池
+			if err := tenantdb.InitResolver(cfg.Mysql, cfg.Tenant); err != nil {
+				return err
+			}
+		}
+		if err := authz.Init(db.Get()); err != nil {
 			return err
 		}
 		if err := store.Init(cfg.Redis); err != nil {
@@ -112,10 +127,19 @@ var serverCmd = &cobra.Command{
 
 		authM := auth.New(cfg.JWT)
 		authSvc := service.NewAuth(cfg, authM)
+		userSvc := service.NewUser(authM)
+		roleSvc := service.NewRole()
+		menuSvc := service.NewMenu()
+		deptSvc := service.NewDept()
+		postSvc := service.NewPost()
+		tenantSvc := service.NewTenant(cfg, authM)
 
-		err = httpx.Run(cfg.Server, router.Register(authM, authSvc))
+		err = httpx.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
+			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc))
 
-		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 idclient、store、db
+		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
+		tenantdb.CloseResolver()
+		authz.Close()
 		_ = grpcx.Close(conn)
 		_ = store.Close()
 		_ = db.Close()

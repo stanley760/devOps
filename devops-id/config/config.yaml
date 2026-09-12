@@ -35,7 +35,7 @@ idgen:
 
 etcd:                    # 仅 idgen.mode=snowflake 时使用
   endpoints:
-    - "127.0.0.1:2379"
+    - "192.168.215.3:2379"
   dial_timeout: 5s
   lease_ttl: 10s         # 宕机后槽位释放延迟
-  worker_cache: "data/worker_id" # 本地槽位缓存（优先复用原槽）
+  worker_cache: "data"   # 槽位/发号水位缓存目录（优先复用原槽位）

@@ -41,8 +41,8 @@ func Tenant() gin.HandlerFunc {
 			return
 		}
 
-		// ctx 注入租户：dao 层经 tenantdb.DB(ctx) 消费（TenantPlugin 过滤，P5）
-		ctx := tenantdb.With(c.Request.Context(), claims.TenantID)
+		// ctx 注入租户：dao 层经 tenantdb.DB(ctx) 消费（模式A 插件过滤 / 模式B 切库）
+		ctx := tenantdb.With(c.Request.Context(), claims.TenantID, claims.TenantCode)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}

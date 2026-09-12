@@ -1,9 +1,10 @@
 // Package middleware devops-system 业务中间件：JWT / Tenant（方案 6.2）。
 //
 // 统一中间件链：Recovery → AccessLog → CORS（infra httpx）
-//   ├─ 公开：/auth/login /auth/refresh
-//   └─ JWT → Tenant(租户校验) → [CasbinAuth(P5)] → 业务路由
-//   └─ JWT → Platform(g2 校验，P5) → 租户管理路由
+//
+//	├─ 公开：/auth/login /auth/refresh
+//	└─ JWT → Tenant(租户校验) → [CasbinAuth(P5)] → 业务路由
+//	└─ JWT → Platform(g2 校验，P5) → 租户管理路由
 package middleware
 
 import (

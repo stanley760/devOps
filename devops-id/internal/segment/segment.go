@@ -1,4 +1,4 @@
-// Package segment 实现美团 Leaf-segment 号段模式（服务端双 buffer）。
+// Package segment 实现美团 Leaf-segment 号段模式（服务端双 buffer + 动态 step）。
 //
 // 核心机制：
 //   - 号段从 MySQL t_leaf_alloc 批量取回内存（UPDATE 推进 max_id + 回读），
@@ -6,6 +6,8 @@
 //   - 双 buffer：cur 当前号段发号，剩余低于水位时异步预加载 next；
 //     DB 短暂不可用仍可发号（Leaf 解耦 DB 可用性的核心价值）
 //   - 双 buffer 耗尽且加载失败 → fail-fast 拒发（宁可拒发不可重号）
+//   - 动态 step（对齐 Leaf 进阶特性）：按号段消耗速率（两次回源间隔）调整步长，
+//     消耗快则翻倍防频繁回源，消耗慢则减半省号；调整值写回 t_leaf_alloc 跨实例生效
 //   - 服务重启丢号段尾部：趋势递增、非严格连续（业务可接受）
 package segment
 
@@ -14,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -58,12 +61,24 @@ type Manager struct {
 	buffers map[string]*segmentBuffer
 }
 
+// 动态 step 调整参数（对齐 Leaf 默认值）：
+// 两次回源间隔即号段消耗时长；消耗快于 15min 翻倍、慢于 30min 减半，步长范围 [100, 50000]。
+const (
+	stepGrowBelow   = 15 * time.Minute
+	stepShrinkAbove = 30 * time.Minute
+	stepMin         = int64(100)
+	stepMax         = int64(50000)
+)
+
 // segmentBuffer 单个 biz_tag 的双 buffer 状态。
 type segmentBuffer struct {
 	mu      sync.Mutex
 	cur     *buffer
 	next    *buffer // 预加载号段（双 buffer 核心）
-	loading bool   // 异步加载单飞去重
+	loading bool    // 异步加载单飞去重
+
+	curStep    int64     // 动态 step 当前值（回源时调整并写回 t_leaf_alloc）
+	lastLoadAt time.Time // 上次回源时间（与本次回源间隔 = 号段消耗时长）
 }
 
 // New 创建号段管理器。
@@ -127,13 +142,23 @@ func (m *Manager) nextN(ctx context.Context, bizTag string, count int) ([]int64,
 			continue
 		}
 
-		// next 也没有：同步回源加载（返回错误则 fail-fast）
-		nb, err := m.load(ctx, bizTag)
+		// next 也没有：同步回源加载（返回错误则 fail-fast；号段按 count 放大防死循环）
+		nb, nstep, err := m.load(ctx, bizTag, sb.curStep, sinceLastLoad(sb), count)
 		if err != nil {
 			return nil, fmt.Errorf("%w: biz_tag=%s: %v", ErrSegmentExhausted, bizTag, err)
 		}
+		sb.curStep = nstep
+		sb.lastLoadAt = time.Now()
 		sb.cur = nb
 	}
+}
+
+// sinceLastLoad 距上次回源的间隔（首次为 0；调用方持有 sb.mu）。
+func sinceLastLoad(sb *segmentBuffer) time.Duration {
+	if sb.lastLoadAt.IsZero() {
+		return 0
+	}
+	return time.Since(sb.lastLoadAt)
 }
 
 // get 取（或惰性创建）biz_tag 对应的 segmentBuffer。
@@ -156,6 +181,9 @@ func (m *Manager) asyncLoadIfNeeded(sb *segmentBuffer, bizTag string) {
 	if float64(sb.cur.remain()) >= float64(m.cfg.Step)*m.cfg.LowWater {
 		return // 未到水位
 	}
+	// 快照回源参数（goroutine 内 load 不持锁，避免阻塞发号）
+	prevStep := sb.curStep
+	since := sinceLastLoad(sb)
 	sb.loading = true
 	go func() {
 		defer func() {
@@ -163,53 +191,89 @@ func (m *Manager) asyncLoadIfNeeded(sb *segmentBuffer, bizTag string) {
 			sb.loading = false
 			sb.mu.Unlock()
 		}()
-		nb, err := m.load(context.Background(), bizTag)
+		nb, nstep, err := m.load(context.Background(), bizTag, prevStep, since, 1)
 		if err != nil {
 			// 预加载失败不打断发号：cur 未耗尽前无感知；耗尽后 nextN 会同步重试
 			return
 		}
 		sb.mu.Lock()
 		defer sb.mu.Unlock()
-		if sb.next == nil { // 防御：期间若已被填则丢弃（不回滚 DB，趋势递增语义下可接受）
+		sb.curStep = nstep
+		sb.lastLoadAt = time.Now()
+		// 防御：期间若 nextN 已同步加载过更新的号段（DB 慢 + 恰好耗尽），
+		// 丢弃本次较旧结果（号段浪费可接受，防 cur/next 逆序）
+		if sb.next == nil && (sb.cur == nil || nb.start > sb.cur.end) {
 			sb.next = nb
 		}
 	}()
 }
 
 // load 从 MySQL 取一个新号段：UPDATE 推进 + 回读，行锁保证多实例互斥。
-func (m *Manager) load(ctx context.Context, bizTag string) (*buffer, error) {
+// step 动态调整（对齐 Leaf）：首次回源取 t_leaf_alloc.step 为基准；
+// 后续按消耗间隔调整（prevStep 传入、新值随号段一并返回，由调用方在 sb.mu 下落账），
+// 并写回 t_leaf_alloc.step 供其他实例与 DBA 观察。
+// minCount 为本次请求所需最小号段数（同步取号传 count；预加载传 1）：
+// 一次性大批量时号段按需放大（只影响本次分配，不写回表），防 nextN 死循环。
+func (m *Manager) load(ctx context.Context, bizTag string, prevStep int64, sinceLast time.Duration, minCount int) (*buffer, int64, error) {
 	var alloc Alloc
 	if err := m.db.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("biz_tag = ?", bizTag).
 		First(&alloc).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("biz_tag 未注册: %s", bizTag)
+			return nil, 0, fmt.Errorf("biz_tag 未注册: %s", bizTag)
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
-	step := int64(alloc.Step)
-	if step <= 0 {
-		step = int64(m.cfg.Step)
+	var step int64
+	if prevStep <= 0 {
+		// 首次回源：以表内 step 为基准（表内也无效则退回配置 step）
+		step = int64(alloc.Step)
+		if step <= 0 {
+			step = int64(m.cfg.Step)
+		}
+	} else {
+		step = adjustStep(prevStep, sinceLast)
+	}
+	size := step
+	if int64(minCount) > size {
+		size = int64(minCount)
 	}
 
-	// 事务：推进 max_id 并回读，号段 = (newMax-step, newMax]
+	// 事务：推进 max_id（并写回动态 step）+ 回读，号段 = (newMax-size, newMax]
 	var newMax int64
 	if err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&Alloc{}).
 			Where("biz_tag = ?", bizTag).
-			UpdateColumn("max_id", gorm.Expr("max_id + ?", step)).Error; err != nil {
+			Updates(map[string]any{
+				"max_id": gorm.Expr("max_id + ?", size),
+				"step":   step,
+			}).Error; err != nil {
 			return err
 		}
 		return tx.Model(&Alloc{}).
 			Where("biz_tag = ?", bizTag).
 			Pluck("max_id", &newMax).Error
 	}); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return &buffer{start: newMax - step, end: newMax, pos: newMax - step}, nil
+	return &buffer{start: newMax - size, end: newMax, pos: newMax - size}, step, nil
+}
+
+// adjustStep 动态步长：两次回源间隔即号段消耗时长，
+// 消耗快于 15min → 翻倍（防高峰频繁回源），慢于 30min → 减半（省号），
+// 夹在 [100, 50000]（对齐 Leaf 默认）。
+func adjustStep(cur int64, interval time.Duration) int64 {
+	switch {
+	case interval < stepGrowBelow && cur < stepMax:
+		return min(cur*2, stepMax)
+	case interval > stepShrinkAbove && cur > stepMin:
+		return max(cur/2, stepMin)
+	default:
+		return cur
+	}
 }
 
 // EnsureRegistered 确保 biz_tag 在 t_leaf_alloc 有行（devops-id migrate 使用）。

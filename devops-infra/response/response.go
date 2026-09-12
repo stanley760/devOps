@@ -1,4 +1,4 @@
-﻿// Package response 统一 HTTP 响应格式与错误出口。
+// Package response 统一 HTTP 响应格式与错误出口。
 //
 // 所有业务接口返回 BaseResponse 信封：
 //
@@ -13,11 +13,17 @@
 package response
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 
 	"devops-infra/errs"
 )
@@ -81,12 +87,51 @@ func FailErr(c *gin.Context, err error) {
 		return
 	}
 
+	// handler 习惯直接 return c.ShouldBindJSON 的错误，
+	// 绑定/校验类错误属客户端问题，归类 400 而非 500 兜底
+	if msg, ok := asParamError(err); ok {
+		Fail(c, errs.CodeParam, msg)
+		return
+	}
+
 	slog.Error("未分类错误", "err", err, "method", c.Request.Method, "path", c.FullPath())
 	Fail(c, errs.CodeInternal, errs.ErrInternal.Msg)
 }
 
+// asParamError 识别请求绑定/校验类错误，返回面向用户的提示。
+func asParamError(err error) (string, bool) {
+	var valErrs validator.ValidationErrors
+	if errors.As(err, &valErrs) {
+		var b strings.Builder
+		for i, fe := range valErrs {
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			fmt.Fprintf(&b, "字段 %s 未通过 %s 校验", fe.Field(), fe.Tag())
+		}
+		return "参数校验失败: " + b.String(), true
+	}
+	var synErr *json.SyntaxError
+	if errors.As(err, &synErr) {
+		return "请求体不是合法 JSON", true
+	}
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		return "请求体字段类型错误", true
+	}
+	var parseErr *time.ParseError
+	if errors.As(err, &parseErr) {
+		return "请求体时间格式错误", true
+	}
+	if errors.Is(err, io.EOF) {
+		return "请求体不能为空", true
+	}
+	return "", false
+}
+
 // Wrap 把 Handler 适配为 gin.HandlerFunc，并统一处理错误：
 //   - 返回 BizError（含被 fmt.Errorf("%w") 包装的）→ 按其 code/msg 响应
+//   - 返回绑定/校验类错误（ShouldBindJSON 直返）→ 400 带字段级提示
 //   - 返回其他错误 → 500，细节只进日志
 //   - 返回 nil 但未写响应（漏写 bug）→ 兜底 500，避免请求挂起
 //   - 已写响应又返回错误 → 无法覆盖输出，记日志后中断

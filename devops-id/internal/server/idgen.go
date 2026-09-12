@@ -10,19 +10,29 @@ import (
 	"google.golang.org/grpc/status"
 
 	"devops-id/internal/segment"
+	"devops-id/internal/snowflake"
 	"devops-id/pkg/idgenpb"
 )
 
-// IdGenServer IdGen gRPC 实现：委托给 segment 管理器。
-// snowflake 模式随 P9 交付，届时按配置装配。
+// IdGenerator 发号器统一接口：segment（双 buffer 号段）与
+// snowflake（etcd workerID）双模式实现，server 层按配置装配。
+type IdGenerator interface {
+	Next(ctx context.Context, bizTag string) (int64, error)
+	BatchNext(ctx context.Context, bizTag string, count int) ([]int64, error)
+}
+
+// maxBatchCount 单次批量取号上限（防恶意超大批量一次性推进 max_id）。
+const maxBatchCount = 100000
+
+// IdGenServer IdGen gRPC 实现：委托给 IdGenerator（segment / snowflake）。
 type IdGenServer struct {
 	idgenpb.UnimplementedIdGenServer
-	mgr *segment.Manager
+	gen IdGenerator
 }
 
 // NewIdGenServer 创建实现。
-func NewIdGenServer(mgr *segment.Manager) *IdGenServer {
-	return &IdGenServer{mgr: mgr}
+func NewIdGenServer(gen IdGenerator) *IdGenServer {
+	return &IdGenServer{gen: gen}
 }
 
 // Next 取单个 ID。
@@ -30,7 +40,7 @@ func (s *IdGenServer) Next(ctx context.Context, req *idgenpb.NextRequest) (*idge
 	if req.GetBizTag() == "" {
 		return nil, status.Error(codes.InvalidArgument, "biz_tag 不能为空")
 	}
-	id, err := s.mgr.Next(ctx, req.GetBizTag())
+	id, err := s.gen.Next(ctx, req.GetBizTag())
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -45,7 +55,10 @@ func (s *IdGenServer) BatchNext(ctx context.Context, req *idgenpb.BatchNextReque
 	if req.GetCount() < 1 {
 		return nil, status.Error(codes.InvalidArgument, "count 必须 >= 1")
 	}
-	ids, err := s.mgr.BatchNext(ctx, req.GetBizTag(), int(req.GetCount()))
+	if req.GetCount() > maxBatchCount {
+		return nil, status.Errorf(codes.InvalidArgument, "count 超过单次上限 %d", maxBatchCount)
+	}
+	ids, err := s.gen.BatchNext(ctx, req.GetBizTag(), int(req.GetCount()))
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -53,10 +66,16 @@ func (s *IdGenServer) BatchNext(ctx context.Context, req *idgenpb.BatchNextReque
 }
 
 // mapErr 把发号层错误映射到 gRPC 状态码：
-// 号段耗尽 → Unavailable（建议重试）；tag 未注册 → NotFound；其余 → Internal。
+// 号段耗尽 / 时钟回拨 → Unavailable（建议重试）；tag 未注册 → NotFound；其余 → Internal。
 func mapErr(err error) error {
 	if errors.Is(err, segment.ErrSegmentExhausted) {
 		return status.Error(codes.Unavailable, "号段耗尽且回源失败，请稍后重试")
+	}
+	if errors.Is(err, snowflake.ErrClockBackward) {
+		return status.Error(codes.Unavailable, "时钟回拨，请稍后重试")
+	}
+	if errors.Is(err, snowflake.ErrLeaseLost) {
+		return status.Error(codes.Unavailable, "发号器 lease 失效（槽位可能被抢占），请稍后重试")
 	}
 	if strings.Contains(err.Error(), "未注册") {
 		return status.Error(codes.NotFound, "biz_tag 未注册")

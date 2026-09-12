@@ -1,4 +1,4 @@
-﻿package response_test
+package response_test
 
 import (
 	"encoding/json"
@@ -160,5 +160,57 @@ func TestFailCodeNormalization(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", w.Code)
+	}
+}
+
+// bindRun 模拟真实 handler：POST JSON → ShouldBindJSON 直返错误。
+func bindRun(t *testing.T, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/x", response.Wrap(func(c *gin.Context) error {
+		var req struct {
+			Name string `json:"name" binding:"required"`
+			Age  int    `json:"age" binding:"gte=0"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			return err
+		}
+		response.OK(c, nil)
+		return nil
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body)))
+	return w
+}
+
+func TestWrapValidationErrorAs400(t *testing.T) {
+	// 缺 required 字段：应 400 且 msg 带字段名，而非 500 兜底
+	w := bindRun(t, `{"age":1}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	var e env
+	if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.Code != errs.CodeParam || !strings.Contains(e.Msg, "Name") {
+		t.Fatalf("code=%d msg=%q，应含字段名 Name 的 400 提示", e.Code, e.Msg)
+	}
+}
+
+func TestWrapJSONSyntaxErrorAs400(t *testing.T) {
+	w := bindRun(t, `{bad json`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	var e env
+	if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.Code != errs.CodeParam {
+		t.Fatalf("code=%d, want %d", e.Code, errs.CodeParam)
 	}
 }

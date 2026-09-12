@@ -1,4 +1,4 @@
-﻿// Package middleware 存放 gin 中间件。
+// Package middleware 存放 gin 中间件。
 package middleware
 
 import (

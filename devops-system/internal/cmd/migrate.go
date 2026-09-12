@@ -1,7 +1,12 @@
 // migrate 子命令：业务表 AutoMigrate + 复合唯一索引 + 号段注册 + 种子。
+//
+// 模式A（shared，默认）：主库建全部表 + 全量种子。
+// 模式B（schema）：主库仅 t_tenant + 菜单母本（+ casbin/号段）；遍历 t_tenant
+// 各租户库 AutoMigrate + 菜单 fan-out 同步（tenantdb.MigrateAllTenants）。
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -11,9 +16,11 @@ import (
 
 	infracfg "devops-infra/config"
 
+	"devops-system/internal/authz"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
 	"devops-system/internal/model"
+	"devops-system/internal/tenantdb"
 )
 
 var migrateCmd = &cobra.Command{
@@ -29,25 +36,53 @@ var migrateCmd = &cobra.Command{
 		}
 		gdb := db.Get()
 
-		if err := autoMigrate(gdb); err != nil {
+		schemaMode := cfg.Tenant.Mode == "schema"
+		if schemaMode {
+			if err := tenantdb.InitResolver(cfg.Mysql, cfg.Tenant); err != nil {
+				return err
+			}
+			defer tenantdb.CloseResolver()
+		}
+
+		if err := autoMigrate(gdb, schemaMode); err != nil {
 			return fmt.Errorf("建表失败: %w", err)
 		}
-		if err := ensureUniqueIndexes(gdb); err != nil {
+		if err := db.EnsureCompositeUniques(gdb); err != nil {
 			return fmt.Errorf("创建唯一索引失败: %w", err)
 		}
 		if err := registerBizTags(gdb, cfg.Tenant); err != nil {
 			return err
 		}
-		if err := seed(gdb); err != nil {
+		if err := authz.Init(gdb); err != nil { // 建 casbin_rule 表并加载存量策略
+			return err
+		}
+		defer authz.Close()
+		if err := seed(gdb, schemaMode); err != nil {
 			return fmt.Errorf("种子数据初始化失败: %w", err)
 		}
-		fmt.Println("migrate 完成：t_tenant + 7 张 t_system_* 表已就绪")
+		if err := bumpSegmentsAfterSeed(gdb); err != nil {
+			return err
+		}
+		if schemaMode { // 各租户库迁移 + 菜单 fan-out（幂等）
+			if err := tenantdb.MigrateAllTenants(); err != nil {
+				return err
+			}
+		}
+		if err := authz.SeedPolicies(1, 1); err != nil { // admin = 平台管理员 + 租户1超管
+			return fmt.Errorf("casbin 策略种子失败: %w", err)
+		}
+		fmt.Println("migrate 完成：t_tenant + t_system_* 表 + casbin_rule 已就绪")
 		return nil
 	},
 }
 
-// autoMigrate 全部业务表（幂等）。
-func autoMigrate(gdb *gorm.DB) error {
+// autoMigrate 建表（幂等）。模式A 主库建全部表；模式B 主库仅全局表
+// （t_tenant + 菜单母本），租户表由 provision 建在各租户库——
+// 主库不建租户表使「无租户 ctx 误路由主库」表现为表不存在错误（fail-closed）。
+func autoMigrate(gdb *gorm.DB, schemaMode bool) error {
+	if schemaMode {
+		return gdb.AutoMigrate(&model.Tenant{}, &model.Menu{})
+	}
 	return gdb.AutoMigrate(
 		&model.Tenant{},
 		&model.User{},
@@ -58,42 +93,6 @@ func autoMigrate(gdb *gorm.DB) error {
 		&model.UserRole{},
 		&model.RoleMenu{},
 	)
-}
-
-// compositeUniques 跨嵌入字段的复合唯一索引（租户内唯一，方案 5 节）。
-// GORM tag 无法在共享的 BaseTenantModel.TenantID 上按表组合，故以 DDL 声明。
-var compositeUniques = []struct {
-	Table  string
-	Name   string
-	Column string
-}{
-	{"t_system_users", "uk_tenant_username", "tenant_id, username"},
-	{"t_system_users", "uk_tenant_mobile", "tenant_id, mobile"},
-	{"t_system_role", "uk_tenant_code", "tenant_id, code"},
-	{"t_system_post", "uk_tenant_code", "tenant_id, code"},
-}
-
-// ensureUniqueIndexes 逐个检查并创建（information_schema 判存，MySQL/MariaDB 通用）。
-func ensureUniqueIndexes(gdb *gorm.DB) error {
-	for _, u := range compositeUniques {
-		var cnt int64
-		if err := gdb.Raw(
-			"SELECT COUNT(*) FROM information_schema.statistics "+
-				"WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
-			u.Table, u.Name,
-		).Scan(&cnt).Error; err != nil {
-			return err
-		}
-		if cnt > 0 {
-			continue
-		}
-		if err := gdb.Exec(
-			fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s (%s)", u.Name, u.Table, u.Column),
-		).Error; err != nil {
-			return fmt.Errorf("表 %s 创建 %s 失败: %w", u.Table, u.Name, err)
-		}
-	}
-	return nil
 }
 
 // registerBizTags 同库部署时向 t_leaf_alloc 注册号段行（INSERT IGNORE 幂等；
@@ -112,9 +111,39 @@ func registerBizTags(gdb *gorm.DB, cfg config.TenantConfig) error {
 	return nil
 }
 
-// seed 种子数据（幂等：t_tenant 为空才执行）。
+// bumpSegmentsAfterSeed 种子显式 ID 不消耗号段，若不推进 max_id，
+// API 创建的实体（从号段取号）会与种子主键冲突（如租户2超管角色取到 ID 2
+// 撞上租户1 common 角色的显式 ID 2）。此处把各 biz_tag 的 max_id
+// 推进到至少覆盖其表内显式种子 ID 的最大值（GREATEST 幂等，已推进则跳过）。
+func bumpSegmentsAfterSeed(gdb *gorm.DB) error {
+	menuMax := int64(0)
+	for _, m := range seedMenusData {
+		if m.ID > menuMax {
+			menuMax = m.ID
+		}
+	}
+	for tag, floor := range map[string]int64{
+		"user": 1, "role": 2, "menu": menuMax, "dept": 102, "post": 4, "tenant": 1,
+	} {
+		if err := gdb.Exec(
+			"UPDATE t_leaf_alloc SET max_id = GREATEST(max_id, ?) WHERE biz_tag = ?",
+			floor, tag,
+		).Error; err != nil {
+			return fmt.Errorf("推进 biz_tag %s 号段下限失败: %w", tag, err)
+		}
+	}
+	return nil
+}
+
+// seed 种子数据（幂等：菜单母本与 t_tenant 均非空才跳过）。
 // 显式 ID（admin=1、部门 100 起、菜单 1-7 等）——不消耗号段。
-func seed(gdb *gorm.DB) error {
+// 租户 1 业务数据落点：模式A 主库 / 模式B 租户库（tenant_default）。
+func seed(gdb *gorm.DB, schemaMode bool) error {
+	// 菜单母本：主库（模式A 即共享菜单表；模式B 供 fan-out）
+	if err := seedMenusIfEmpty(gdb); err != nil {
+		return err
+	}
+
 	var cnt int64
 	if err := gdb.Model(&model.Tenant{}).Count(&cnt).Error; err != nil {
 		return err
@@ -129,18 +158,51 @@ func seed(gdb *gorm.DB) error {
 		return fmt.Errorf("生成密码哈希失败: %w", err)
 	}
 
-	const tid = int64(1) // 默认租户 1
-	return gdb.Transaction(func(tx *gorm.DB) error {
-		// 租户：1=devOps / code=default（expire NULL 永不过期）
-		if err := tx.Create(&model.Tenant{
-			BaseModel: model.BaseModel{ID: 1, Creator: "seed"},
-			Name:      "devOps",
-			Code:      "default",
-			Status:    0,
-		}).Error; err != nil {
+	// 租户 1 行：主库
+	if err := gdb.Create(&model.Tenant{
+		BaseModel: model.BaseModel{ID: 1, Creator: "seed"},
+		Name:      "devOps",
+		Code:      "default",
+		Status:    0,
+	}).Error; err != nil {
+		return err
+	}
+
+	// 模式B：为默认租户建库 + 迁移 + 菜单同步（失败回滚租户行，重跑幂等）
+	if schemaMode {
+		if err := tenantdb.ProvisionSchema(context.Background(), "default"); err != nil {
+			_ = gdb.Unscoped().Delete(&model.Tenant{}, 1).Error
 			return err
 		}
+	}
 
+	// 租户 1 业务数据：tenantdb.DB 按模式路由（模式A 主库 / 模式B tenant_default 池）
+	tctx := tenantdb.With(context.Background(), 1, "default")
+	if err := seedTenantData(tenantdb.DB(tctx), pwd); err != nil {
+		_ = gdb.Unscoped().Delete(&model.Tenant{}, 1).Error
+		return err
+	}
+
+	fmt.Println("种子完成：租户 default(1)、admin、部门 100-102、岗位 1-4、角色 super_admin/common、菜单树")
+	return nil
+}
+
+// seedMenusIfEmpty 菜单母本种子（主库，幂等：非空跳过）。
+func seedMenusIfEmpty(gdb *gorm.DB) error {
+	var cnt int64
+	if err := gdb.Model(&model.Menu{}).Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+	return gdb.Create(&seedMenusData).Error
+}
+
+// seedTenantData 租户 1 业务数据（dept/post/role/user/授权，显式 ID + TenantID）。
+func seedTenantData(tx *gorm.DB, pwd []byte) error {
+	const tid = int64(1)
+	return tx.Transaction(func(tx *gorm.DB) error {
 		// 部门：100=devOps(root) → 101 技术部、102 运维部
 		depts := []model.Dept{
 			{BaseTenantModel: model.BaseTenantModel{BaseModel: model.BaseModel{ID: 100, Creator: "seed"}, TenantID: tid},
@@ -180,12 +242,6 @@ func seed(gdb *gorm.DB) error {
 			return err
 		}
 
-		// 菜单：1 系统管理（目录）→ 2-6 五管理 + 7 租户管理（type 2）+ 各自按钮（type 3）
-		menus := seedMenus()
-		if err := tx.Create(&menus).Error; err != nil {
-			return err
-		}
-
 		// 用户：1=admin / Admin@123（dept 101，post_ids [4]）
 		if err := tx.Create(&model.User{
 			BaseTenantModel: model.BaseTenantModel{BaseModel: model.BaseModel{ID: 1, Creator: "seed"}, TenantID: tid},
@@ -201,25 +257,22 @@ func seed(gdb *gorm.DB) error {
 			return err
 		}
 
-		// 授权：admin → super_admin；super_admin → 全量菜单（含菜单 7）
+		// 授权：admin → super_admin；super_admin → 全量菜单（含菜单 7 租户管理）
 		if err := tx.Create(&model.UserRole{TenantID: tid, UserID: 1, RoleID: 1}).Error; err != nil {
 			return err
 		}
-		roleMenus := make([]model.RoleMenu, 0, len(menus))
-		for _, m := range menus {
+		roleMenus := make([]model.RoleMenu, 0, len(seedMenusData))
+		for _, m := range seedMenusData {
 			roleMenus = append(roleMenus, model.RoleMenu{TenantID: tid, RoleID: 1, MenuID: m.ID})
 		}
-		if err := tx.Create(&roleMenus).Error; err != nil {
-			return err
-		}
-
-		fmt.Println("种子完成：租户 default(1)、admin、部门 100-102、岗位 1-4、角色 super_admin/common、菜单树")
-		return nil
+		return tx.Create(&roleMenus).Error
 	})
 }
 
-// seedMenus 菜单树（对齐 yudao 精简版；租户管理 permission 留空——不派生 p 行）。
-func seedMenus() []model.Menu {
+// seedMenusData 菜单树（对齐 yudao 精简版；租户管理 permission 留空——不派生 p 行）。
+var seedMenusData = buildSeedMenus()
+
+func buildSeedMenus() []model.Menu {
 	base := func(id int64, name string, typ int8, parent int64, sort int, path, icon, component, permission string) model.Menu {
 		return model.Menu{
 			BaseModel:  model.BaseModel{ID: id, Creator: "seed"},

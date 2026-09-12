@@ -14,7 +14,7 @@ type Menu struct {
 	Icon          string `gorm:"size:100"`
 	Component     string `gorm:"size:255"`
 	ComponentName string `gorm:"size:255;column:component_name"`
-	Status        int8   `gorm:"not null;default:0"`  // 0正常 1停用
+	Status        int8   `gorm:"not null;default:0"`     // 0正常 1停用
 	Visible       bool   `gorm:"not null;default:true"`  // 是否显示
 	KeepAlive     bool   `gorm:"not null;default:false"` // 是否缓存
 	AlwaysShow    bool   `gorm:"not null;default:true"`  // 目录始终显示

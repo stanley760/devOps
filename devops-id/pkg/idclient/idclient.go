@@ -23,8 +23,8 @@ import (
 
 // BufferConfig 预取缓冲配置。
 type BufferConfig struct {
-	Batch      int           // 预取批量（1 = 关闭预取，逐次 RPC）
-	LowWater   float64       // 剩余比例低于该值时异步补充
+	Batch       int           // 预取批量（1 = 关闭预取，逐次 RPC）
+	LowWater    float64       // 剩余比例低于该值时异步补充
 	CallTimeout time.Duration // fetch 单次调用超时（0 = 不限时，跟随传入 ctx）
 }
 
