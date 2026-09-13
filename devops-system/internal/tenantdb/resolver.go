@@ -1,4 +1,4 @@
-// 模式B（schema）：租户独立 Schema 的数据源解析与库管理（方案 5.4）。
+// 模式B（schema）：租户独立 Schema 的数据源解析与库管理。
 //
 // 如实说明 GORM 约束：schema.Namer 无 context 且表名按 model 缓存，
 // 按请求动态拼表名不可行；DSN 级切库是 GORM 生态内唯一干净的物理隔离路径。

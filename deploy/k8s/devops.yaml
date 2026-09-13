@@ -1,0 +1,267 @@
+# Kubernetes 部署清单（单文件，按分隔符分段）。
+#
+# 前置假设（按实际环境修改）：
+#   1. 镜像已推送到仓库：registry.example.com/devops/*，替换下方 image 为实际地址
+#   2. MySQL / Redis / etcd 为集群外托管服务或独立部署（K8s 内直连 RDS 是常见形态），
+#      配置中的地址为占位，替换后应用
+#   3. 配置含数据库密码与 JWT 密钥，因此用 Secret 而非 ConfigMap 承载
+#      （当前配置系统无环境变量绑定，无法引用独立 Secret 键）
+#
+# 使用：
+#   kubectl apply -f deploy/k8s/devops.yaml
+#   kubectl -n devops wait --for=condition=complete job/devops-migrate --timeout=120s
+#   kubectl -n devops rollout status deploy/devops-id deploy/devops-system
+#
+# 设计要点：
+#   - devops-id 副本数 2：segment 模式靠 MySQL 行锁天然安全，
+#     snowflake 模式每实例经 etcd 抢占独立 worker 槽位，亦安全
+#   - devops-system 无状态（会话在 Redis），可任意水平扩
+#   - snowflake 模式强依赖时钟：节点须开 NTP/chrony，回拨会被拒绝发号
+#   - K8s ≥1.24 可用原生 grpc 探针探测 devops-id 健康状态
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops
+---
+# devops-id 的 prod.yaml（含 MySQL 密码，故入 Secret）
+apiVersion: v1
+kind: Secret
+metadata:
+  name: devops-id-config
+  namespace: devops
+stringData:
+  prod.yaml: |
+    log:
+      level: info
+      console: true
+      format: json
+    mysql:
+      host: YOUR_MYSQL_HOST      # TODO: 如 mysql.devops.svc.cluster.local 或 RDS 地址
+      username: devops
+      password: "YOUR_MYSQL_PASSWORD"
+    idgen:
+      mode: segment              # snowflake 时改此处并确认 etcd 段
+    etcd:
+      endpoints:
+        - "YOUR_ETCD_ENDPOINT:2379"
+---
+# devops-system 的 prod.yaml（含 MySQL/Redis 密码与 JWT 密钥，故入 Secret）
+apiVersion: v1
+kind: Secret
+metadata:
+  name: devops-system-config
+  namespace: devops
+stringData:
+  prod.yaml: |
+    log:
+      level: info
+      console: true
+      format: json
+    mysql:
+      host: YOUR_MYSQL_HOST
+      password: "YOUR_MYSQL_PASSWORD"
+    redis:
+      host: YOUR_REDIS_HOST
+      password: "YOUR_REDIS_PASSWORD"
+    jwt:
+      signing_key: "YOUR_JWT_SIGNING_KEY_MIN_32_CHARS"
+    idclient:
+      endpoint: "devops-id.devops.svc.cluster.local:9090"
+    server:
+      trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []
+      cors:
+        allow_origins:
+          - "https://admin.example.com"  # TODO: 实际前端域名
+---
+# 建表迁移：init 容器先建号段表，主容器建业务表 + 种子（有先后依赖）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devops-migrate
+  namespace: devops
+spec:
+  backoffLimit: 0          # 迁移幂等可重跑，但失败应人工排查而非自动重试
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: id-migrate
+          image: registry.example.com/devops/devops-id:0.1.0
+          args: ["migrate"]
+          env:
+            - name: APP_ENV
+              value: prod
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/prod.yaml
+              subPath: prod.yaml
+              readOnly: true
+      containers:
+        - name: system-migrate
+          image: registry.example.com/devops/devops-system:0.1.0
+          args: ["migrate"]
+          env:
+            - name: APP_ENV
+              value: prod
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/prod.yaml
+              subPath: prod.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          projected:
+            sources:
+              - secret:
+                  name: devops-id-config
+              - secret:
+                  name: devops-system-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-id
+  namespace: devops
+  labels:
+    app: devops-id
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devops-id
+  template:
+    metadata:
+      labels:
+        app: devops-id
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: devops-id
+          image: registry.example.com/devops/devops-id:0.1.0
+          args: ["server"]
+          ports:
+            - name: grpc
+              containerPort: 9090
+          env:
+            - name: APP_ENV
+              value: prod
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          # K8s ≥1.24 原生 grpc 探针，探测 grpc.health.v1
+          livenessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/prod.yaml
+              subPath: prod.yaml
+              readOnly: true
+            # snowflake 槽位/发号水位缓存：Pod 级临时卷，重建靠 etcd 重新抢占
+            - name: worker-cache
+              mountPath: /app/data
+      volumes:
+        - name: config
+          secret:
+            secretName: devops-id-config
+        - name: worker-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-id
+  namespace: devops
+spec:
+  selector:
+    app: devops-id
+  ports:
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-system
+  namespace: devops
+  labels:
+    app: devops-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devops-system
+  template:
+    metadata:
+      labels:
+        app: devops-system
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: devops-system
+          image: registry.example.com/devops/devops-system:0.1.0
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: 9999
+          env:
+            - name: APP_ENV
+              value: prod
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/prod.yaml
+              subPath: prod.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: devops-system-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-system
+  namespace: devops
+spec:
+  selector:
+    app: devops-system
+  ports:
+    - name: http
+      port: 9999
+      targetPort: http

@@ -1,4 +1,4 @@
-// 租户管理模块 DTO（P7，平台级）。
+// 租户管理模块 DTO。
 package types
 
 import "time"

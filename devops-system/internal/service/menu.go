@@ -1,4 +1,4 @@
-// 菜单管理服务（P6）：CRUD + permission 变更联动重建引用角色的 p 行。
+// 菜单管理服务：CRUD + permission 变更联动重建引用角色的 p 行。
 package service
 
 import (

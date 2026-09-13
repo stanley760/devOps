@@ -1,4 +1,4 @@
-// Casbin 鉴权中间件（方案 6.3/6.4）：路由声明式权限标识 + 域模型 Enforce。
+// Casbin 鉴权中间件：路由声明式权限标识 + 域模型 Enforce。
 //
 //	业务路由：JWT → Tenant → Perm("system:user:query")        域内鉴权（dom = tenant_id）
 //	平台路由：JWT → PlatformPerm("platform:tenant:query")     g2 平台角色 + dom = "*"

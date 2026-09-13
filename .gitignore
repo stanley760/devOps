@@ -18,6 +18,9 @@ coverage.txt
 # 日志
 logs/
 
+# 运行时状态（snowflake worker 槽位/发号水位缓存）
+data/
+
 # 编辑器 / IDE
 .idea/
 .vscode/

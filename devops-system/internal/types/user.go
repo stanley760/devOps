@@ -1,4 +1,4 @@
-// 用户管理模块 DTO（P5）。ID 一律 types.ID 字符串形态。
+// 用户管理模块 DTO。ID 一律 types.ID 字符串形态。
 package types
 
 // UserPageQuery GET /users 查询参数。

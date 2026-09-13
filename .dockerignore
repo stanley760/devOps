@@ -1,0 +1,17 @@
+# 构建上下文为仓库根（go.work 需要三个模块），排除无关内容
+.git
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# 运行时产物与本地状态
+**/logs/
+**/data/
+.tools/
+
+# 部署编排文件不参与镜像构建
+deploy/
+
+# 文档
+*.md

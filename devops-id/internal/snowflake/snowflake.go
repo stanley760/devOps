@@ -1,7 +1,7 @@
 // Package snowflake 实现美团 Leaf-snowflake（etcd 版）：本地 41bit 时间戳
 // + 10bit workerID + 12bit 序列。
 //
-// zk → etcd 能力映射（方案 4.3）：
+// etcd 能力映射：
 //   - 顺序临时节点序号即 workerID → 槽位 key idgen/snowflake/{i}，依序扫描抢占
 //   - 创建节点原子性 → Txn(If NotExists Then Put with lease)，raft 线性一致
 //   - Session 心跳保活 → lease TTL + clientv3 自动 keepalive

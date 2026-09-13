@@ -29,9 +29,9 @@ mysql:
   log_level: warn        # silent | error | warn | info（GORM 日志级别）
 
 idgen:
-  mode: segment          # segment（号段模式，默认）| snowflake
-  step: 1000             # segment：号段长度
-  low_water: 0.1         # segment：剩余比例低于 10% 时异步预加载下一号段
+  mode: snowflake        # segment（号段模式，默认）| snowflake
+  # step: 1000             # segment：号段长度
+  # low_water: 0.1         # segment：剩余比例低于 10% 时异步预加载下一号段
 
 etcd:                    # 仅 idgen.mode=snowflake 时使用
   endpoints:

@@ -1,4 +1,4 @@
-// Package authz 基于 Casbin 域模型的权限鉴权（方案第六节）。
+// Package authz 基于 Casbin 域模型的权限鉴权。
 //
 // 模型要点：
 //   - sub = user_id、dom = tenant_id、obj = 权限标识（如 system:user:create）

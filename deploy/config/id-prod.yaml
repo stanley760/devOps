@@ -1,0 +1,19 @@
+# devops-id 容器环境覆盖：挂载为镜像内 /app/config/prod.yaml，APP_ENV=prod 生效。
+# 地址为 docker-compose 服务名（同一网络内的服务发现）；
+# K8s 部署时换成对应 Service 名或外部托管服务地址。
+log:
+  level: info
+  console: true       # 容器标准：日志走 stdout，由 docker/k8s 日志驱动收集
+  format: json
+
+mysql:
+  host: mysql
+  username: devops
+  password: "devopspwd"   # TODO 生产必改，与 MySQL 容器环境变量一致
+
+idgen:
+  mode: segment       # 容器默认号段模式；切 snowflake 时配合 --profile snowflake
+
+etcd:                 # 仅 idgen.mode=snowflake 时读取
+  endpoints:
+    - "etcd:2379"

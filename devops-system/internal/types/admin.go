@@ -1,4 +1,4 @@
-// 角色/菜单/部门/岗位管理模块 DTO（P6）。
+// 角色/菜单/部门/岗位管理模块 DTO。
 package types
 
 import "time"

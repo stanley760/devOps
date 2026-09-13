@@ -1,0 +1,28 @@
+# devops-system 容器环境覆盖：挂载为镜像内 /app/config/prod.yaml，APP_ENV=prod 生效。
+# 地址为 docker-compose 服务名（同一网络内的服务发现）；
+# K8s 部署时换成对应 Service 名或外部托管服务地址。
+log:
+  level: info
+  console: true       # 容器标准：日志走 stdout，由 docker/k8s 日志驱动收集
+  format: json
+
+mysql:
+  host: mysql
+  password: "devopspwd"       # TODO 生产必改，与 MySQL 容器环境变量一致
+
+redis:
+  host: redis
+  password: "123456"
+
+jwt:
+  signing_key: "change-me-to-a-random-string-of-at-least-32-chars"   # TODO 生产必改
+
+idclient:
+  endpoint: "devops-id:9090"
+
+server:
+  # 直接对外暴露时置空；置于 nginx / ingress 之后改为代理网段（如 10.0.0.0/8）
+  trusted_proxies: []
+  cors:
+    allow_origins:
+      - "http://localhost:5173"   # TODO 换成实际前端域名

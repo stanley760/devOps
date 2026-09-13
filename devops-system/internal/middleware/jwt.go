@@ -1,4 +1,4 @@
-// Package middleware devops-system 业务中间件：JWT / Tenant（方案 6.2）。
+// Package middleware devops-system 业务中间件：JWT / Tenant。
 //
 // 统一中间件链：Recovery → AccessLog → CORS（infra httpx）
 //

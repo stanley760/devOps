@@ -1,4 +1,4 @@
-// Tenant 中间件（方案 6.2）：JWT 之后，claims → ctx 注入租户 + 租户状态校验。
+// Tenant 中间件：JWT 之后，claims → ctx 注入租户 + 租户状态校验。
 //
 // 状态校验带 Redis 缓存（tenant:{id}，5min）：
 // 即时失效由「停用租户时 RevokeAllSessions」保证（停用 → 全员 401），

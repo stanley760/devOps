@@ -1,7 +1,7 @@
 # devops-system 用户权限系统基础配置
 
 server:
-  port: 8080
+  port: 9999
   read_timeout: 10s
   write_timeout: 10s
   trusted_proxies:          # 可信反向代理 IP 或 CIDR；不在代理后建议置空 []

@@ -1,9 +1,9 @@
-// 租户管理服务（P7，平台级）：CRUD + 启停/过期 + 租户初始超管。
+// 租户管理服务：CRUD + 启停/过期 + 租户初始超管。
 //
 // 平台路由 ctx 无租户：t_tenant 为全局表可直接访问；创建租户初始超管时
 // 显式注入新租户 ctx（tenantdb.With），user/role 行由 TenantPlugin 填充 tenant_id。
 //
-// 停用语义（方案 5.2/7）：状态落库 + 撤销租户全部会话（RevokeTenantSessions，
+// 停用语义：状态落库 + 撤销租户全部会话（RevokeTenantSessions，
 // 全员 access 立即 401）+ 清除 Tenant 中间件的 Redis 状态缓存（防 5min 缓存误放行）。
 package service
 
