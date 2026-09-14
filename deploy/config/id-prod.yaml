@@ -8,11 +8,11 @@ log:
 
 mysql:
   host: mysql
-  username: devops
-  password: "devopspwd"   # TODO 生产必改，与 MySQL 容器环境变量一致
+  username: root
+  password: "123456"   # TODO 生产必改，与 MySQL 容器环境变量一致
 
 idgen:
-  mode: segment       # 容器默认号段模式；切 snowflake 时配合 --profile snowflake
+  mode: snowflake       # 容器号段模式切 snowflake 
 
 etcd:                 # 仅 idgen.mode=snowflake 时读取
   endpoints:

@@ -14,6 +14,7 @@ package snowflake
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,8 +38,11 @@ const (
 	epoch = int64(1704067200000)
 
 	slotPrefix = "idgen/snowflake/"
+	// permanentPrefix stores the stable worker ID assigned to an instance.
+	// Unlike the active slot key, this mapping has no lease and survives restarts.
+	permanentPrefix = "idgen/snowflake/forever/"
 
-	// maxBackwardMs 时钟回拨容忍阈值（ms）：小于则自旋等待，大于则拒绝发号。
+	// maxBackwardMs 时钟回拨容忍阈值（ms）：小于则等待，大于则拒绝发号。
 	maxBackwardMs = int64(5)
 )
 
@@ -48,6 +52,8 @@ var ErrClockBackward = errors.New("时钟回拨超过阈值，拒绝发号")
 // ErrLeaseLost lease 意外失效（非优雅退出：etcd 异常/网络分区致 TTL 到期）。
 // 此时 worker 槽位可能已被其他实例抢占，继续发号会重号，宁可拒发。
 var ErrLeaseLost = errors.New("lease 失效，worker 槽位可能被抢占，拒绝发号")
+
+var errEtcdUnavailable = errors.New("etcd unavailable")
 
 // Config snowflake 配置。
 type Config struct {
@@ -65,12 +71,18 @@ type Manager struct {
 	client         *clientv3.Client
 	lease          clientv3.LeaseID
 	kaCancel       context.CancelFunc
+	nodeCancel     context.CancelFunc
 	leaseLost      atomic.Bool // lease 意外失效（非正常退出），此后拒绝发号
 	normalShutdown atomic.Bool
 
-	workerFile string // worker_id 槽位缓存
-	tsFile     string // last_timestamp 持久化（启动回拨校验）
+	workerFile string // worker_id 本地缓存（仅 etcd 初始化失败时读取）
+	instance   string
 	closeOnce  sync.Once
+}
+
+type permanentNode struct {
+	WorkerID  int64 `json:"worker_id"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // New 抢占 workerID 槽位并启动 keepalive（etcd 连接由调用方创建并管理生命周期）。
@@ -82,47 +94,54 @@ func New(ctx context.Context, client *clientv3.Client, cfg Config) (*Manager, er
 	if dir == "" {
 		dir = "data"
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("创建缓存目录 %s 失败: %w", dir, err)
-	}
-
-	// lease + keepalive：TTL 到期（宕机未续约）槽位自动释放
-	leaseResp, err := client.Grant(ctx, int64(cfg.LeaseTTL.Seconds()))
-	if err != nil {
-		return nil, fmt.Errorf("创建 etcd lease 失败: %w", err)
-	}
-	kaCtx, kaCancel := context.WithCancel(context.Background())
-
 	m := &Manager{
 		client:     client,
-		lease:      leaseResp.ID,
-		kaCancel:   kaCancel,
 		workerFile: filepath.Join(dir, "worker_id"),
-		tsFile:     filepath.Join(dir, "last_timestamp"),
+		instance:   instanceID(),
 	}
 
-	// KeepAlive 的响应通道必须排水，否则 etcd client 内部队列（容量 16）堆满后
-	// 持续告警 "lease keepalive response queue is full"。
-	kaCh, err := client.KeepAlive(kaCtx, leaseResp.ID)
-	if err != nil {
-		kaCancel()
-		_, _ = client.Revoke(ctx, leaseResp.ID)
-		return nil, fmt.Errorf("启动 lease keepalive 失败: %w", err)
-	}
-	go m.watchLease(kaCh)
-
-	// 启动时钟回拨校验：当前时间不得明显早于上次持久化发号时间
-	if persisted, ok := readIntFile(m.tsFile); ok && persisted > epoch {
-		if now := time.Now().UnixMilli(); now < persisted-maxBackwardMs {
-			m.releaseLease()
-			return nil, fmt.Errorf(
-				"系统时钟回拨异常：当前 %d 早于上次发号 %d（%dms），拒绝启动以防重号",
-				now, persisted, persisted-now)
+	// lease + keepalive：TTL 到期（宕机未续约）槽位自动释放。
+	// 只有 etcd 完全不可用时才进入本地文件兜底；不能把正常的“槽位已满”
+	// 当成 etcd 故障，否则会产生重复 worker ID。
+	if client != nil {
+		leaseResp, err := client.Grant(ctx, int64(cfg.LeaseTTL.Seconds()))
+		if err == nil {
+			kaCtx, kaCancel := context.WithCancel(context.Background())
+			m.lease = leaseResp.ID
+			m.kaCancel = kaCancel
+			// KeepAlive 的响应通道必须排水，否则 etcd client 内部队列（容量 16）堆满后
+			// 持续告警 "lease keepalive response queue is full"。
+			kaCh, keepAliveErr := client.KeepAlive(kaCtx, leaseResp.ID)
+			if keepAliveErr == nil {
+				go m.watchLease(kaCh)
+			} else {
+				kaCancel()
+				_, _ = client.Revoke(ctx, leaseResp.ID)
+				m.lease = 0
+				m.kaCancel = nil
+				slog.Warn("启动 etcd lease keepalive 失败，将使用本地文件兜底", "err", keepAliveErr)
+			}
+		} else {
+			slog.Warn("创建 etcd lease 失败，将使用本地文件兜底", "err", err)
 		}
 	}
-
-	// 槽位抢占：优先复用本地缓存槽位，失败则从 0 依序扫描
-	workerID, err := m.acquireSlot(ctx)
+	// 槽位抢占：优先复用 etcd 永久节点，未找到则原子创建永久节点。
+	var workerID int64
+	var err error
+	usedLocalFallback := false
+	if m.client == nil || m.lease == 0 {
+		err = errEtcdUnavailable
+	} else {
+		workerID, err = m.acquireSlot(ctx)
+	}
+	if errors.Is(err, errEtcdUnavailable) {
+		usedLocalFallback = true
+		if err := m.initLocalCache(); err != nil {
+			m.releaseLease()
+			return nil, err
+		}
+		workerID, err = m.acquireLocalSlot()
+	}
 	if err != nil {
 		m.releaseLease()
 		return nil, err
@@ -130,8 +149,18 @@ func New(ctx context.Context, client *clientv3.Client, cfg Config) (*Manager, er
 	m.workerID = workerID
 	m.lastTimestamp = time.Now().UnixMilli()
 
-	// 定时持久化发号水位（宕机兜底；优雅退出由 Close 兜底）
-	go m.persistLoop()
+	// Leaf 会在成功拿到 workerID 后写入本地缓存，供 etcd 初始化失败时使用。
+	// 这不是正常分配路径的输入，也不承担时间回拨校验。
+	if !usedLocalFallback {
+		if err := m.initLocalCache(); err == nil {
+			writeIntFile(m.workerFile, workerID)
+		} else {
+			slog.Warn("写入 workerID 本地缓存失败", "err", err)
+		}
+		nodeCtx, nodeCancel := context.WithCancel(context.Background())
+		m.nodeCancel = nodeCancel
+		go m.refreshPermanentNode(nodeCtx)
+	}
 
 	slog.Info("snowflake 发号器就绪",
 		"worker_id", workerID, "epoch_ms", epoch, "lease_ttl", cfg.LeaseTTL)
@@ -207,11 +236,9 @@ func (m *Manager) next() (int64, error) {
 // （宕机场景无 Close，靠 lease TTL 自动释放，期间槽位不可被抢占。）
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		m.mu.Lock()
-		last := m.lastTimestamp
-		m.mu.Unlock()
-		writeIntFile(m.tsFile, last)
-
+		if m.nodeCancel != nil {
+			m.nodeCancel()
+		}
 		m.releaseLease()
 		slog.Info("snowflake 已关闭：槽位释放", "worker_id", m.workerID)
 	})
@@ -221,6 +248,9 @@ func (m *Manager) Close() {
 // 先标记正常退出再取消 keepalive 上下文，避免 watchLease 把通道关闭误判为 lease 失效。
 func (m *Manager) releaseLease() {
 	m.normalShutdown.Store(true)
+	if m.kaCancel == nil || m.lease == 0 || m.client == nil {
+		return
+	}
 	m.kaCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -244,60 +274,139 @@ func (m *Manager) watchLease(kaCh <-chan *clientv3.LeaseKeepAliveResponse) {
 	}
 }
 
-// acquireSlot 抢占 workerID 槽位：优先复用本地缓存（减少扫描），失败依序扫描 0-1023。
+// acquireSlot 按 Leaf 的顺序分配 workerID：
+// 先读取实例对应的永久节点；不存在时，原子创建永久节点和带 lease 的活动槽位。
+// 永久节点只保存稳定映射，活动槽位仍由 lease 控制，避免宕机后永久占坑。
 func (m *Manager) acquireSlot(ctx context.Context) (int64, error) {
 	instance := instanceID()
+	permanentKey := permanentPrefix + instance
 
-	if cached, ok := readIntFile(m.workerFile); ok && cached >= 0 && cached <= maxWorker {
-		if m.trySlot(ctx, int(cached), instance) {
-			slog.Info("复用本地缓存 worker 槽位", "slot", cached)
-			return int64(cached), nil
+	resp, err := m.client.Get(ctx, permanentKey)
+	if err != nil {
+		return 0, fmt.Errorf("%w: 读取永久 worker 节点失败: %v", errEtcdUnavailable, err)
+	}
+	if len(resp.Kvs) > 0 {
+		var node permanentNode
+		if err := json.Unmarshal(resp.Kvs[0].Value, &node); err != nil {
+			return 0, fmt.Errorf("永久 worker 节点 %q 内容无效: %q", permanentKey, resp.Kvs[0].Value)
 		}
-		slog.Warn("缓存槽位被占用，重新扫描", "slot", cached)
+		if node.WorkerID < 0 || node.WorkerID > maxWorker {
+			return 0, fmt.Errorf("永久 worker 节点 %q workerID 无效: %d", permanentKey, node.WorkerID)
+		}
+		if node.Timestamp > time.Now().UnixMilli() {
+			return 0, fmt.Errorf(
+				"系统时钟回拨异常：当前 %d 早于永久节点最后时间 %d",
+				time.Now().UnixMilli(), node.Timestamp)
+		}
+		ok, err := m.claimSlot(ctx, int(node.WorkerID), instance)
+		if err != nil {
+			return 0, fmt.Errorf("%w: 激活永久 worker 节点失败: %v", errEtcdUnavailable, err)
+		}
+		if !ok {
+			return 0, fmt.Errorf("永久 worker 槽位 %d 当前仍被其他实例占用", node.WorkerID)
+		}
+		return node.WorkerID, nil
 	}
 
 	for i := 0; i <= maxWorker; i++ {
-		if m.trySlot(ctx, i, instance) {
-			writeIntFile(m.workerFile, int64(i))
+		key := fmt.Sprintf("%s%d", slotPrefix, i)
+		nodeValue, err := json.Marshal(permanentNode{
+			WorkerID:  int64(i),
+			Timestamp: time.Now().UnixMilli(),
+		})
+		if err != nil {
+			return 0, fmt.Errorf("序列化永久 worker 节点失败: %w", err)
+		}
+		tx, err := m.client.Txn(ctx).
+			If(
+				clientv3.Compare(clientv3.CreateRevision(permanentKey), "=", 0),
+				clientv3.Compare(clientv3.CreateRevision(key), "=", 0),
+			).
+			Then(
+				clientv3.OpPut(permanentKey, string(nodeValue)),
+				clientv3.OpPut(key, instance, clientv3.WithLease(m.lease)),
+			).
+			Commit()
+		if err != nil {
+			return 0, fmt.Errorf("%w: 创建永久 worker 节点失败: %v", errEtcdUnavailable, err)
+		}
+		if tx.Succeeded {
 			return int64(i), nil
 		}
 	}
 	return 0, errors.New("worker 槽位已满（0-1023 全部被占用），请下线实例或扩 worker 位")
 }
 
-// trySlot 原子抢占单个槽位：Txn(If NotExists Then Put with lease)。
-func (m *Manager) trySlot(ctx context.Context, slot int, instance string) bool {
+// claimSlot 原子抢占已存在的永久映射对应的活动槽位。
+func (m *Manager) claimSlot(ctx context.Context, slot int, instance string) (bool, error) {
 	key := fmt.Sprintf("%s%d", slotPrefix, slot)
 	resp, err := m.client.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
 		Then(clientv3.OpPut(key, instance, clientv3.WithLease(m.lease))).
 		Commit()
 	if err != nil {
-		slog.Warn("抢占槽位失败", "slot", slot, "err", err)
-		return false
+		return false, err
 	}
-	return resp.Succeeded
+	return resp.Succeeded, nil
 }
 
-// persistLoop 定时持久化发号水位（宕机后启动回拨校验依据）。
-func (m *Manager) persistLoop() {
-	ticker := time.NewTicker(10 * time.Second)
+// acquireLocalSlot is used only when etcd cannot be used at all. A cached
+// worker ID is preferred; a fresh local-only instance starts at slot zero.
+func (m *Manager) acquireLocalSlot() (int64, error) {
+	if cached, ok := readIntFile(m.workerFile); ok && cached >= 0 && cached <= maxWorker {
+		slog.Warn("etcd 不可用，复用本地 worker 槽位", "slot", cached)
+		return cached, nil
+	}
+	writeIntFile(m.workerFile, 0)
+	slog.Warn("etcd 不可用且无本地槽位缓存，使用 worker 槽位 0")
+	return 0, nil
+}
+
+func (m *Manager) initLocalCache() error {
+	dir := filepath.Dir(m.workerFile)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("创建本地缓存目录 %s 失败: %w", dir, err)
+	}
+	return nil
+}
+
+// refreshPermanentNode periodically uploads the last timestamp, matching
+// Leaf's startup clock rollback check after a process restart.
+func (m *Manager) refreshPermanentNode(ctx context.Context) {
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		m.mu.Lock()
-		last := m.lastTimestamp
-		m.mu.Unlock()
-		writeIntFile(m.tsFile, last)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			value, err := json.Marshal(permanentNode{
+				WorkerID:  m.workerID,
+				Timestamp: time.Now().UnixMilli(),
+			})
+			if err != nil {
+				slog.Error("序列化永久 worker 节点失败", "err", err)
+				continue
+			}
+			updateCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			_, err = m.client.Put(updateCtx, permanentPrefix+m.instance, string(value))
+			cancel()
+			if err != nil {
+				slog.Warn("更新永久 worker 节点时间失败", "err", err)
+			}
+		}
 	}
 }
 
-// instanceID 实例标识（写入槽位 value，便于排查持有者）。
+// instanceID 返回实例的稳定标识。不能包含 PID，否则重启后无法命中
+// etcd 永久节点并会不断创建新的 worker 映射。
 func instanceID() string {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "unknown"
 	}
-	return fmt.Sprintf("%s:%d", host, os.Getpid())
+
+	return host
 }
 
 // readIntFile 读取整数缓存文件。
