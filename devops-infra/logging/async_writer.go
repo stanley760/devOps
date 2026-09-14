@@ -1,4 +1,4 @@
-package logger
+package logging
 
 import (
 	"errors"
@@ -29,29 +29,28 @@ func newAsyncWriter(dst io.Writer, bufSize int) *asyncWriter {
 	if bufSize <= 0 {
 		bufSize = defaultBufferSize
 	}
-	w := &asyncWriter{
+	writer := &asyncWriter{
 		ch:   make(chan []byte, bufSize),
 		dst:  dst,
 		done: make(chan struct{}),
 	}
-	w.wg.Add(1)
-	go w.run()
-	return w
+	writer.wg.Add(1)
+	go writer.run()
+	return writer
 }
 
-func (w *asyncWriter) run() {
-	defer w.wg.Done()
+func (writer *asyncWriter) run() {
+	defer writer.wg.Done()
 
 	for {
 		select {
-		case p := <-w.ch:
-			_, _ = w.dst.Write(p)
-		case <-w.done:
-			// 收到关闭信号后，先把缓冲区里残留的日志排空再退出
+		case line := <-writer.ch:
+			_, _ = writer.dst.Write(line)
+		case <-writer.done:
 			for {
 				select {
-				case p := <-w.ch:
-					_, _ = w.dst.Write(p)
+				case line := <-writer.ch:
+					_, _ = writer.dst.Write(line)
 				default:
 					return
 				}
@@ -61,31 +60,31 @@ func (w *asyncWriter) run() {
 }
 
 // Write 实现 io.Writer。缓冲区满时直接丢弃并返回错误，绝不阻塞调用方。
-func (w *asyncWriter) Write(p []byte) (int, error) {
+func (writer *asyncWriter) Write(line []byte) (int, error) {
 	// slog 会复用底层 buffer，必须拷贝一份再投递，否则后台读到的是被覆盖的数据
-	buf := make([]byte, len(p))
-	copy(buf, p)
+	buffer := make([]byte, len(line))
+	copy(buffer, line)
 
 	select {
-	case w.ch <- buf:
-		return len(p), nil
+	case writer.ch <- buffer:
+		return len(line), nil
 	default:
-		w.dropped.Add(1)
-		return len(p), ErrBufferFull
+		writer.dropped.Add(1)
+		return len(line), ErrBufferFull
 	}
 }
 
 // Close 通知后台协程排空并退出，会等待落盘完成。
-func (w *asyncWriter) Close() error {
-	if !w.closed.CompareAndSwap(false, true) {
+func (writer *asyncWriter) Close() error {
+	if !writer.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	close(w.done)
-	w.wg.Wait()
+	close(writer.done)
+	writer.wg.Wait()
 	return nil
 }
 
 // Dropped 返回运行期间因缓冲区满而丢弃的日志条数。
-func (w *asyncWriter) Dropped() uint64 {
-	return w.dropped.Load()
+func (writer *asyncWriter) Dropped() uint64 {
+	return writer.dropped.Load()
 }

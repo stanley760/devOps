@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"devops-infra/errs"
-	"devops-infra/response"
+	"devops-infra/http/response"
 )
 
 // Recovery panic 统一处理：记录堆栈后返回 500 错误信封。

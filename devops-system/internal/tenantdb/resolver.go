@@ -19,20 +19,21 @@ import (
 	"strings"
 	"sync"
 
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
-
+	dbConfig "devops-infra/config"
+	client "devops-infra/database/mysql"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
 	"devops-system/internal/model"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 var currentResolver *resolver
 
 // resolver 模式B数据源解析器。
 type resolver struct {
-	mysqlCfg  config.MysqlConfig
+	mysqlCfg  dbConfig.MysqlConfig
 	tenantCfg config.TenantConfig
 
 	mu    sync.Mutex
@@ -46,7 +47,7 @@ type poolEntry struct {
 }
 
 // InitResolver 装配模式B解析器（tenant.mode=schema 时由 server/migrate 调用）。
-func InitResolver(mysqlCfg config.MysqlConfig, tenantCfg config.TenantConfig) error {
+func InitResolver(mysqlCfg dbConfig.MysqlConfig, tenantCfg config.TenantConfig) error {
 	if tenantCfg.SchemaTemplate == "" {
 		tenantCfg.SchemaTemplate = "tenant_{code}"
 	}
@@ -82,12 +83,12 @@ func SchemaEnabled() bool { return currentResolver != nil }
 func (r *resolver) resolve(ctx context.Context) *gorm.DB {
 	tc, ok := From(ctx)
 	if !ok || tc.Code == "" {
-		return db.Get().WithContext(ctx)
+		return client.Get().WithContext(ctx)
 	}
 	gdb, err := r.pool(tc.Code)
 	if err != nil {
 		slog.Error("租户库连接失败（回退主库，租户表查询将失败）", "code", tc.Code, "err", err)
-		return db.Get().WithContext(ctx)
+		return client.Get().WithContext(ctx)
 	}
 	return gdb.WithContext(ctx)
 }
@@ -182,7 +183,7 @@ func ProvisionSchema(ctx context.Context, code string) error {
 		return nil // 模式A：无需建库
 	}
 	dbName := currentResolver.dbName(code)
-	if err := db.Get().Exec(
+	if err := client.Get().Exec(
 		fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` DEFAULT CHARACTER SET utf8mb4", dbName),
 	).Error; err != nil {
 		return fmt.Errorf("创建租户库 %s 失败: %w", dbName, err)
@@ -198,7 +199,7 @@ func ProvisionSchema(ctx context.Context, code string) error {
 	if err := db.EnsureCompositeUniques(gdb); err != nil {
 		return fmt.Errorf("租户库 %s 创建唯一索引失败: %w", dbName, err)
 	}
-	if err := syncMenus(db.Get(), gdb); err != nil {
+	if err := syncMenus(client.Get(), gdb); err != nil {
 		return fmt.Errorf("租户库 %s 菜单同步失败: %w", dbName, err)
 	}
 	slog.Info("租户库就绪", "database", dbName, "tables", len(tenantTables()))
@@ -228,7 +229,7 @@ func MigrateAllTenants() error {
 		return nil
 	}
 	var tenants []model.Tenant
-	if err := db.Get().Find(&tenants).Error; err != nil {
+	if err := client.Get().Find(&tenants).Error; err != nil {
 		return fmt.Errorf("遍历租户失败: %w", err)
 	}
 	for i := range tenants {

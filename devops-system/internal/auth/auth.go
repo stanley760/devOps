@@ -1,7 +1,7 @@
 // Package auth 实现 JWT 双 token 与 Redis 会话管理。
 //
 //   - Access：HS256，claims 携带 user_id/username/sid/tenant_id/tenant_code，短期（2h）
-//   - Refresh：UUID（sid），Redis 持会话态（键空间租户分段，方案 6.5）：
+//   - Refresh：UUID（sid），Redis 持会话态（键空间租户分段）：
 //     t{tid}:auth:refresh:{sid} = user_id，TTL = refresh_expire（7d）
 //     t{tid}:auth:sids:{uid}    = SET<sid>（RevokeAllSessions 用）
 //     auth:sid2uid:{sid}        = "tid:uid"（refresh 端点由 sid 定位会话归属）
@@ -11,19 +11,17 @@ package auth
 
 import (
 	"context"
+	cacheinf "devops-infra/cache"
+	"devops-infra/errs"
+	"devops-system/internal/config"
+	"devops-system/internal/store"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
-
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-
-	"devops-infra/errs"
-
-	"devops-system/internal/config"
-	"devops-system/internal/store"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // AccessClaims access token 载荷。
@@ -38,13 +36,14 @@ type AccessClaims struct {
 
 // Manager JWT + 会话管理器。
 type Manager struct {
-	cfg config.JWTConfig
-	rdb *redis.Client
+	cfg   config.JWTConfig
+	cache cacheinf.Cache
+	redis *redis.Client
 }
 
 // New 创建管理器。
 func New(cfg config.JWTConfig) *Manager {
-	return &Manager{cfg: cfg, rdb: store.Get()}
+	return &Manager{cfg: cfg, cache: store.Cache(), redis: store.Get()}
 }
 
 // ---- 键空间（方案 6.5） ----
@@ -86,7 +85,7 @@ func (m *Manager) Issue(ctx context.Context, userID int64, username string, tena
 		return "", "", 0, errs.Wrap(err, errs.CodeInternal, "签发 token 失败")
 	}
 
-	pipe := m.rdb.Pipeline()
+	pipe := m.redis.Pipeline()
 	pipe.Set(ctx, refreshKey(tenantID, sid), userID, m.cfg.RefreshExpire)
 	pipe.SAdd(ctx, sidsKey(tenantID, userID), sid)
 	pipe.Set(ctx, sid2uidKey(sid), fmt.Sprintf("%d:%d", tenantID, userID), m.cfg.RefreshExpire)
@@ -113,12 +112,13 @@ func (m *Manager) Parse(token string) (*AccessClaims, error) {
 
 // SessionActive 会话是否仍有效（logout/踢下线/改密后立即失效的关键）。
 func (m *Manager) SessionActive(ctx context.Context, claims *AccessClaims) bool {
-	return m.rdb.Exists(ctx, refreshKey(claims.TenantID, claims.SID)).Val() > 0
+	active, _ := m.cache.Exists(ctx, refreshKey(claims.TenantID, claims.SID))
+	return active
 }
 
 // LookupSID 由 refresh token（sid）定位会话归属（refresh 端点用）。
 func (m *Manager) LookupSID(ctx context.Context, sid string) (tenantID, userID int64, ok bool) {
-	val, err := m.rdb.Get(ctx, sid2uidKey(sid)).Result()
+	val, err := m.cache.Get(ctx, sid2uidKey(sid))
 	if err != nil {
 		return 0, 0, false
 	}
@@ -136,7 +136,7 @@ func (m *Manager) LookupSID(ctx context.Context, sid string) (tenantID, userID i
 
 // SIDMatch 校验 sid 会话确属该用户。
 func (m *Manager) SIDMatch(ctx context.Context, tenantID int64, sid string, userID int64) bool {
-	val, err := m.rdb.Get(ctx, refreshKey(tenantID, sid)).Result()
+	val, err := m.cache.Get(ctx, refreshKey(tenantID, sid))
 	return err == nil && val == strconv.FormatInt(userID, 10)
 }
 
@@ -147,7 +147,7 @@ func (m *Manager) Rotate(ctx context.Context, oldSID string, userID int64, usern
 		return "", "", 0, err
 	}
 	// 轮换：删旧会话与索引，sids 集合同步收紧
-	pipe := m.rdb.Pipeline()
+	pipe := m.redis.Pipeline()
 	pipe.Del(ctx, refreshKey(tenantID, oldSID))
 	pipe.Del(ctx, sid2uidKey(oldSID))
 	pipe.SRem(ctx, sidsKey(tenantID, userID), oldSID)
@@ -157,7 +157,7 @@ func (m *Manager) Rotate(ctx context.Context, oldSID string, userID int64, usern
 
 // Logout 撤销当前会话。
 func (m *Manager) Logout(ctx context.Context, claims *AccessClaims) {
-	pipe := m.rdb.Pipeline()
+	pipe := m.redis.Pipeline()
 	pipe.Del(ctx, refreshKey(claims.TenantID, claims.SID))
 	pipe.Del(ctx, sid2uidKey(claims.SID))
 	pipe.SRem(ctx, sidsKey(claims.TenantID, claims.UserID), claims.SID)
@@ -167,11 +167,11 @@ func (m *Manager) Logout(ctx context.Context, claims *AccessClaims) {
 // RevokeAllSessions 撤销用户全部会话（改密/重置密码/停用/删除用户、停用租户）。
 func (m *Manager) RevokeAllSessions(ctx context.Context, tenantID, userID int64) {
 	skey := sidsKey(tenantID, userID)
-	sids, err := m.rdb.SMembers(ctx, skey).Result()
+	sids, err := m.redis.SMembers(ctx, skey).Result()
 	if err != nil {
 		return
 	}
-	pipe := m.rdb.Pipeline()
+	pipe := m.redis.Pipeline()
 	for _, sid := range sids {
 		pipe.Del(ctx, refreshKey(tenantID, sid))
 		pipe.Del(ctx, sid2uidKey(sid))
@@ -186,13 +186,13 @@ func (m *Manager) RevokeTenantSessions(ctx context.Context, tenantID int64) {
 	pattern := fmt.Sprintf("t%d:auth:sids:*", tenantID)
 	var cursor uint64
 	for {
-		keys, next, err := m.rdb.Scan(ctx, cursor, pattern, 100).Result()
+		keys, next, err := m.redis.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
 			return
 		}
-		pipe := m.rdb.Pipeline()
+		pipe := m.redis.Pipeline()
 		for _, skey := range keys {
-			sids, err := m.rdb.SMembers(ctx, skey).Result()
+			sids, err := m.redis.SMembers(ctx, skey).Result()
 			if err != nil {
 				continue
 			}

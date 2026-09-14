@@ -1,6 +1,6 @@
 // Package router 注册 devops-system 的业务路由。
 //
-// /healthz 与统一中间件（Recovery/AccessLog/404/405 信封）由 devops-infra/httpx 提供。
+// /healthz 与统一中间件（Recovery/AccessLog/404/405 信封）由 devops-infra/http 提供。
 // 中间件链（方案 6.2）：
 //
 //	公开：/auth/login /auth/refresh
@@ -11,8 +11,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"devops-infra/httpx"
-	"devops-infra/response"
+	httpinfra "devops-infra/http"
+	"devops-infra/http/response"
 
 	apiv1 "devops-system/internal/api/v1"
 	"devops-system/internal/auth"
@@ -20,11 +20,11 @@ import (
 	"devops-system/internal/service"
 )
 
-// Register 返回业务路由注册回调，交给 httpx.Run 组装。
+// Register 返回业务路由注册回调，交给 httpinfra.Run 组装。
 func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 	roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept, postSvc *service.Post,
 	tenantSvc *service.Tenant,
-) httpx.Register {
+) httpinfra.Register {
 	authH := apiv1.NewAuthHandler(authSvc)
 	userH := apiv1.NewUserHandler(userSvc)
 	roleH := apiv1.NewRoleHandler(roleSvc)

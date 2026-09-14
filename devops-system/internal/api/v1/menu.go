@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"devops-infra/errs"
-	"devops-infra/response"
+	"devops-infra/http/response"
 
 	"devops-system/internal/middleware"
 	"devops-system/internal/service"

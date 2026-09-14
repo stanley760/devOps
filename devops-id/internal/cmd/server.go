@@ -14,14 +14,14 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	infracfg "devops-infra/config"
-	"devops-infra/grpcx"
+	grpcinfra "devops-infra/grpc"
 
 	"devops-id/internal/config"
-	"devops-id/internal/db"
 	"devops-id/internal/segment"
 	"devops-id/internal/server"
 	"devops-id/internal/snowflake"
 	"devops-id/pkg/idgenpb"
+	client "devops-infra/database/mysql"
 )
 
 var serverCmd = &cobra.Command{
@@ -34,14 +34,14 @@ var serverCmd = &cobra.Command{
 		}
 
 		// 发号器装配：segment 依赖 MySQL；snowflake 依赖 etcd（抢槽位 + keepalive）。
-		// 优雅退出：grpcx.Run 收到信号返回后，defer 链 revoke lease 释放槽位（方案 6.6 Shutdown）。
+		// 优雅退出：grpcinfra.Run 收到信号返回后，defer 链 revoke lease 释放槽位（方案 6.6 Shutdown）。
 		var gen server.IdGenerator
 		switch cfg.IDGen.Mode {
 		case "", "segment":
-			if err := db.Init(cfg.Mysql); err != nil {
+			if err := client.Init(cfg.Mysql); err != nil {
 				return err
 			}
-			gen = segment.New(db.Get(), segment.Config{
+			gen = segment.New(client.Get(), segment.Config{
 				Step:     cfg.IDGen.Step,
 				LowWater: cfg.IDGen.LowWater,
 			})
@@ -84,7 +84,7 @@ var serverCmd = &cobra.Command{
 			reflection = true // dev 环境强制开启，便于 grpcurl 调试
 		}
 
-		return grpcx.Run(grpcx.ServerConfig{
+		return grpcinfra.Run(grpcinfra.ServerConfig{
 			Listen:     cfg.Grpc.Listen,
 			Reflection: reflection,
 		}, func(s *grpc.Server, hc *health.Server) {

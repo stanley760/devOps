@@ -7,7 +7,7 @@
 //     历史文件按 max_backups / max_age 保留，并可 gzip/zstd 压缩
 //   - 控制台与文件双输出，控制台固定为易读的 text 格式
 //   - 文件写入走异步缓冲区，磁盘 IO 不会阻塞业务协程
-package logger
+package logging
 
 import (
 	"errors"
@@ -15,25 +15,14 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/DeRuina/timberjack"
 
 	"devops-infra/config"
 )
 
-const (
-	defaultPrefix     = "devops"
-	defaultBufferSize = 4096
-	// 备份文件名中的时间格式，形如 devops-2026-09-10-16-44-05.123-size.log
-	// 两个注意点：
-	//  1. timberjack 会校验格式能否完整往返（format→parse 后时间不变），
-	//     因此必须包含时分秒，只写 2006-01-02 会校验失败
-	//  2. 必须带毫秒，否则高吞吐下同一秒内多次切分会产生同名文件而互相覆盖
-	defaultTimeFormat = "2006-01-02-15-04-05.000"
-)
+const defaultBufferSize = 4096
 
 var (
 	currentRolling *timberjack.Logger
@@ -48,31 +37,9 @@ func Init(cfg config.LogConfig) error {
 		return err
 	}
 
-	dir := strings.TrimSpace(cfg.Dir)
-	if dir == "" {
-		dir = "logs"
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("创建日志目录失败: %w", err)
-	}
-
-	interval, err := parseInterval(cfg.RotationInterval)
+	rolling, err := newRollingLogger(cfg)
 	if err != nil {
 		return err
-	}
-
-	rolling := &timberjack.Logger{
-		Filename:         filepath.Join(dir, defaultPrefix+".log"),
-		MaxSize:          cfg.MaxSize,
-		MaxBackups:       cfg.MaxBackups,
-		MaxAge:           cfg.MaxAge,
-		Compression:      normalizeCompression(cfg.Compress),
-		RotationInterval: interval,
-		LocalTime:        true,
-		BackupTimeFormat: defaultTimeFormat,
-	}
-	if err := rolling.ValidateBackupTimeFormat(); err != nil {
-		return fmt.Errorf("日志备份时间格式非法: %w", err)
 	}
 
 	// 落盘交给 timberjack，外面再包一层异步缓冲，避免 IO 影响业务
@@ -140,25 +107,4 @@ func parseLevel(s string) (slog.Level, error) {
 	default:
 		return 0, fmt.Errorf("不支持的日志级别: %q（可选 debug/info/warn/error）", s)
 	}
-}
-
-// parseInterval 解析时间滚动间隔，空值或 0 表示仅按大小滚动
-func parseInterval(s string) (time.Duration, error) {
-	s = strings.TrimSpace(s)
-	if s == "" || s == "0" {
-		return 0, nil
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, fmt.Errorf("rotation_interval 格式非法: %q（示例 24h、12h30m）: %w", s, err)
-	}
-	return d, nil
-}
-
-func normalizeCompression(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	if s == "" {
-		return "gzip"
-	}
-	return s
 }

@@ -46,7 +46,7 @@ type tagBuffer struct {
 	loading bool // 异步补充单飞去重
 }
 
-// New 创建发号客户端。conn 由调用方创建（devops-infra/grpcx.Dial）并管理生命周期。
+// New 创建发号客户端。conn 由调用方创建（devops-infra/grpc.Dial）并管理生命周期。
 func New(conn *grpc.ClientConn, cfg BufferConfig) *Client {
 	if cfg.Batch < 1 {
 		cfg.Batch = 1

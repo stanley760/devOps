@@ -12,31 +12,17 @@ import (
 
 // Config devops-id 服务根配置，对应 config/config.yaml 顶层结构
 type Config struct {
-	Grpc  GrpcConfig       `mapstructure:"grpc"`
-	Log   config.LogConfig `mapstructure:"log"`
-	Mysql MysqlConfig      `mapstructure:"mysql"`
-	IDGen IDGenConfig      `mapstructure:"idgen"`
-	Etcd  EtcdConfig       `mapstructure:"etcd"`
+	Grpc  GrpcConfig         `mapstructure:"grpc"`
+	Log   config.LogConfig   `mapstructure:"log"`
+	Mysql config.MysqlConfig `mapstructure:"mysql"`
+	IDGen IDGenConfig        `mapstructure:"idgen"`
+	Etcd  EtcdConfig         `mapstructure:"etcd"`
 }
 
 // GrpcConfig gRPC 服务配置
 type GrpcConfig struct {
 	Listen     string `mapstructure:"listen"`     // 监听地址，如 ":9090"
 	Reflection bool   `mapstructure:"reflection"` // 是否开启 reflection（dev 调试用）
-}
-
-// MysqlConfig MySQL 连接配置（t_leaf_alloc 号段表）
-type MysqlConfig struct {
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	Username        string        `mapstructure:"username"`
-	Password        string        `mapstructure:"password"`
-	Database        string        `mapstructure:"database"`
-	Charset         string        `mapstructure:"charset"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
-	LogLevel        string        `mapstructure:"log_level"` // silent|error|warn|info
 }
 
 // IDGenConfig 发号器配置

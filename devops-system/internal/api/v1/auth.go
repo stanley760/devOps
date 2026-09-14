@@ -4,7 +4,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
-	"devops-infra/response"
+	"devops-infra/http/response"
 
 	"devops-system/internal/middleware"
 	"devops-system/internal/service"

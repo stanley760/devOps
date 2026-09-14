@@ -11,16 +11,15 @@ import (
 	"github.com/spf13/cobra"
 
 	infracfg "devops-infra/config"
-	"devops-infra/grpcx"
-	"devops-infra/httpx"
-	"devops-infra/logger"
+	grpcinfra "devops-infra/grpc"
+	httpinfra "devops-infra/http"
+	"devops-infra/logging"
 
 	"devops-id/pkg/idclient"
-
+	client "devops-infra/database/mysql"
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
-	"devops-system/internal/db"
 	"devops-system/internal/model"
 	"devops-system/internal/router"
 	"devops-system/internal/service"
@@ -40,7 +39,7 @@ var rootCmd = &cobra.Command{
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
-		if err := logger.Init(cfg.Log); err != nil {
+		if err := logging.Init(cfg.Log); err != nil {
 			return err
 		}
 
@@ -55,7 +54,7 @@ var rootCmd = &cobra.Command{
 
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		return logger.Close()
+		return logging.Close()
 	},
 
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -97,10 +96,10 @@ var serverCmd = &cobra.Command{
 
 		// 装配链（方案 11.1）：db → TenantPlugin(fail-closed) → [模式B Resolver] → authz
 		//   → store(Redis 会话) → idclient（发号）→ auth/service → httpx
-		if err := db.Init(cfg.Mysql); err != nil {
+		if err := client.Init(cfg.Mysql); err != nil {
 			return err
 		}
-		if err := tenantdb.RegisterPlugin(db.Get()); err != nil {
+		if err := tenantdb.RegisterPlugin(client.Get()); err != nil {
 			return fmt.Errorf("注册租户过滤插件失败: %w", err)
 		}
 		if cfg.Tenant.Mode == "schema" { // 模式B：按租户解析独立库连接池
@@ -108,13 +107,13 @@ var serverCmd = &cobra.Command{
 				return err
 			}
 		}
-		if err := authz.Init(db.Get()); err != nil {
+		if err := authz.Init(client.Get()); err != nil {
 			return err
 		}
 		if err := store.Init(cfg.Redis); err != nil {
 			return err
 		}
-		conn, err := grpcx.Dial(cmd.Context(), cfg.IDClient.Endpoint, cfg.IDClient.DialTimeout)
+		conn, err := grpcinfra.Dial(cmd.Context(), cfg.IDClient.Endpoint, cfg.IDClient.DialTimeout)
 		if err != nil {
 			return err
 		}
@@ -134,15 +133,15 @@ var serverCmd = &cobra.Command{
 		postSvc := service.NewPost()
 		tenantSvc := service.NewTenant(cfg, authM)
 
-		err = httpx.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
+		err = httpinfra.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
 			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc))
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
 		tenantdb.CloseResolver()
 		authz.Close()
-		_ = grpcx.Close(conn)
+		_ = grpcinfra.Close(conn)
 		_ = store.Close()
-		_ = db.Close()
+		_ = client.Close()
 		return err
 	},
 }

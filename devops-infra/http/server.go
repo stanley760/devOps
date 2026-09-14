@@ -1,8 +1,8 @@
-// Package httpx 组装 HTTP 服务：统一中间件、统一 404/405 信封、健康检查与优雅退出。
+// Package http 组装 HTTP 服务：统一中间件、统一 404/405 信封、健康检查与优雅退出。
 //
 // 业务路由不在此处注册，由各服务通过 Register 回调挂载（如 devops-system 的 /api/v1），
 // 从而让本包可被所有 HTTP 服务复用。
-package httpx
+package http
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 
 	"devops-infra/config"
 	"devops-infra/errs"
-	"devops-infra/middleware"
-	"devops-infra/response"
+	"devops-infra/http/middleware"
+	"devops-infra/http/response"
 )
 
 // Register 业务路由注册回调：在统一中间件链装配完成后调用。

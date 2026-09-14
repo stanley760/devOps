@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	infracfg "devops-infra/config"
-	"devops-infra/logger"
+	"devops-infra/logging"
 
 	"devops-id/internal/config"
 )
@@ -27,7 +27,7 @@ var rootCmd = &cobra.Command{
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
-		if err := logger.Init(cfg.Log); err != nil {
+		if err := logging.Init(cfg.Log); err != nil {
 			return err
 		}
 
@@ -42,7 +42,7 @@ var rootCmd = &cobra.Command{
 
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		return logger.Close()
+		return logging.Close()
 	},
 
 	RunE: func(cmd *cobra.Command, args []string) error {

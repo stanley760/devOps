@@ -7,19 +7,16 @@ package middleware
 
 import (
 	"context"
-	"fmt"
-	"net/http"
-	"time"
-
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-
-	"devops-infra/response"
-
-	"devops-system/internal/db"
+	client "devops-infra/database/mysql"
+	"devops-infra/http/response"
 	"devops-system/internal/model"
 	"devops-system/internal/store"
 	"devops-system/internal/tenantdb"
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"net/http"
+	"time"
 )
 
 // tenantCacheTTL 租户状态缓存时长。
@@ -35,7 +32,7 @@ func Tenant() gin.HandlerFunc {
 			return
 		}
 
-		if !tenantUsable(c.Request.Context(), db.Get(), claims.TenantID) {
+		if !tenantUsable(c.Request.Context(), client.Get(), claims.TenantID) {
 			response.Fail(c, http.StatusForbidden, "租户不可用（停用或已过期）")
 			c.Abort()
 			return
@@ -51,9 +48,9 @@ func Tenant() gin.HandlerFunc {
 // tenantUsable 租户存在、未停用、未过期；结果缓存 5min。
 func tenantUsable(ctx context.Context, gdb *gorm.DB, tenantID int64) bool {
 	cacheKey := fmt.Sprintf("tenant:%d", tenantID)
-	rdb := store.Get()
-	if rdb != nil {
-		if v, err := rdb.Get(ctx, cacheKey).Result(); err == nil && v == "ok" {
+	c := store.Cache()
+	if c != nil {
+		if value, err := c.Get(ctx, cacheKey); err == nil && value == "ok" {
 			return true
 		}
 	}
@@ -70,8 +67,8 @@ func tenantUsable(ctx context.Context, gdb *gorm.DB, tenantID int64) bool {
 		return false
 	}
 
-	if rdb != nil {
-		rdb.Set(ctx, cacheKey, "ok", tenantCacheTTL)
+	if c != nil {
+		_ = c.Set(ctx, cacheKey, "ok", tenantCacheTTL)
 	}
 	return true
 }

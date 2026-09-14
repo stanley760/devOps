@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"devops-infra/grpcx"
+	grpcinfra "devops-infra/grpc"
 
 	"devops-id/pkg/idclient"
 )
@@ -20,7 +20,7 @@ func dial(t *testing.T) *idclient.Client {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	conn, err := grpcx.Dial(ctx, "127.0.0.1:9090", 2*time.Second)
+	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9090", 2*time.Second)
 	if err != nil {
 		t.Skipf("devops-id 服务未启动，跳过集成测试: %v", err)
 	}

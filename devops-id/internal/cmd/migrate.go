@@ -7,11 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	infracfg "devops-infra/config"
-
 	"devops-id/internal/config"
-	"devops-id/internal/db"
 	"devops-id/internal/segment"
+	infracfg "devops-infra/config"
+	db "devops-infra/database/mysql"
 )
 
 // bizTags 支持通过 --tags 额外注册的业务标识（逗号分隔）。

@@ -7,20 +7,18 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"strings"
-
-	"github.com/spf13/cobra"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-
 	infracfg "devops-infra/config"
-
+	"devops-infra/database/mysql"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
+	"fmt"
+	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"strings"
 )
 
 var migrateCmd = &cobra.Command{
@@ -31,10 +29,10 @@ var migrateCmd = &cobra.Command{
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
-		if err := db.Init(cfg.Mysql); err != nil {
+		if err := mysql.Init(cfg.Mysql); err != nil {
 			return err
 		}
-		gdb := db.Get()
+		gdb := mysql.Get()
 
 		schemaMode := cfg.Tenant.Mode == "schema"
 		if schemaMode {

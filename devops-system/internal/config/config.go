@@ -14,34 +14,11 @@ import (
 type Config struct {
 	Server   config.ServerConfig `mapstructure:"server"`
 	Log      config.LogConfig    `mapstructure:"log"`
-	Mysql    MysqlConfig         `mapstructure:"mysql"`
-	Redis    RedisConfig         `mapstructure:"redis"`
+	Mysql    config.MysqlConfig  `mapstructure:"mysql"`
+	Redis    config.RedisConfig  `mapstructure:"redis"`
 	JWT      JWTConfig           `mapstructure:"jwt"`
 	Tenant   TenantConfig        `mapstructure:"tenant"`
 	IDClient IDClientConfig      `mapstructure:"idclient"`
-}
-
-// MysqlConfig MySQL 连接配置
-type MysqlConfig struct {
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	Username        string        `mapstructure:"username"`
-	Password        string        `mapstructure:"password"`
-	Database        string        `mapstructure:"database"`
-	Charset         string        `mapstructure:"charset"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
-	LogLevel        string        `mapstructure:"log_level"` // silent|error|warn|info
-}
-
-// RedisConfig Redis 连接配置
-type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
-	PoolSize int    `mapstructure:"pool_size"`
 }
 
 // JWTConfig JWT 双 token 配置

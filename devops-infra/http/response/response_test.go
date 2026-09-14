@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"devops-infra/errs"
-	"devops-infra/response"
+	"devops-infra/http/response"
 )
 
 // run 经真实 gin 引擎执行 handler，返回其响应。

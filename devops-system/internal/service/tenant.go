@@ -179,8 +179,8 @@ func (s *Tenant) UpdateStatus(ctx context.Context, claims *auth.AccessClaims, id
 	}
 
 	// 清除 Tenant 中间件状态缓存（停用防 5min 缓存误放行；启用防读到旧停用态）
-	if rdb := store.Get(); rdb != nil {
-		rdb.Del(ctx, fmt.Sprintf("tenant:%d", t.ID))
+	if c := store.Cache(); c != nil {
+		_ = c.Delete(ctx, fmt.Sprintf("tenant:%d", t.ID))
 	}
 	if req.Status == 1 {
 		s.authM.RevokeTenantSessions(ctx, t.ID)
@@ -209,8 +209,8 @@ func (s *Tenant) Delete(ctx context.Context, claims *auth.AccessClaims, id types
 
 	// 保险：清残余会话与状态缓存（停用时已撤，此处兜底）
 	s.authM.RevokeTenantSessions(ctx, t.ID)
-	if rdb := store.Get(); rdb != nil {
-		rdb.Del(ctx, fmt.Sprintf("tenant:%d", t.ID))
+	if c := store.Cache(); c != nil {
+		_ = c.Delete(ctx, fmt.Sprintf("tenant:%d", t.ID))
 	}
 	// 模式A：casbin g/p 行与业务数据保留（租户已删不可登录），清理工具列 Roadmap
 	return nil

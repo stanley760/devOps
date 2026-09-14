@@ -9,12 +9,11 @@ import (
 	"time"
 
 	infracfg "devops-infra/config"
-	"devops-infra/grpcx"
+	grpcinfra "devops-infra/grpc"
 
 	"devops-id/pkg/idclient"
-
+	client "devops-infra/database/mysql"
 	"devops-system/internal/config"
-	"devops-system/internal/db"
 	"devops-system/internal/model"
 )
 
@@ -29,13 +28,13 @@ func setup(t *testing.T) {
 	if err := infracfg.LoadInto(&cfg); err != nil {
 		t.Skipf("解析配置失败，跳过集成测试: %v", err)
 	}
-	if err := db.Init(cfg.Mysql); err != nil {
+	if err := client.Init(cfg.Mysql); err != nil {
 		t.Skipf("MySQL 不可达，跳过集成测试: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	conn, err := grpcx.Dial(ctx, cfg.IDClient.Endpoint, 2*time.Second)
+	conn, err := grpcinfra.Dial(ctx, cfg.IDClient.Endpoint, 2*time.Second)
 	if err != nil {
 		t.Skipf("devops-id 拨号失败，跳过集成测试: %v", err)
 	}
@@ -54,7 +53,7 @@ func setup(t *testing.T) {
 // TestBeforeCreateGeneratesID 创建用户 → 主键由 devops-id 发号（ID 批次递增）。
 func TestBeforeCreateGeneratesID(t *testing.T) {
 	setup(t)
-	gdb := db.Get()
+	gdb := client.Get()
 
 	ts := time.Now().UnixNano()
 	u1 := &model.User{
