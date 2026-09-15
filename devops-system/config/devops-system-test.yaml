@@ -1,0 +1,5 @@
+# test 环境覆盖：只保留差异项
+
+log:
+  level: info
+

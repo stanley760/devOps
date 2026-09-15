@@ -1,20 +1,19 @@
 // Package config 定义应用配置结构，并封装 viper 的初始化与读取。
 //
 // 职责划分：
-//   - Init(path) 加载基础配置，再按 APP_ENV 合并环境差异，开启热更新
-//   - Load()     把配置反序列化到结构体
+//   - Init(path) 先加载 bootstrap.yaml，再按 APP_ENV 合并模块环境覆盖文件，开启热更新
+//   - LoadInto() 把配置反序列化到结构体
 //
-// 配置组织方式（基础 + 覆盖）：
+// 配置组织方式（bootstrap + 环境覆盖）：
 //
-//	config/config.yaml   基础配置，写全公共项
-//	config/dev.yaml      仅覆盖与基础配置不同的字段
-//	config/prod.yaml     同上
-//	config/test.yaml     同上
+//	config/bootstrap.yaml         基础配置，写全公共项
+//	config/<module>-<env>.yaml    仅覆盖 bootstrap 中不同的字段
+//	例如：devops-id-dev.yaml、devops-system-prod.yaml
 //
 // 使用方式（cmd 层）：
 //
 //	cobra.OnInitialize(func() { config.Init(confFile) })
-//	cfg, err := config.Load()
+//	cfg, err := config.LoadInto(&cfg)
 package config
 
 import (
@@ -27,69 +26,75 @@ import (
 )
 
 // EnvAppEnv 用于选择环境的环境变量名，取值如 dev / prod / test。
-//
-// 注意这与「用环境变量覆盖单个配置值」是两回事：
-// 这里只读一个变量来决定加载哪个配置文件，不需要逐项绑定，
-// 因此不会引入 DEVOPS_LOG_LEVEL 那种重复映射。
 const EnvAppEnv = "APP_ENV"
 
-// 记录实际加载来源，供 Files() 展示。
-// viper.ConfigFileUsed() 在 MergeInConfig 后只返回最后那个文件，
-// 会让人误以为基础配置没生效，所以这里自己维护。
 var (
 	baseFile string
 	envFile  string
 )
 
-// Init 加载配置：先读基础文件，再按 APP_ENV 合并同名环境文件。
-// 出错时返回 error，由调用方决定如何处理（cmd 层目前选择 panic）。
+// Init 加载 bootstrap 基础配置，再按 APP_ENV 合并模块环境差异文件。
 func Init(path string) error {
+	if path == "" {
+		path = filepath.Join("config", "bootstrap.yaml")
+	}
+	viper.Reset()
 	viper.SetConfigFile(path)
-
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("读取基础配置 %s 失败: %w", path, err)
 	}
 	baseFile = path
-
 	if err := mergeEnvConfig(path); err != nil {
 		return err
 	}
-
-	// 监听配置文件变化，修改后自动重载
 	viper.WatchConfig()
-
 	return nil
 }
 
-// mergeEnvConfig 按 APP_ENV 合并环境差异配置。
-// APP_ENV 为空则跳过，只使用基础配置。
+// mergeEnvConfig 按 APP_ENV 加载模块级环境配置，文件名格式：<module>-<env>.yaml。
 func mergeEnvConfig(basePath string) error {
+	env := Env()
+	configDir := filepath.Dir(basePath)
+	module := filepath.Base(configDir)
+	if module == "config" || module == "." || module == string(filepath.Separator) {
+		parent := filepath.Base(filepath.Dir(configDir))
+		if parent != "." && parent != string(filepath.Separator) {
+			module = parent
+		} else if wd, err := os.Getwd(); err == nil {
+			module = filepath.Base(wd)
+		}
+	}
+	candidate := filepath.Join(configDir, module+"-"+env+".yaml")
+	if _, err := os.Stat(candidate); err != nil {
+		legacy := filepath.Join(configDir, env+".yaml")
+		if _, legacyErr := os.Stat(legacy); legacyErr == nil {
+			candidate = legacy
+		} else {
+			return nil
+		}
+	}
+	envViper := viper.New()
+	envViper.SetConfigFile(candidate)
+	if err := envViper.ReadInConfig(); err != nil {
+		return fmt.Errorf("读取模块环境配置 %s 失败: %w", candidate, err)
+	}
+	if err := viper.MergeConfigMap(envViper.AllSettings()); err != nil {
+		return fmt.Errorf("合并模块环境配置 %s 失败: %w", candidate, err)
+	}
+	envFile = candidate
+	return nil
+}
+
+// Env 返回当前生效的环境名，未设置时默认 dev。
+func Env() string {
 	env := strings.TrimSpace(os.Getenv(EnvAppEnv))
 	if env == "" {
-		return nil
+		return "dev"
 	}
-
-	// 环境文件与基础配置放在同一目录
-	dir := filepath.Dir(basePath)
-	viper.SetConfigName(env)
-	viper.AddConfigPath(dir)
-
-	// MergeInConfig 只覆盖环境文件中显式写出的字段，其余保留基础配置的值
-	if err := viper.MergeInConfig(); err != nil {
-		return fmt.Errorf("合并环境配置 %s.yaml 失败（目录: %s）: %w", env, dir, err)
-	}
-	envFile = filepath.Join(dir, env+".yaml")
-
-	return nil
-}
-
-// Env 返回当前生效的环境名，未设置时为空字符串。
-func Env() string {
-	return strings.TrimSpace(os.Getenv(EnvAppEnv))
+	return env
 }
 
 // Files 返回实际加载的配置文件来源。
-// 未设置 APP_ENV 时只有基础文件；否则形如 "config/config.yaml + prod.yaml"。
 func Files() string {
 	if envFile == "" {
 		return baseFile
@@ -98,15 +103,23 @@ func Files() string {
 }
 
 // LoadInto 把合并后的配置反序列化到调用方定义的结构体。
-// 各服务自定义自己的根 Config（组合本包的共享配置类型），通过此方法加载：
-//
-//	var cfg Config // 服务自定义
-//	if err := config.LoadInto(&cfg); err != nil { ... }
-//
-// 配置来自基础文件与环境文件的合并结果，未配置的字段为零值。
 func LoadInto(target any) error {
 	if err := viper.Unmarshal(target); err != nil {
 		return fmt.Errorf("解析配置失败: %w", err)
+	}
+	return nil
+}
+
+// ReplaceWithYAML replaces the active Viper configuration with a complete YAML
+// document fetched from an external configuration center.
+func ReplaceWithYAML(content string) error {
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("外部配置内容为空")
+	}
+	viper.Reset()
+	viper.SetConfigType("yaml")
+	if err := viper.ReadConfig(strings.NewReader(content)); err != nil {
+		return fmt.Errorf("解析外部 YAML 配置失败: %w", err)
 	}
 	return nil
 }

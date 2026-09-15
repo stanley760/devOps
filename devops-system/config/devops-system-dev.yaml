@@ -1,0 +1,10 @@
+# dev 环境覆盖：只保留差异项
+
+log:
+  level: debug
+  console: true
+  max_size: 50
+  max_backups: 10
+  max_age: 3
+  compress: none
+

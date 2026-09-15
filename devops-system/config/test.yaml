@@ -1,5 +1,0 @@
-# test 环境差异
-log:
-  level: debug
-  console: true
-  format: text

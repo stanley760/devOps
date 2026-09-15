@@ -1,0 +1,39 @@
+# devops-id 分布式 ID 发号服务基础配置
+
+grpc:
+  listen: ":9090"
+  reflection: false       # dev 环境自动强制开启，便于 grpcurl 调试
+
+nacos:
+  enabled: true
+  endpoints:
+    - "127.0.0.1:8848"
+  namespace: ""
+  group: "DEVOPS_GROUP"
+  username: "nacos"
+  password: "nacos"
+  timeout: 5s
+  config:
+    data_ids:
+      - "devops-id.yaml"
+    group: "DEVOPS_GROUP"
+    timeout: 5s
+    required: false
+  registry:
+    service_name: "devops-id"
+    cluster: "DEFAULT"
+    weight: 1
+    meta:
+      service: "devops-id"
+
+log:
+  level: debug           # debug | info | warn | error
+  dir: logs              # 日志文件存放目录（devops-id 服务自身日志）
+  console: true          # 是否同时输出到控制台
+  format: text           # text | json
+  buffer: 4096           # 异步写入缓冲区大小（条），写满丢弃新日志
+  max_size: 100          # 单文件上限（MB），写满立即切分
+  max_backups: 30        # 保留历史文件个数，0 不限制
+  max_age: 7             # 历史文件保留天数，0 不限制
+  compress: gzip         # none | gzip | zstd
+  rotation_interval: 24h  # 时间滚动间隔，留空或 0 仅按大小滚动

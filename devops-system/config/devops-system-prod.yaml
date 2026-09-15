@@ -1,0 +1,6 @@
+# prod 环境覆盖：只保留差异项
+
+log:
+  level: warn
+  console: false
+  format: json

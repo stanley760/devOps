@@ -5,6 +5,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,6 +17,7 @@ import (
 
 	infracfg "devops-infra/config"
 	grpcinfra "devops-infra/grpc"
+	"devops-infra/nacos"
 
 	"devops-id/internal/config"
 	"devops-id/internal/segment"
@@ -84,6 +87,21 @@ var serverCmd = &cobra.Command{
 			reflection = true // dev 环境强制开启，便于 grpcurl 调试
 		}
 
+		serviceName := cfg.Nacos.Registry.ServiceName
+		if serviceName == "" {
+			return fmt.Errorf("nacos.registry.service_name 未配置")
+		}
+		port, err := listenPort(cfg.Grpc.Listen)
+		if err != nil {
+			return err
+		}
+		if err := nacos.Register(serviceName, port, cfg.Nacos.Registry.Meta); err != nil {
+			return err
+		}
+		defer func() {
+			_ = nacos.Deregister(serviceName, port)
+		}()
+
 		return grpcinfra.Run(grpcinfra.ServerConfig{
 			Listen:     cfg.Grpc.Listen,
 			Reflection: reflection,
@@ -92,4 +110,16 @@ var serverCmd = &cobra.Command{
 			hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
 		})
 	},
+}
+
+func listenPort(listen string) (int, error) {
+	_, portText, err := net.SplitHostPort(listen)
+	if err != nil {
+		return 0, fmt.Errorf("解析 gRPC 监听地址 %q 失败: %w", listen, err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port <= 0 || port > 65535 {
+		return 0, fmt.Errorf("gRPC 监听地址 %q 的端口无效", listen)
+	}
+	return port, nil
 }

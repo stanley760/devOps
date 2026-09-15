@@ -5,12 +5,14 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/spf13/cobra"
 
 	infracfg "devops-infra/config"
 	"devops-infra/logging"
+	"devops-infra/nacos"
 
 	"devops-id/internal/config"
 )
@@ -25,6 +27,9 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var cfg config.Config
 		if err := infracfg.LoadInto(&cfg); err != nil {
+			return err
+		}
+		if err := loadNacosConfig(&cfg); err != nil {
 			return err
 		}
 		if err := logging.Init(cfg.Log); err != nil {
@@ -42,6 +47,7 @@ var rootCmd = &cobra.Command{
 
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		_ = nacos.Close()
 		return logging.Close()
 	},
 
@@ -50,9 +56,38 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func loadNacosConfig(cfg *config.Config) error {
+	if !cfg.Nacos.Enabled || len(cfg.Nacos.ConfigCenter.DataIDs) == 0 {
+		return nil
+	}
+	if err := nacos.Init(cfg.Nacos); err != nil {
+		if cfg.Nacos.ConfigCenter.Required {
+			return err
+		}
+		return nil
+	}
+	content, err := nacos.FetchAll(cfg.Nacos.ConfigCenter.DataIDs)
+	if err != nil {
+		if cfg.Nacos.ConfigCenter.Required {
+			return err
+		}
+		return nil
+	}
+	if content == "" {
+		if cfg.Nacos.ConfigCenter.Required {
+			return fmt.Errorf("nacos 配置中心未返回配置")
+		}
+		return nil
+	}
+	if err := infracfg.ReplaceWithYAML(content); err != nil {
+		return err
+	}
+	return infracfg.LoadInto(cfg)
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(
-		&confFile, "config-file", "f", "config/config.yaml", "the service config from file",
+		&confFile, "config-file", "f", "config/bootstrap.yaml", "the bootstrap config file",
 	)
 }
 

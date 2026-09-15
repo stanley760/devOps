@@ -14,6 +14,7 @@ import (
 	grpcinfra "devops-infra/grpc"
 	httpinfra "devops-infra/http"
 	"devops-infra/logging"
+	"devops-infra/nacos"
 
 	"devops-id/pkg/idclient"
 	client "devops-infra/database/mysql"
@@ -39,6 +40,9 @@ var rootCmd = &cobra.Command{
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
+		if err := loadNacosConfig(&cfg); err != nil {
+			return err
+		}
 		if err := logging.Init(cfg.Log); err != nil {
 			return err
 		}
@@ -54,6 +58,7 @@ var rootCmd = &cobra.Command{
 
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		_ = nacos.Close()
 		return logging.Close()
 	},
 
@@ -62,9 +67,38 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func loadNacosConfig(cfg *config.Config) error {
+	if !cfg.Nacos.Enabled || len(cfg.Nacos.ConfigCenter.DataIDs) == 0 {
+		return nil
+	}
+	if err := nacos.Init(cfg.Nacos); err != nil {
+		if cfg.Nacos.ConfigCenter.Required {
+			return err
+		}
+		return nil
+	}
+	content, err := nacos.FetchAll(cfg.Nacos.ConfigCenter.DataIDs)
+	if err != nil {
+		if cfg.Nacos.ConfigCenter.Required {
+			return err
+		}
+		return nil
+	}
+	if content == "" {
+		if cfg.Nacos.ConfigCenter.Required {
+			return fmt.Errorf("nacos 配置中心未返回配置")
+		}
+		return nil
+	}
+	if err := infracfg.ReplaceWithYAML(content); err != nil {
+		return err
+	}
+	return infracfg.LoadInto(cfg)
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(
-		&confFile, "config-file", "f", "config/config.yaml", "the service config from file",
+		&confFile, "config-file", "f", "config/bootstrap.yaml", "the bootstrap config file",
 	)
 }
 
@@ -133,10 +167,19 @@ var serverCmd = &cobra.Command{
 		postSvc := service.NewPost()
 		tenantSvc := service.NewTenant(cfg, authM)
 
+		serviceName := cfg.Nacos.Registry.ServiceName
+		if serviceName == "" {
+			return fmt.Errorf("nacos.registry.service_name 未配置")
+		}
+		if err := nacos.Register(serviceName, cfg.Server.Port, cfg.Nacos.Registry.Meta); err != nil {
+			return err
+		}
+
 		err = httpinfra.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
 			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc))
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
+		_ = nacos.Deregister(serviceName, cfg.Server.Port)
 		tenantdb.CloseResolver()
 		authz.Close()
 		_ = grpcinfra.Close(conn)

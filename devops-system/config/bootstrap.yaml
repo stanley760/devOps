@@ -58,8 +58,30 @@ tenant:
   default_code: "default"          # 登录未指定租户时的默认租户 code
 
 idclient:                          # devops-id 发号服务接入
-  endpoint: "127.0.0.1:9090"
+  endpoint: "127.0.0.1:9090"       # 启用 Nacos 时改为 nacos://devops-id
   batch: 100                       # 预取批量（1 = 关闭预取，逐次 RPC）
   low_water: 0.2                   # 剩余比例低于 20% 时异步补充
   dial_timeout: 3s
   call_timeout: 3s
+
+nacos:
+  enabled: false
+  endpoints:
+    - "127.0.0.1:8848"
+  namespace: ""
+  group: "DEVOPS_GROUP"
+  username: "nacos"
+  password: "nacos"
+  timeout: 5s
+  config:
+    data_ids:
+      - "devops-system.yaml"
+    group: "DEVOPS_GROUP"
+    timeout: 5s
+    required: false
+  registry:
+    service_name: "devops-system"
+    cluster: "DEFAULT"
+    weight: 1
+    meta:
+      service: "devops-system"

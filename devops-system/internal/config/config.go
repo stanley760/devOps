@@ -19,6 +19,7 @@ type Config struct {
 	JWT      JWTConfig           `mapstructure:"jwt"`
 	Tenant   TenantConfig        `mapstructure:"tenant"`
 	IDClient IDClientConfig      `mapstructure:"idclient"`
+	Nacos    config.NacosConfig  `mapstructure:"nacos"`
 }
 
 // JWTConfig JWT 双 token 配置

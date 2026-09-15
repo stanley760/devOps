@@ -17,6 +17,7 @@ type Config struct {
 	Mysql config.MysqlConfig `mapstructure:"mysql"`
 	IDGen IDGenConfig        `mapstructure:"idgen"`
 	Etcd  EtcdConfig         `mapstructure:"etcd"`
+	Nacos config.NacosConfig `mapstructure:"nacos"`
 }
 
 // GrpcConfig gRPC 服务配置
