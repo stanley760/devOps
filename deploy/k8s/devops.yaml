@@ -23,14 +23,14 @@ kind: Namespace
 metadata:
   name: devops
 ---
-# devops-id 的 prod.yaml（含 MySQL 密码，故入 Secret）
+# devops-id 的 devops-id-prod.yaml（含 MySQL 密码，故入 Secret）
 apiVersion: v1
 kind: Secret
 metadata:
   name: devops-id-config
   namespace: devops
 stringData:
-  prod.yaml: |
+  devops-id-prod.yaml: |
     log:
       level: info
       console: true
@@ -39,20 +39,22 @@ stringData:
       host: YOUR_MYSQL_HOST      # TODO: 如 mysql.devops.svc.cluster.local 或 RDS 地址
       username: devops
       password: "YOUR_MYSQL_PASSWORD"
+    nacos:
+      enabled: false
     idgen:
       mode: segment              # snowflake 时改此处并确认 etcd 段
     etcd:
       endpoints:
         - "YOUR_ETCD_ENDPOINT:2379"
 ---
-# devops-system 的 prod.yaml（含 MySQL/Redis 密码与 JWT 密钥，故入 Secret）
+# devops-system 的 devops-system-prod.yaml（含 MySQL/Redis 密码与 JWT 密钥，故入 Secret）
 apiVersion: v1
 kind: Secret
 metadata:
   name: devops-system-config
   namespace: devops
 stringData:
-  prod.yaml: |
+  devops-system-prod.yaml: |
     log:
       level: info
       console: true
@@ -63,15 +65,14 @@ stringData:
     redis:
       host: YOUR_REDIS_HOST
       password: "YOUR_REDIS_PASSWORD"
+    nacos:
+      enabled: false
     jwt:
       signing_key: "YOUR_JWT_SIGNING_KEY_MIN_32_CHARS"
     idclient:
       endpoint: "devops-id.devops.svc.cluster.local:9090"
     server:
       trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []
-      cors:
-        allow_origins:
-          - "https://admin.example.com"  # TODO: 实际前端域名
 ---
 # 建表迁移：init 容器先建号段表，主容器建业务表 + 种子（有先后依赖）
 apiVersion: batch/v1
@@ -94,8 +95,8 @@ spec:
               value: prod
           volumeMounts:
             - name: config
-              mountPath: /app/config/prod.yaml
-              subPath: prod.yaml
+              mountPath: /app/config/devops-id-prod.yaml
+              subPath: devops-id-prod.yaml
               readOnly: true
       containers:
         - name: system-migrate
@@ -106,8 +107,8 @@ spec:
               value: prod
           volumeMounts:
             - name: config
-              mountPath: /app/config/prod.yaml
-              subPath: prod.yaml
+              mountPath: /app/config/devops-system-prod.yaml
+              subPath: devops-system-prod.yaml
               readOnly: true
       volumes:
         - name: config
@@ -168,8 +169,8 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /app/config/prod.yaml
-              subPath: prod.yaml
+              mountPath: /app/config/devops-id-prod.yaml
+              subPath: devops-id-prod.yaml
               readOnly: true
             # snowflake 槽位/发号水位缓存：Pod 级临时卷，重建靠 etcd 重新抢占
             - name: worker-cache
@@ -245,8 +246,8 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /app/config/prod.yaml
-              subPath: prod.yaml
+              mountPath: /app/config/devops-system-prod.yaml
+              subPath: devops-system-prod.yaml
               readOnly: true
       volumes:
         - name: config

@@ -69,15 +69,6 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 	r.Use(gin.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.AccessLog())
-	if len(cfg.CORS.AllowOrigins) > 0 {
-		r.Use(middleware.CORS(middleware.CORSConfig{
-			AllowOrigins:     cfg.CORS.AllowOrigins,
-			AllowMethods:     cfg.CORS.AllowMethods,
-			AllowHeaders:     cfg.CORS.AllowHeaders,
-			AllowCredentials: cfg.CORS.AllowCredentials,
-			MaxAge:           cfg.CORS.MaxAge,
-		}))
-	}
 	r.HandleMethodNotAllowed = true
 	r.NoRoute(func(c *gin.Context) { response.Fail(c, errs.CodeNotFound, "接口不存在") })
 	r.NoMethod(func(c *gin.Context) { response.Fail(c, errs.CodeMethodNotAllowed, errs.ErrMethodNotAllowed.Msg) })

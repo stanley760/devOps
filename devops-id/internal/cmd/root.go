@@ -60,16 +60,10 @@ func loadNacosConfig(cfg *config.Config) error {
 	if !cfg.Nacos.Enabled {
 		return nil
 	}
-	dataIDs := infracfg.RemoteDataIDs(cfg.Nacos.ConfigCenter.DataIDs)
-	if len(dataIDs) == 0 {
-		return nil
-	}
 	if err := nacos.Init(cfg.Nacos); err != nil {
-		if cfg.Nacos.ConfigCenter.Required {
-			return err
-		}
-		return nil
+		return err
 	}
+	dataIDs := infracfg.RemoteDataIDs(cfg.Nacos.ConfigCenter.DataIDs)
 	loaded := false
 	for _, dataID := range dataIDs {
 		content, err := nacos.Fetch(dataID)

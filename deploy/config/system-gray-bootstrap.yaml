@@ -1,0 +1,8 @@
+nacos:
+  enabled: true
+  endpoints:
+    - "nacos:8848"
+  namespace: public
+  group: DEVOPS_GROUP
+  registry:
+    service_name: devops-system-gray

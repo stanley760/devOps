@@ -4,7 +4,7 @@
 #   docker build -f devops-system/Dockerfile -t devops-system:dev .
 #
 # 镜像内配置仅为占位（config/config.yaml），实际环境差异通过
-# APP_ENV 合并环境文件覆盖（挂载 prod.yaml，见 deploy/）。
+# APP_ENV 合并环境文件覆盖（挂载 devops-system-prod.yaml，见 deploy/）。
 FROM golang:1.26-alpine AS builder
 
 ARG VERSION=dev

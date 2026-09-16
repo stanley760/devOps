@@ -14,14 +14,4 @@ type ServerConfig struct {
 	ReadTimeout    time.Duration `mapstructure:"read_timeout"`    // 读超时，0 表示不限制
 	WriteTimeout   time.Duration `mapstructure:"write_timeout"`   // 写超时，0 表示不限制
 	TrustedProxies []string      `mapstructure:"trusted_proxies"` // 可信反向代理 IP 或 CIDR
-	CORS           CORSConfig    `mapstructure:"cors"`            // 跨域配置（allow_origins 为空则不启用）
-}
-
-// CORSConfig 跨域配置（httpx 统一装配，见 middleware.CORS）
-type CORSConfig struct {
-	AllowOrigins     []string      `mapstructure:"allow_origins"`     // 允许的源，精确匹配；["*"] 通配
-	AllowMethods     []string      `mapstructure:"allow_methods"`     // 空：GET/POST/PUT/DELETE/OPTIONS
-	AllowHeaders     []string      `mapstructure:"allow_headers"`     // 空：Origin/Content-Type/Authorization/X-Requested-With
-	AllowCredentials bool          `mapstructure:"allow_credentials"` // 允许携带 Cookie（为 true 时不回显 *）
-	MaxAge           time.Duration `mapstructure:"max_age"`           // 预检缓存时长，如 12h
 }

@@ -1,4 +1,4 @@
-# 单机容器化部署：MySQL + Redis +（可选 etcd）+ devops-id + devops-system
+# 单机容器化部署：MySQL + Redis + Nacos +（可选 etcd / Higress）+ devops-id + devops-system
 #
 # 标准流程（也可用根目录 Makefile 快捷命令）：
 #   docker compose -f deploy/docker-compose.yml build
@@ -6,6 +6,11 @@
 #   docker compose -f deploy/docker-compose.yml run --rm devops-system migrate   # 业务表 + 种子数据
 #   docker compose -f deploy/docker-compose.yml up -d
 #   curl http://localhost:9999/healthz
+#
+# Higress 网关（可选）：
+#   docker compose -f deploy/docker-compose.yml --profile gateway up -d
+#   curl -H 'Host: api.devops.local' http://localhost:8080/healthz
+#   控制台 http://localhost:8001；Nacos 控制台 http://localhost:8848/nacos
 #
 # snowflake 发号模式：先把 config/id-prod.yaml 的 idgen.mode 改为 snowflake，
 # 再加 --profile snowflake 启动（会额外起单节点 etcd）：
@@ -36,6 +41,28 @@ services:
       retries: 30
       start_period: 15s
     restart: unless-stopped
+  nacos:
+    image: nacos/nacos-server:v2.4.3   # 建议 2.x，Higress 走 gRPC 协议感知更快
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+      JVM_XMN: 128m
+    ports:
+      - "8848:8848"
+    expose:
+      - "9848"
+      - "9849"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -47,6 +74,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    restart: unless-stopped
+
+  # Higress all-in-one 仅适合本地/体验环境；生产请使用 Helm 部署到 K8s。
+  higress:
+    image: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/all-in-one:2.2.3
+    profiles: ["gateway"]
+    ports:
+      - "8001:8001"           # 控制台
+      - "8080:8080"           # HTTP 网关
+      - "8443:8443"           # HTTPS 网关
+    volumes:
+      - ./higress:/data
+    depends_on:
+      nacos:
+        condition: service_healthy
     restart: unless-stopped
 
   # 仅 snowflake 模式需要，默认不启动
@@ -78,11 +120,13 @@ services:
     environment:
       APP_ENV: prod
     volumes:
-      - ./config/id-prod.yaml:/app/config/prod.yaml:ro
+      - ./config/id-prod.yaml:/app/config/devops-id-prod.yaml:ro
       # snowflake 槽位/发号水位缓存；容器重建后靠 etcd 重新抢占，符合设计
       - id-data:/app/data
     depends_on:
       mysql:
+        condition: service_healthy
+      nacos:
         condition: service_healthy
       etcd:
         condition: service_started
@@ -101,11 +145,35 @@ services:
     environment:
       APP_ENV: prod
     volumes:
-      - ./config/system-prod.yaml:/app/config/prod.yaml:ro
+      - ./config/system-prod.yaml:/app/config/devops-system-prod.yaml:ro
     depends_on:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      devops-id:
+        condition: service_started
+    restart: unless-stopped
+
+  devops-system-gray:
+    build:
+      context: ..
+      dockerfile: devops-system/Dockerfile
+    image: devops-system:latest
+    profiles: ["gray"]
+    environment:
+      APP_ENV: prod
+    volumes:
+      - ./config/system-gray-bootstrap.yaml:/app/config/bootstrap.yaml:ro
+      - ./config/system-gray-prod.yaml:/app/config/devops-system-gray-prod.yaml:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
         condition: service_healthy
       devops-id:
         condition: service_started
@@ -113,6 +181,7 @@ services:
 
 volumes:
   mysql-data:
+  nacos-data:
   redis-data:
   etcd-data:
   id-data:

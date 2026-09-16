@@ -1,4 +1,4 @@
-# devops-id 容器环境覆盖：挂载为镜像内 /app/config/prod.yaml，APP_ENV=prod 生效。
+# devops-id 容器环境覆盖：挂载为镜像内 /app/config/devops-id-prod.yaml，APP_ENV=prod 生效。
 # 地址为 docker-compose 服务名（同一网络内的服务发现）；
 # K8s 部署时换成对应 Service 名或外部托管服务地址。
 log:
@@ -11,8 +11,17 @@ mysql:
   username: root
   password: "123456"   # TODO 生产必改，与 MySQL 容器环境变量一致
 
+nacos:
+  enabled: true
+  endpoints:
+    - "nacos:8848"
+  namespace: public
+  group: "DEVOPS_GROUP"
+  registry:
+    service_name: "devops-id"
+
 idgen:
-  mode: snowflake       # 容器号段模式切 snowflake 
+  mode: segment          # snowflake 时改这里，并加 --profile snowflake 启动 etcd
 
 etcd:                 # 仅 idgen.mode=snowflake 时读取
   endpoints:

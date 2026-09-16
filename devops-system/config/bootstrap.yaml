@@ -7,13 +7,6 @@ server:
   trusted_proxies:          # 可信反向代理 IP 或 CIDR；不在代理后建议置空 []
     - 127.0.0.1
     - "::1"
-  cors:                     # 跨域配置（allow_origins 为空则不启用 CORS）
-    allow_origins:          # 允许的前端源，精确匹配；prod 建议收敛为具体域名
-      - "http://localhost:5173"   # 常见 Vite dev server
-      - "http://localhost:3000"   # 常见 CRA/Next dev server
-    allow_credentials: true # 登录态走 Authorization 头 + 可选 Cookie，需携带凭据
-    max_age: 12h            # 预检结果缓存，减少 OPTIONS 探测
-
 log:
   level: debug            # debug | info | warn | error
   dir: logs

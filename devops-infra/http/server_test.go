@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,28 @@ func TestReadyZReportsCheckStatus(t *testing.T) {
 	}
 	if len(body.Data.Ready) != 1 || body.Data.Unready[0] != "redis" {
 		t.Fatalf("checks = %+v", body.Data)
+	}
+}
+
+func TestRouterDoesNotHandleCORS(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router, err := newRouter(config.ServerConfig{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodOptions, "/healthz", nil)
+	request.Header.Set("Origin", "http://localhost:5173")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
+	}
+	for header := range recorder.Header() {
+		if strings.HasPrefix(header, "Access-Control-") {
+			t.Fatalf("CORS header %q should be handled by Higress", header)
+		}
 	}
 }
 

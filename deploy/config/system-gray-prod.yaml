@@ -1,0 +1,44 @@
+log:
+  level: info
+  console: true
+  format: json
+
+mysql:
+  host: mysql
+  port: 3306
+  username: devops
+  password: devopspwd
+  database: devops
+  charset: utf8mb4
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 1h
+  log_level: warn
+
+redis:
+  host: redis
+  port: 6379
+  password: "123456"
+  db: 0
+  pool_size: 100
+
+jwt:
+  signing_key: change-me-to-a-random-string-of-at-least-32-chars
+  issuer: devops
+  access_expire: 2h
+  refresh_expire: 168h
+
+idclient:
+  endpoint: nacos://devops-id
+  batch: 100
+  low_water: 0.2
+  dial_timeout: 3s
+  call_timeout: 3s
+
+server:
+  port: 9999
+  read_timeout: 10s
+  write_timeout: 10s
+  trusted_proxies:
+    - 172.16.0.0/12
+    - 192.168.0.0/16

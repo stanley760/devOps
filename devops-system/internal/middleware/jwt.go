@@ -1,6 +1,6 @@
 // Package middleware devops-system 业务中间件：JWT / Tenant。
 //
-// 统一中间件链：Recovery → AccessLog → CORS（infra httpx）
+// 统一中间件链：Recovery → AccessLog（CORS 由 Higress 网关统一处理）
 //
 //	├─ 公开：/auth/login /auth/refresh
 //	└─ JWT → Tenant(租户校验) → [CasbinAuth(P5)] → 业务路由

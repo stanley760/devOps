@@ -1,0 +1,29 @@
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: devops-cors
+  namespace: higress-system
+spec:
+  defaultConfigDisable: true
+  matchRules:
+    - ingress:
+        - higress-system/devops-system
+        - higress-system/devops-system-canary
+      config:
+        allow_origins:
+          - http://localhost:5173
+          - http://localhost:3000
+        allow_methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        allow_headers:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+        allow_credentials: true
+        max_age: 3600
+  url: oci://higress-registry.cn-hangzhou.cr.aliyuncs.com/plugins/cors:1.0.0
