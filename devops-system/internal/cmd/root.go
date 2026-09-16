@@ -68,7 +68,11 @@ var rootCmd = &cobra.Command{
 }
 
 func loadNacosConfig(cfg *config.Config) error {
-	if !cfg.Nacos.Enabled || len(cfg.Nacos.ConfigCenter.DataIDs) == 0 {
+	if !cfg.Nacos.Enabled {
+		return nil
+	}
+	dataIDs := infracfg.RemoteDataIDs(cfg.Nacos.ConfigCenter.DataIDs)
+	if len(dataIDs) == 0 {
 		return nil
 	}
 	if err := nacos.Init(cfg.Nacos); err != nil {
@@ -77,23 +81,30 @@ func loadNacosConfig(cfg *config.Config) error {
 		}
 		return nil
 	}
-	content, err := nacos.FetchAll(cfg.Nacos.ConfigCenter.DataIDs)
-	if err != nil {
-		if cfg.Nacos.ConfigCenter.Required {
+	loaded := false
+	for _, dataID := range dataIDs {
+		content, err := nacos.Fetch(dataID)
+		if err != nil {
+			if cfg.Nacos.ConfigCenter.Required {
+				return err
+			}
+			continue
+		}
+		if content == "" {
+			continue
+		}
+		if err := infracfg.MergeRemoteYAML(dataID, content); err != nil {
 			return err
 		}
-		return nil
+		loaded = true
 	}
-	if content == "" {
-		if cfg.Nacos.ConfigCenter.Required {
-			return fmt.Errorf("nacos 配置中心未返回配置")
-		}
-		return nil
+	if cfg.Nacos.ConfigCenter.Required && !loaded {
+		return fmt.Errorf("nacos 配置中心未返回配置")
 	}
-	if err := infracfg.ReplaceWithYAML(content); err != nil {
-		return err
+	if loaded {
+		return infracfg.LoadInto(cfg)
 	}
-	return infracfg.LoadInto(cfg)
+	return nil
 }
 
 func init() {
@@ -175,8 +186,13 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
+		readiness := []httpinfra.ReadinessCheck{
+			{Name: "mysql", Check: client.Default().Ping},
+			{Name: "redis", Check: store.Ping},
+			{Name: "devops-id", Check: idc.Ping},
+		}
 		err = httpinfra.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
-			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc))
+			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc), readiness...)
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
 		_ = nacos.Deregister(serviceName, cfg.Server.Port)

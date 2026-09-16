@@ -57,7 +57,11 @@ var rootCmd = &cobra.Command{
 }
 
 func loadNacosConfig(cfg *config.Config) error {
-	if !cfg.Nacos.Enabled || len(cfg.Nacos.ConfigCenter.DataIDs) == 0 {
+	if !cfg.Nacos.Enabled {
+		return nil
+	}
+	dataIDs := infracfg.RemoteDataIDs(cfg.Nacos.ConfigCenter.DataIDs)
+	if len(dataIDs) == 0 {
 		return nil
 	}
 	if err := nacos.Init(cfg.Nacos); err != nil {
@@ -66,23 +70,30 @@ func loadNacosConfig(cfg *config.Config) error {
 		}
 		return nil
 	}
-	content, err := nacos.FetchAll(cfg.Nacos.ConfigCenter.DataIDs)
-	if err != nil {
-		if cfg.Nacos.ConfigCenter.Required {
+	loaded := false
+	for _, dataID := range dataIDs {
+		content, err := nacos.Fetch(dataID)
+		if err != nil {
+			if cfg.Nacos.ConfigCenter.Required {
+				return err
+			}
+			continue
+		}
+		if content == "" {
+			continue
+		}
+		if err := infracfg.MergeRemoteYAML(dataID, content); err != nil {
 			return err
 		}
-		return nil
+		loaded = true
 	}
-	if content == "" {
-		if cfg.Nacos.ConfigCenter.Required {
-			return fmt.Errorf("nacos 配置中心未返回配置")
-		}
-		return nil
+	if cfg.Nacos.ConfigCenter.Required && !loaded {
+		return fmt.Errorf("nacos 配置中心未返回配置")
 	}
-	if err := infracfg.ReplaceWithYAML(content); err != nil {
-		return err
+	if loaded {
+		return infracfg.LoadInto(cfg)
 	}
-	return infracfg.LoadInto(cfg)
+	return nil
 }
 
 func init() {
