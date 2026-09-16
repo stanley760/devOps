@@ -6,7 +6,6 @@ require (
 	devops-infra v0.0.0
 	github.com/fatih/color v1.19.0
 	github.com/spf13/cobra v1.10.2
-	go.etcd.io/etcd/client/v3 v3.7.1
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gorm.io/gorm v1.31.2

@@ -8,6 +8,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/spf13/viper v1.21.0
+	go.etcd.io/etcd/client/v3 v3.7.1
 	google.golang.org/grpc v1.82.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.2

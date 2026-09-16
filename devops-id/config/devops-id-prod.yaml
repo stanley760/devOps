@@ -18,6 +18,7 @@ mysql:
 
 idgen:
   mode: snowflake        # segment（号段模式，默认）| snowflake
+  worker_cache: "data"
   # step: 1000             # segment：号段长度
   # low_water: 0.1         # segment：剩余比例低于 10% 时异步预加载下一号段
 
@@ -26,4 +27,3 @@ etcd:                    # 仅 idgen.mode=snowflake 时使用
     - "192.168.215.3:2379"
   dial_timeout: 5s
   lease_ttl: 10s         # 宕机后槽位释放延迟
-  worker_cache: "data"   # 槽位/发号水位缓存目录（优先复用原槽位）

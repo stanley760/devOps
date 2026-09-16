@@ -5,8 +5,6 @@
 package config
 
 import (
-	"time"
-
 	"devops-infra/config"
 )
 
@@ -16,7 +14,7 @@ type Config struct {
 	Log   config.LogConfig   `mapstructure:"log"`
 	Mysql config.MysqlConfig `mapstructure:"mysql"`
 	IDGen IDGenConfig        `mapstructure:"idgen"`
-	Etcd  EtcdConfig         `mapstructure:"etcd"`
+	Etcd  config.EtcdConfig  `mapstructure:"etcd"`
 	Nacos config.NacosConfig `mapstructure:"nacos"`
 }
 
@@ -28,15 +26,8 @@ type GrpcConfig struct {
 
 // IDGenConfig 发号器配置
 type IDGenConfig struct {
-	Mode     string  `mapstructure:"mode"`      // segment（号段模式，默认）| snowflake
-	Step     int     `mapstructure:"step"`      // segment：号段长度
-	LowWater float64 `mapstructure:"low_water"` // segment：剩余比例低于该值时异步预加载
-}
-
-// EtcdConfig etcd 连接配置（仅 snowflake 模式使用）
-type EtcdConfig struct {
-	Endpoints   []string      `mapstructure:"endpoints"`
-	DialTimeout time.Duration `mapstructure:"dial_timeout"`
-	LeaseTTL    time.Duration `mapstructure:"lease_ttl"`    // 槽位持有 lease 的 TTL（宕机后槽位释放延迟）
-	WorkerCache string        `mapstructure:"worker_cache"` // 本地槽位缓存文件（优先复用原槽）
+	Mode        string  `mapstructure:"mode"`
+	Step        int     `mapstructure:"step"`
+	LowWater    float64 `mapstructure:"low_water"`
+	WorkerCache string  `mapstructure:"worker_cache"`
 }

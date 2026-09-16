@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	infracfg "devops-infra/config"
+	etcdinfra "devops-infra/etcd"
 	grpcinfra "devops-infra/grpc"
 	"devops-infra/nacos"
 
@@ -50,18 +50,9 @@ var serverCmd = &cobra.Command{
 			})
 
 		case "snowflake":
-			if len(cfg.Etcd.Endpoints) == 0 {
-				return fmt.Errorf("idgen.mode=snowflake 需要配置 etcd.endpoints")
-			}
-			if cfg.Etcd.DialTimeout <= 0 {
-				cfg.Etcd.DialTimeout = 5 * time.Second
-			}
-			cli, err := clientv3.New(clientv3.Config{
-				Endpoints:   cfg.Etcd.Endpoints,
-				DialTimeout: cfg.Etcd.DialTimeout,
-			})
+			cli, err := etcdinfra.New(cfg.Etcd)
 			if err != nil {
-				return fmt.Errorf("连接 etcd 失败: %w", err)
+				return err
 			}
 			defer cli.Close()
 
@@ -70,7 +61,7 @@ var serverCmd = &cobra.Command{
 			defer cancel()
 			sf, err := snowflake.New(initCtx, cli, snowflake.Config{
 				LeaseTTL:    cfg.Etcd.LeaseTTL,
-				WorkerCache: cfg.Etcd.WorkerCache,
+				WorkerCache: cfg.IDGen.WorkerCache,
 			})
 			if err != nil {
 				return err

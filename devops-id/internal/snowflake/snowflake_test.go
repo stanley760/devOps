@@ -3,6 +3,7 @@
 package snowflake
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestNextBitLayoutAndMonotonic(t *testing.T) {
 
 func TestBatchNextStrictlyIncreasing(t *testing.T) {
 	m := newTestManager(1)
-	ids, err := m.BatchNext(nil, "any", 500)
+	ids, err := m.BatchNext(context.TODO(), "any", 500)
 	if err != nil {
 		t.Fatal(err)
 	}
