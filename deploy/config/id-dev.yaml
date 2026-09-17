@@ -1,0 +1,26 @@
+# Docker 单节点开发环境配置。
+# 容器之间使用 Compose 服务名通信，不要改为 127.0.0.1。
+log:
+  level: debug
+  dir: /app/logs
+  console: true
+  format: text
+
+nacos:
+  enabled: true
+  endpoints:
+    - "nacos:8848"
+  namespace: public
+  group: "DEVOPS_GROUP"
+  registry:
+    service_name: "devops-id"
+
+idgen:
+  leaf_name: devops-id
+  worker_cache: data
+
+etcd:
+  endpoints:
+    - "etcd:2379"
+  dial_timeout: 5s
+  lease_ttl: 10s

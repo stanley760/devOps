@@ -46,7 +46,8 @@ RUN apk add --no-cache tzdata ca-certificates \
 WORKDIR /app
 COPY --from=builder /out/devops-id /usr/local/bin/devops-id
 COPY --chown=app:app devops-id/config/ /app/config/
-RUN mkdir -p /app/logs /app/data && chown app:app /app/logs /app/data
+RUN mkdir -p /app/log /app/logs /app/data \
+    && chown -R app:app /app/log /app/logs /app/data
 
 USER app
 ENV TZ=Asia/Shanghai \

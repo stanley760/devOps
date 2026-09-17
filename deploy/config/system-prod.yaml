@@ -3,6 +3,7 @@
 # K8s 部署时换成对应 Service 名或外部托管服务地址。
 log:
   level: info
+  dir: /app/logs
   console: true       # 容器标准：日志走 stdout，由 docker/k8s 日志驱动收集
   format: json
 

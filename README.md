@@ -166,6 +166,53 @@ etcdctl --endpoints=192.168.215.3:2379 get --prefix idgen/snowflake/devops-id/
 
 每个 `biz_tag` 都会使用 `idgen/snowflake/{leaf_name}/{biz_tag}/` 独立槽位前缀。服务启动时不分配 worker，首次收到某个 `biz_tag` 的请求后才懒加载对应生成器。
 
+jwt.signing_key 生成规则
+
+jwt.signing_key 应使用密码学安全的随机字符串，至少 32 字节（256 位）。不要使用固定示例值或普通随机数。
+Windows PowerShell 生成：
+
+```powershell
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$rng.Dispose()
+[Convert]::ToBase64String($bytes)
+```
+将结果写入 system-dev.yaml：
+```yaml
+jwt:
+  signing_key: "mM9z6mYxJ5vQ3K8rT2pL7wN4sB1cD6eF0gH2jK5lP8Q="
+```
+
+使用 OpenSSL
+
+如果已安装 OpenSSL：
+```bash
+openssl rand -base64 32
+```
+或者生成十六进制字符串：
+```bash
+openssl rand -hex 32
+```
+使用 Linux/macOS
+```bash
+openssl rand -base64 32
+```
+也可以：
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+注意事项
+开发环境和生产环境应使用不同的 signing_key。
+不要将真实生产密钥提交到 Git。
+修改 signing_key 后，之前签发的 JWT 会全部失效，需要重新登录。
+生成后建议检查长度：
+```bash
+$key = "你的密钥"
+$key.Length
+```
+
+Base64 形式的 32 字节随机值通常是 44 个字符，长度满足当前 HS256 配置要求。
 ## API
 
 统一前缀 `/api/v1`，统一信封 `{"code", "msg", "data"}`（code 与 HTTP 状态一致）；`types.ID` 序列化为字符串（防 JS 精度丢失）。
@@ -207,3 +254,34 @@ go test ./devops-infra/... ./devops-id/... ./devops-system/...
 - [ ] 租户套餐、域名 → 租户映射、A→B 迁移工具
 - [ ] Prometheus 发号监控
 - [ ] Docker 与生产部署
+
+## Docker 开发环境故障排查
+
+单节点开发环境使用独立编排文件：
+
+```powershell
+.\deploy\dev.ps1
+```
+
+如果脚本报告 `Docker Compose command failed`，真正的 Docker 错误会出现在该异常之前，
+并且脚本会标明失败阶段（`build`、启动基础设施、`migrate` 或启动应用）。
+也可以直接执行以下命令获取完整输出：
+
+```powershell
+docker compose -f deploy/docker-compose-dev.yml config
+docker compose -f deploy/docker-compose-dev.yml build
+```
+
+常见原因：
+
+- Docker Desktop 未启动，或当前终端找不到 `docker.exe`；
+- 首次构建拉取 `golang:1.26-alpine` 或 Go 依赖时网络不可用；
+- `9999`、`8848` 等端口已被其他程序占用；
+- Docker Desktop 的磁盘空间不足。
+
+查看具体服务状态和日志：
+
+```powershell
+.\deploy\dev.ps1 -Command ps
+docker compose -f deploy/docker-compose-dev.yml logs devops-id devops-system
+```

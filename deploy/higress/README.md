@@ -24,6 +24,9 @@ curl -i -H 'Host: api.devops.local' http://localhost:8080/healthz
 
 如需浏览器访问，可把 `127.0.0.1 api.devops.local` 加入本机 hosts。
 
+开发环境的一键启动、服务依赖、访问地址和常用命令见
+[deploy/README.md](../README.md)。
+
 ## 资源说明
 
 - `mcpbridges/default.yaml`：使用 `nacos2` 协议对接 Nacos，并订阅 `DEVOPS_GROUP`。

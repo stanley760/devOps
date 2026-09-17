@@ -1,0 +1,40 @@
+# Docker 单节点开发环境配置。
+# 容器之间使用 Compose 服务名通信，不要改为 127.0.0.1。
+log:
+  level: debug
+  dir: /app/logs
+  console: true
+  format: text
+
+mysql:
+  host: mysql
+  port: 3306
+  username: devops
+  password: "devopspwd"
+  database: devops
+
+redis:
+  host: redis
+  port: 6379
+  password: "123456"
+  db: 0
+
+nacos:
+  enabled: true
+  endpoints:
+    - "nacos:8848"
+  namespace: public
+  group: "DEVOPS_GROUP"
+  registry:
+    service_name: "devops-system"
+
+jwt:
+  signing_key: "kwi0hd0nvjXX/okQVo5VlVgfJGrKJdDH6NlkLUldLfE="
+
+idclient:
+  endpoint: "nacos://devops-id"
+
+server:
+  trusted_proxies:
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
