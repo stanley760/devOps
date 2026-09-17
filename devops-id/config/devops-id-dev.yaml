@@ -4,25 +4,11 @@ log:
   level: debug
   console: true
 
-mysql:
-  host: 127.0.0.1
-  port: 3306
-  username: devops
-  password: "changeme"
-  database: devops       # t_leaf_alloc 号段表所在库（默认与 devops-system 同库）
-  charset: utf8mb4
-  max_idle_conns: 10
-  max_open_conns: 100
-  conn_max_lifetime: 1h
-  log_level: warn        # silent | error | warn | info（GORM 日志级别）
-
 idgen:
-  mode: snowflake        # segment（号段模式，默认）| snowflake
+  leaf_name: devops-id
   worker_cache: "data"
-  # step: 1000             # segment：号段长度
-  # low_water: 0.1         # segment：剩余比例低于 10% 时异步预加载下一号段
 
-etcd:                    # 仅 idgen.mode=snowflake 时使用
+etcd:                    # snowflake worker 协调
   endpoints:
     - "192.168.215.3:2379"
   dial_timeout: 5s

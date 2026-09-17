@@ -1,5 +1,4 @@
-// server 子命令：按 idgen.mode 装配发号器（segment → MySQL 双 buffer；
-// snowflake → etcd 槽位抢占）并启动 gRPC 服务。
+// server 子命令：装配 snowflake 发号器并启动 gRPC 服务。
 package cmd
 
 import (
@@ -7,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -20,58 +18,36 @@ import (
 	"devops-infra/nacos"
 
 	"devops-id/internal/config"
-	"devops-id/internal/segment"
 	"devops-id/internal/server"
 	"devops-id/internal/snowflake"
 	"devops-id/pkg/idgenpb"
-	client "devops-infra/database/mysql"
 )
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "启动 gRPC 发号服务（segment | snowflake 双模式）",
+	Short: "启动 gRPC snowflake 发号服务",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var cfg config.Config
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
 		}
 
-		// 发号器装配：segment 依赖 MySQL；snowflake 依赖 etcd（抢槽位 + keepalive）。
-		// 优雅退出：grpcinfra.Run 收到信号返回后，defer 链 revoke lease 释放槽位（方案 6.6 Shutdown）。
-		var gen server.IdGenerator
-		switch cfg.IDGen.Mode {
-		case "", "segment":
-			if err := client.Init(cfg.Mysql); err != nil {
-				return err
-			}
-			gen = segment.New(client.Get(), segment.Config{
-				Step:     cfg.IDGen.Step,
-				LowWater: cfg.IDGen.LowWater,
-			})
-
-		case "snowflake":
-			cli, err := etcdinfra.New(cfg.Etcd)
-			if err != nil {
-				return err
-			}
-			defer cli.Close()
-
-			// 抢槽位含 1024 槽依序扫描，预算 30s 超时防启动卡死
-			initCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			sf, err := snowflake.New(initCtx, cli, snowflake.Config{
-				LeaseTTL:    cfg.Etcd.LeaseTTL,
-				WorkerCache: cfg.IDGen.WorkerCache,
-			})
-			if err != nil {
-				return err
-			}
-			defer sf.Close() // 优雅退出：持久化水位 + revoke lease 立即释放槽位
-			gen = sf
-
-		default:
-			return fmt.Errorf("未知 idgen.mode %q（支持 segment | snowflake）", cfg.IDGen.Mode)
+		// 发号器装配：snowflake 依赖 etcd；worker slot 在首次使用 biz_tag 时懒加载。
+		cli, err := etcdinfra.New(cfg.Etcd)
+		if err != nil {
+			return err
 		}
+		defer cli.Close()
+
+		sf, err := snowflake.New(context.Background(), cli, snowflake.Config{
+			LeafName:    cfg.IDGen.LeafName,
+			LeaseTTL:    cfg.Etcd.LeaseTTL,
+			WorkerCache: cfg.IDGen.WorkerCache,
+		})
+		if err != nil {
+			return err
+		}
+		defer sf.Close() // 优雅退出：revoke 所有 per-tag lease，立即释放槽位
 
 		reflection := cfg.Grpc.Reflection
 		if infracfg.Env() == "dev" {
@@ -97,7 +73,7 @@ var serverCmd = &cobra.Command{
 			Listen:     cfg.Grpc.Listen,
 			Reflection: reflection,
 		}, func(s *grpc.Server, hc *health.Server) {
-			idgenpb.RegisterIdGenServer(s, server.NewIdGenServer(gen))
+			idgenpb.RegisterIdGenServer(s, server.NewIdGenServer(sf))
 			hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
 		})
 	},

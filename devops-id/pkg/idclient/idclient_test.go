@@ -1,5 +1,5 @@
 // 集成测试：验证 idclient 预取缓冲 + 服务端发号链路。
-// 依赖本地 devops-id 服务（:9090）与已注册的 t_leaf_alloc 行，
+// 依赖本地 devops-id 服务（:9090），
 // 跳过条件：连接失败（服务未启动）时 t.Skip。
 package idclient_test
 
@@ -51,7 +51,7 @@ func TestNextSequential(t *testing.T) {
 		}
 		prev = id
 	}
-	t.Logf("user 号段 50 个 ID 连续递增，末值 %d", prev)
+	t.Logf("user worker 50 个 ID 连续递增，末值 %d", prev)
 }
 
 func TestMultiTagIsolation(t *testing.T) {
@@ -66,6 +66,6 @@ func TestMultiTagIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 不同 biz_tag 号段独立，值域不应保证大小关系，只验证可发号
-	t.Logf("user=%d role=%d（不同 biz_tag 独立号段）", u1, r1)
+	// 不同 biz_tag 拥有独立 worker 空间，允许重号，只验证可发号
+	t.Logf("user=%d role=%d（不同 biz_tag 独立 worker 空间）", u1, r1)
 }

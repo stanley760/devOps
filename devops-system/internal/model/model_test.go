@@ -105,7 +105,6 @@ func TestBizTagOf(t *testing.T) {
 		{"t_system_post", "post", true},
 		{"t_tenant", "tenant", true},
 		{"t_system_user_role", "", false}, // 关联表不走发号，无映射
-		{"t_leaf_alloc", "", false},
 		{"", "", false},
 	}
 	for _, c := range cases {

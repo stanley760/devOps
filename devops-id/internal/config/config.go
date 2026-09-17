@@ -12,7 +12,6 @@ import (
 type Config struct {
 	Grpc  GrpcConfig         `mapstructure:"grpc"`
 	Log   config.LogConfig   `mapstructure:"log"`
-	Mysql config.MysqlConfig `mapstructure:"mysql"`
 	IDGen IDGenConfig        `mapstructure:"idgen"`
 	Etcd  config.EtcdConfig  `mapstructure:"etcd"`
 	Nacos config.NacosConfig `mapstructure:"nacos"`
@@ -26,8 +25,6 @@ type GrpcConfig struct {
 
 // IDGenConfig 发号器配置
 type IDGenConfig struct {
-	Mode        string  `mapstructure:"mode"`
-	Step        int     `mapstructure:"step"`
-	LowWater    float64 `mapstructure:"low_water"`
-	WorkerCache string  `mapstructure:"worker_cache"`
+	LeafName    string `mapstructure:"leaf_name"`
+	WorkerCache string `mapstructure:"worker_cache"`
 }

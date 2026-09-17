@@ -4,27 +4,24 @@ package server
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"devops-id/internal/segment"
 	"devops-id/internal/snowflake"
 	"devops-id/pkg/idgenpb"
 )
 
-// IdGenerator 发号器统一接口：segment（双 buffer 号段）与
-// snowflake（etcd workerID）双模式实现，server 层按配置装配。
+// IdGenerator 发号器统一接口。
 type IdGenerator interface {
 	Next(ctx context.Context, bizTag string) (int64, error)
 	BatchNext(ctx context.Context, bizTag string, count int) ([]int64, error)
 }
 
-// maxBatchCount 单次批量取号上限（防恶意超大批量一次性推进 max_id）。
+// maxBatchCount 单次批量取号上限。
 const maxBatchCount = 100000
 
-// IdGenServer IdGen gRPC 实现：委托给 IdGenerator（segment / snowflake）。
+// IdGenServer IdGen gRPC 实现。
 type IdGenServer struct {
 	idgenpb.UnimplementedIdGenServer
 	gen IdGenerator
@@ -66,10 +63,10 @@ func (s *IdGenServer) BatchNext(ctx context.Context, req *idgenpb.BatchNextReque
 }
 
 // mapErr 把发号层错误映射到 gRPC 状态码：
-// 号段耗尽 / 时钟回拨 → Unavailable（建议重试）；tag 未注册 → NotFound；其余 → Internal。
+// 参数非法 → InvalidArgument；时钟回拨 / lease 失效 → Unavailable；其余 → Internal。
 func mapErr(err error) error {
-	if errors.Is(err, segment.ErrSegmentExhausted) {
-		return status.Error(codes.Unavailable, "号段耗尽且回源失败，请稍后重试")
+	if errors.Is(err, snowflake.ErrInvalidName) {
+		return status.Error(codes.InvalidArgument, "biz_tag 非法")
 	}
 	if errors.Is(err, snowflake.ErrClockBackward) {
 		return status.Error(codes.Unavailable, "时钟回拨，请稍后重试")
@@ -77,8 +74,8 @@ func mapErr(err error) error {
 	if errors.Is(err, snowflake.ErrLeaseLost) {
 		return status.Error(codes.Unavailable, "发号器 lease 失效（槽位可能被抢占），请稍后重试")
 	}
-	if strings.Contains(err.Error(), "未注册") {
-		return status.Error(codes.NotFound, "biz_tag 未注册")
+	if errors.Is(err, snowflake.ErrManagerClosed) {
+		return status.Error(codes.Unavailable, "发号器已关闭，请稍后重试")
 	}
 	return status.Error(codes.Internal, "发号失败")
 }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +28,7 @@ const (
 	// epoch is 2024-01-01T00:00:00Z in milliseconds.
 	epoch = int64(1704067200000)
 
-	slotPrefix = "idgen/snowflake/"
+	slotRoot = "idgen/snowflake"
 
 	// maxBackwardMs is the tolerated clock rollback threshold.
 	maxBackwardMs = int64(5)
@@ -39,8 +40,15 @@ var ErrClockBackward = errors.New("clock rollback exceeded threshold, reject id 
 // ErrLeaseLost means the lease-backed worker slot may have been taken over.
 var ErrLeaseLost = errors.New("lease lost, worker slot may be occupied by another instance")
 
+// ErrInvalidName means leaf_name or biz_tag cannot be used as an etcd/cache path component.
+var ErrInvalidName = errors.New("invalid leaf_name or biz_tag")
+
+// ErrManagerClosed means the snowflake manager has already been closed.
+var ErrManagerClosed = errors.New("snowflake manager is closed")
+
 // Config contains snowflake-specific configuration.
 type Config struct {
+	LeafName    string
 	LeaseTTL    time.Duration
 	WorkerCache string
 }
@@ -56,8 +64,21 @@ type slotCoordinator interface {
 	Refresh(ctx context.Context, keyPrefix, identity string, slot, timestamp int64) error
 }
 
-// Manager generates snowflake IDs.
+type infraFactory func() (leaseLifecycle, slotCoordinator)
+
+// Manager generates snowflake IDs. Each biz_tag owns an independent worker-ID
+// space under leaf_name/biz_tag.
 type Manager struct {
+	mu         sync.Mutex
+	cfg        Config
+	newInfra   infraFactory
+	generators map[string]*tagGenerator
+	closed     bool
+	closeOnce  sync.Once
+}
+
+// tagGenerator holds worker and sequence state for one biz_tag.
+type tagGenerator struct {
 	mu            sync.Mutex
 	lastTimestamp int64
 	sequence      int64
@@ -67,35 +88,138 @@ type Manager struct {
 	slots      slotCoordinator
 	nodeCancel context.CancelFunc
 	leaseLost  atomic.Bool
+	closed     atomic.Bool
 
 	workerFile string
+	slotPrefix string
 	instance   string
 	closeOnce  sync.Once
 }
 
-// New creates a manager and acquires a lease-backed worker slot.
-func New(ctx context.Context, client *etcdinfra.Client, cfg Config) (*Manager, error) {
+// New creates a manager. Worker slots are acquired lazily for each biz_tag.
+func New(_ context.Context, client *etcdinfra.Client, cfg Config) (*Manager, error) {
+	cfg, err := normalizeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	var factory infraFactory
+	if client != nil {
+		leaseTTL := cfg.LeaseTTL
+		factory = func() (leaseLifecycle, slotCoordinator) {
+			lease := etcdinfra.NewLeaseManager(client, leaseTTL)
+			return lease, etcdinfra.NewSlotCoordinator(client, lease)
+		}
+	}
+	return newManagerWithInfra(cfg, factory)
+}
+
+func newManagerWithInfra(cfg Config, factory infraFactory) (*Manager, error) {
+	cfg, err := normalizeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if factory == nil {
+		factory = func() (leaseLifecycle, slotCoordinator) { return nil, nil }
+	}
+	return &Manager{
+		cfg:        cfg,
+		newInfra:   factory,
+		generators: make(map[string]*tagGenerator),
+	}, nil
+}
+
+func normalizeConfig(cfg Config) (Config, error) {
+	if cfg.LeafName == "" {
+		cfg.LeafName = "devops-id"
+	}
+	if err := validateName(cfg.LeafName); err != nil {
+		return Config{}, fmt.Errorf("invalid leaf_name: %w", err)
+	}
 	if cfg.LeaseTTL <= 0 {
 		cfg.LeaseTTL = 10 * time.Second
 	}
-	if client == nil {
-		return newManager(ctx, nil, nil, cfg)
+	if cfg.WorkerCache == "" {
+		cfg.WorkerCache = "data"
 	}
-
-	lease := etcdinfra.NewLeaseManager(client, cfg.LeaseTTL)
-	slots := etcdinfra.NewSlotCoordinator(client, lease)
-	return newManager(ctx, lease, slots, cfg)
+	return cfg, nil
 }
 
-func newManager(ctx context.Context, lease leaseLifecycle, slots slotCoordinator, cfg Config) (*Manager, error) {
-	cacheDir := cfg.WorkerCache
-	if cacheDir == "" {
-		cacheDir = "data"
+func validateName(name string) error {
+	if name == "" || strings.TrimSpace(name) != name || name == "." || name == ".." ||
+		strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("%w: %q must be a safe path component", ErrInvalidName, name)
 	}
-	manager := &Manager{
+	return nil
+}
+
+// Next generates one ID in the independent worker space of biz_tag.
+func (m *Manager) Next(ctx context.Context, bizTag string) (int64, error) {
+	generator, err := m.generator(ctx, bizTag)
+	if err != nil {
+		return 0, err
+	}
+	return generator.next()
+}
+
+// BatchNext generates strictly increasing IDs for one biz_tag.
+func (m *Manager) BatchNext(ctx context.Context, bizTag string, count int) ([]int64, error) {
+	if count < 1 {
+		return nil, fmt.Errorf("count must be >= 1: %d", count)
+	}
+	generator, err := m.generator(ctx, bizTag)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, count)
+	for i := 0; i < count; i++ {
+		id, err := generator.next()
+		if err != nil {
+			return nil, err
+		}
+		ids[i] = id
+	}
+	return ids, nil
+}
+
+func (m *Manager) generator(ctx context.Context, bizTag string) (*tagGenerator, error) {
+	if err := validateName(bizTag); err != nil {
+		return nil, fmt.Errorf("invalid biz_tag: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil, ErrManagerClosed
+	}
+	if generator, ok := m.generators[bizTag]; ok {
+		return generator, nil
+	}
+
+	lease, slots := m.newInfra()
+	generator, err := newTagGenerator(ctx, lease, slots, m.cfg, bizTag)
+	if err != nil {
+		return nil, err
+	}
+	m.generators[bizTag] = generator
+	return generator, nil
+}
+
+func newTagGenerator(
+	ctx context.Context,
+	lease leaseLifecycle,
+	slots slotCoordinator,
+	cfg Config,
+	bizTag string,
+) (*tagGenerator, error) {
+	if err := validateName(bizTag); err != nil {
+		return nil, fmt.Errorf("invalid biz_tag: %w", err)
+	}
+
+	generator := &tagGenerator{
 		lease:      lease,
 		slots:      slots,
-		workerFile: filepath.Join(cacheDir, "worker_id"),
+		workerFile: filepath.Join(cfg.WorkerCache, cfg.LeafName, bizTag, "worker_id"),
+		slotPrefix: strings.Join([]string{slotRoot, cfg.LeafName, bizTag}, "/") + "/",
 		instance:   instanceID(),
 	}
 
@@ -108,82 +232,68 @@ func newManager(ctx context.Context, lease leaseLifecycle, slots slotCoordinator
 		slog.Warn("grant etcd lease failed, using local worker fallback", "err", grantErr)
 		err = etcdinfra.ErrEtcdUnavailable
 	} else {
-		slot, acquireErr := slots.Acquire(ctx, slotPrefix, manager.instance, maxWorker+1)
+		slot, acquireErr := slots.Acquire(ctx, generator.slotPrefix, generator.instance, maxWorker+1)
 		workerID = int64(slot)
 		err = acquireErr
 	}
 
 	if errors.Is(err, etcdinfra.ErrEtcdUnavailable) {
 		usedLocalFallback = true
-		if releaseErr := manager.releaseLease(); releaseErr != nil {
+		if releaseErr := generator.releaseLease(); releaseErr != nil {
 			slog.Warn("release etcd lease after fallback failed", "err", releaseErr)
 		}
-		if initErr := manager.initLocalCache(); initErr != nil {
+		if initErr := generator.initLocalCache(); initErr != nil {
 			return nil, initErr
 		}
-		workerID, err = manager.acquireLocalSlot()
+		workerID, err = generator.acquireLocalSlot()
 	}
 	if err != nil {
-		if releaseErr := manager.releaseLease(); releaseErr != nil {
+		if releaseErr := generator.releaseLease(); releaseErr != nil {
 			slog.Warn("release etcd lease failed", "err", releaseErr)
 		}
 		return nil, err
 	}
 
-	manager.workerID = workerID
-	manager.lastTimestamp = time.Now().UnixMilli()
-	if err := manager.initLocalCache(); err != nil {
+	generator.workerID = workerID
+	generator.lastTimestamp = time.Now().UnixMilli()
+	if err := generator.initLocalCache(); err != nil {
 		slog.Warn("initialize worker cache failed", "err", err)
 	} else {
-		writeIntFile(manager.workerFile, workerID)
+		writeIntFile(generator.workerFile, workerID)
 	}
 
 	if !usedLocalFallback {
 		nodeCtx, cancel := context.WithCancel(context.Background())
-		manager.nodeCancel = cancel
-		go manager.watchLease(nodeCtx)
-		go manager.refreshPermanentNode(nodeCtx)
+		generator.nodeCancel = cancel
+		go generator.watchLease(nodeCtx)
+		go generator.refreshPermanentNode(nodeCtx)
 	}
 
-	slog.Info("snowflake manager ready",
-		"worker_id", workerID, "epoch_ms", epoch, "local_fallback", usedLocalFallback)
-	return manager, nil
+	slog.Info("snowflake tag generator ready",
+		"leaf_name", cfg.LeafName,
+		"biz_tag", bizTag,
+		"worker_id", workerID,
+		"epoch_ms", epoch,
+		"local_fallback", usedLocalFallback)
+	return generator, nil
 }
 
-// Next generates one ID. bizTag is ignored because snowflake is global.
-func (m *Manager) Next(ctx context.Context, bizTag string) (int64, error) {
-	return m.next()
-}
-
-// BatchNext generates strictly increasing IDs.
-func (m *Manager) BatchNext(ctx context.Context, bizTag string, count int) ([]int64, error) {
-	if count < 1 {
-		return nil, fmt.Errorf("count must be >= 1: %d", count)
+func (g *tagGenerator) next() (int64, error) {
+	if g.closed.Load() {
+		return 0, ErrManagerClosed
 	}
-	ids := make([]int64, count)
-	for i := 0; i < count; i++ {
-		id, err := m.next()
-		if err != nil {
-			return nil, err
-		}
-		ids[i] = id
-	}
-	return ids, nil
-}
-
-func (m *Manager) next() (int64, error) {
-	if m.leaseLost.Load() {
+	if g.leaseLost.Load() {
 		return 0, ErrLeaseLost
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
 	now := time.Now().UnixMilli()
-	if now < m.lastTimestamp {
-		rollback := m.lastTimestamp - now
+	if now < g.lastTimestamp {
+		rollback := g.lastTimestamp - now
 		if rollback <= maxBackwardMs {
 			deadline := time.Now().Add(time.Duration(rollback)*time.Millisecond + time.Second)
-			for now < m.lastTimestamp {
+			for now < g.lastTimestamp {
 				if time.Now().After(deadline) {
 					return 0, fmt.Errorf("%w: rollback %dms did not recover", ErrClockBackward, rollback)
 				}
@@ -194,72 +304,90 @@ func (m *Manager) next() (int64, error) {
 		}
 	}
 
-	if now == m.lastTimestamp {
-		m.sequence = (m.sequence + 1) & maxSeq
-		if m.sequence == 0 {
-			for now <= m.lastTimestamp {
+	if now == g.lastTimestamp {
+		g.sequence = (g.sequence + 1) & maxSeq
+		if g.sequence == 0 {
+			for now <= g.lastTimestamp {
 				now = time.Now().UnixMilli()
 			}
 		}
 	} else {
-		m.sequence = 0
+		g.sequence = 0
 	}
-	m.lastTimestamp = now
+	g.lastTimestamp = now
 
-	return ((now - epoch) << (workerBits + seqBits)) | (m.workerID << seqBits) | m.sequence, nil
+	return ((now - epoch) << (workerBits + seqBits)) | (g.workerID << seqBits) | g.sequence, nil
 }
 
-// Close cancels refreshes and revokes the lease immediately.
+// Close cancels refreshes and revokes every per-tag lease immediately.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		if m.nodeCancel != nil {
-			m.nodeCancel()
+		m.mu.Lock()
+		m.closed = true
+		generators := make([]*tagGenerator, 0, len(m.generators))
+		for _, generator := range m.generators {
+			generators = append(generators, generator)
 		}
-		if err := m.releaseLease(); err != nil {
-			slog.Warn("revoke etcd lease failed, slot will expire by TTL", "err", err)
+		m.mu.Unlock()
+
+		for _, generator := range generators {
+			generator.Close()
 		}
-		slog.Info("snowflake manager closed", "worker_id", m.workerID)
 	})
 }
 
-func (m *Manager) releaseLease() error {
-	if m.lease == nil {
+func (g *tagGenerator) Close() {
+	g.closeOnce.Do(func() {
+		g.closed.Store(true)
+		if g.nodeCancel != nil {
+			g.nodeCancel()
+		}
+		if err := g.releaseLease(); err != nil {
+			slog.Warn("revoke etcd lease failed, slot will expire by TTL",
+				"err", err, "worker_id", g.workerID)
+		}
+		slog.Info("snowflake tag generator closed", "worker_id", g.workerID)
+	})
+}
+
+func (g *tagGenerator) releaseLease() error {
+	if g.lease == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return m.lease.Release(ctx)
+	return g.lease.Release(ctx)
 }
 
-func (m *Manager) watchLease(ctx context.Context) {
+func (g *tagGenerator) watchLease(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-m.lease.Lost():
-		m.leaseLost.Store(true)
-		slog.Error("etcd lease lost, id generation is disabled", "worker_id", m.workerID)
+	case <-g.lease.Lost():
+		g.leaseLost.Store(true)
+		slog.Error("etcd lease lost, id generation is disabled", "worker_id", g.workerID)
 	}
 }
 
-func (m *Manager) acquireLocalSlot() (int64, error) {
-	if cached, ok := readIntFile(m.workerFile); ok && cached >= 0 && cached <= maxWorker {
+func (g *tagGenerator) acquireLocalSlot() (int64, error) {
+	if cached, ok := readIntFile(g.workerFile); ok && cached >= 0 && cached <= maxWorker {
 		slog.Warn("etcd unavailable, reuse cached worker slot", "slot", cached)
 		return cached, nil
 	}
-	writeIntFile(m.workerFile, 0)
+	writeIntFile(g.workerFile, 0)
 	slog.Warn("etcd unavailable and no cached slot, use worker slot 0")
 	return 0, nil
 }
 
-func (m *Manager) initLocalCache() error {
-	dir := filepath.Dir(m.workerFile)
+func (g *tagGenerator) initLocalCache() error {
+	dir := filepath.Dir(g.workerFile)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create cache directory %s: %w", dir, err)
 	}
 	return nil
 }
 
-func (m *Manager) refreshPermanentNode(ctx context.Context) {
+func (g *tagGenerator) refreshPermanentNode(ctx context.Context) {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -268,7 +396,7 @@ func (m *Manager) refreshPermanentNode(ctx context.Context) {
 			return
 		case <-ticker.C:
 			updateCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			err := m.slots.Refresh(updateCtx, slotPrefix, m.instance, m.workerID, time.Now().UnixMilli())
+			err := g.slots.Refresh(updateCtx, g.slotPrefix, g.instance, g.workerID, time.Now().UnixMilli())
 			cancel()
 			if err != nil {
 				slog.Warn("refresh permanent worker node failed", "err", err)

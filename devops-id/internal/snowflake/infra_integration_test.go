@@ -40,10 +40,12 @@ type fakeSlotCoordinator struct {
 	refreshErr   error
 	acquireCalls int
 	refreshCalls int
+	prefixes     []string
 }
 
-func (f *fakeSlotCoordinator) Acquire(context.Context, string, string, int) (int, error) {
+func (f *fakeSlotCoordinator) Acquire(_ context.Context, keyPrefix string, _ string, _ int) (int, error) {
 	f.acquireCalls++
+	f.prefixes = append(f.prefixes, keyPrefix)
 	return f.acquireSlot, f.acquireErr
 }
 
@@ -52,21 +54,37 @@ func (f *fakeSlotCoordinator) Refresh(context.Context, string, string, int64, in
 	return f.refreshErr
 }
 
-func TestNewWithInfraAcquiresSlotAndCachesWorker(t *testing.T) {
+func workerOf(id int64) int64 {
+	return (id >> seqBits) & maxWorker
+}
+
+func TestManagerAcquiresSlotAndCachesWorker(t *testing.T) {
 	cache := t.TempDir()
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
 	slots := &fakeSlotCoordinator{acquireSlot: 7}
 
-	manager, err := newManager(context.Background(), lease, slots, Config{WorkerCache: cache})
+	manager, err := newManagerWithInfra(Config{
+		LeafName:    "leaf",
+		WorkerCache: cache,
+	}, func() (leaseLifecycle, slotCoordinator) {
+		return lease, slots
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
 
-	if manager.workerID != 7 || !lease.grantCalled || slots.acquireCalls != 1 {
-		t.Fatalf("manager worker=%d grant=%v acquire=%d", manager.workerID, lease.grantCalled, slots.acquireCalls)
+	id, err := manager.Next(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(cache, "worker_id"))
+	if workerOf(id) != 7 || !lease.grantCalled || slots.acquireCalls != 1 {
+		t.Fatalf("worker=%d grant=%v acquire=%d", workerOf(id), lease.grantCalled, slots.acquireCalls)
+	}
+	if len(slots.prefixes) != 1 || slots.prefixes[0] != "idgen/snowflake/leaf/user/" {
+		t.Fatalf("slot prefixes = %v", slots.prefixes)
+	}
+	data, err := os.ReadFile(filepath.Join(cache, "leaf", "user", "worker_id"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,29 +93,137 @@ func TestNewWithInfraAcquiresSlotAndCachesWorker(t *testing.T) {
 	}
 }
 
-func TestNewWithInfraUsesLocalFallbackWhenEtcdUnavailable(t *testing.T) {
+func TestManagerUsesIndependentWorkerSpacePerBizTag(t *testing.T) {
 	cache := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cache, "worker_id"), []byte("5"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	var leases []*fakeLeaseLifecycle
+	var slots []*fakeSlotCoordinator
+	call := 0
 
-	manager, err := newManager(context.Background(), nil, nil, Config{WorkerCache: cache})
+	manager, err := newManagerWithInfra(Config{
+		LeafName:    "leaf",
+		WorkerCache: cache,
+	}, func() (leaseLifecycle, slotCoordinator) {
+		call++
+		lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
+		coordinator := &fakeSlotCoordinator{acquireSlot: 6 + call}
+		leases = append(leases, lease)
+		slots = append(slots, coordinator)
+		return lease, coordinator
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
-	if manager.workerID != 5 {
-		t.Fatalf("fallback worker = %d, want 5", manager.workerID)
+
+	userID, err := manager.Next(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	roleID, err := manager.Next(context.Background(), "role")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Next(context.Background(), "user"); err != nil {
+		t.Fatal(err)
+	}
+
+	if workerOf(userID) != 7 || workerOf(roleID) != 8 {
+		t.Fatalf("workers = (%d, %d), want (7, 8)", workerOf(userID), workerOf(roleID))
+	}
+	wantPrefixes := []string{
+		"idgen/snowflake/leaf/user/",
+		"idgen/snowflake/leaf/role/",
+	}
+	if len(slots) != len(wantPrefixes) {
+		t.Fatalf("generator count = %d, want %d", len(slots), len(wantPrefixes))
+	}
+	for i, want := range wantPrefixes {
+		if slots[i].acquireCalls != 1 || slots[i].prefixes[0] != want {
+			t.Fatalf("slot[%d] calls=%d prefixes=%v, want %q", i, slots[i].acquireCalls, slots[i].prefixes, want)
+		}
+	}
+
+	userCache := filepath.Join(cache, "leaf", "user", "worker_id")
+	roleCache := filepath.Join(cache, "leaf", "role", "worker_id")
+	for path, want := range map[string]string{userCache: "7", roleCache: "8"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != want {
+			t.Fatalf("worker cache %s = %q, want %q", path, data, want)
+		}
+	}
+
+	manager.Close()
+	for i, lease := range leases {
+		if lease.releaseCalls != 1 {
+			t.Fatalf("lease[%d] release calls = %d, want 1", i, lease.releaseCalls)
+		}
 	}
 }
 
-func TestNewWithInfraDoesNotFallbackWhenSlotOccupied(t *testing.T) {
+func TestManagerRejectsInvalidBizTag(t *testing.T) {
+	manager, err := newManagerWithInfra(Config{WorkerCache: t.TempDir()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	if _, err := manager.Next(context.Background(), "user/role"); !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("Next() error = %v, want ErrInvalidName", err)
+	}
+}
+
+func TestManagerClosedRejectsNewRequests(t *testing.T) {
+	manager, err := newManagerWithInfra(Config{WorkerCache: t.TempDir()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Close()
+
+	if _, err := manager.Next(context.Background(), "user"); !errors.Is(err, ErrManagerClosed) {
+		t.Fatalf("Next() error = %v, want ErrManagerClosed", err)
+	}
+}
+
+func TestManagerUsesLocalFallbackPerBizTag(t *testing.T) {
+	cache := t.TempDir()
+	workerFile := filepath.Join(cache, "leaf", "user", "worker_id")
+	if err := os.MkdirAll(filepath.Dir(workerFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workerFile, []byte("5"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := newManagerWithInfra(Config{LeafName: "leaf", WorkerCache: cache}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	id, err := manager.Next(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workerOf(id) != 5 {
+		t.Fatalf("fallback worker = %d, want 5", workerOf(id))
+	}
+}
+
+func TestManagerDoesNotFallbackWhenSlotOccupied(t *testing.T) {
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
 	slots := &fakeSlotCoordinator{acquireErr: etcdinfra.ErrSlotOccupied}
 
-	_, err := newManager(context.Background(), lease, slots, Config{WorkerCache: t.TempDir()})
-	if !errors.Is(err, etcdinfra.ErrSlotOccupied) {
-		t.Fatalf("newManager() error = %v, want ErrSlotOccupied", err)
+	manager, err := newManagerWithInfra(Config{WorkerCache: t.TempDir()}, func() (leaseLifecycle, slotCoordinator) {
+		return lease, slots
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Next(context.Background(), "user"); !errors.Is(err, etcdinfra.ErrSlotOccupied) {
+		t.Fatalf("Next() error = %v, want ErrSlotOccupied", err)
 	}
 	if lease.releaseCalls != 1 {
 		t.Fatalf("release calls = %d, want 1", lease.releaseCalls)
@@ -106,29 +232,40 @@ func TestNewWithInfraDoesNotFallbackWhenSlotOccupied(t *testing.T) {
 
 func TestInfraLeaseLostRejectsNewIDs(t *testing.T) {
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
-	manager, err := newManager(context.Background(), lease, &fakeSlotCoordinator{}, Config{WorkerCache: t.TempDir()})
+	manager, err := newManagerWithInfra(Config{WorkerCache: t.TempDir()}, func() (leaseLifecycle, slotCoordinator) {
+		return lease, &fakeSlotCoordinator{}
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
 
+	if _, err := manager.Next(context.Background(), "user"); err != nil {
+		t.Fatal(err)
+	}
 	close(lease.lost)
 	deadline := time.Now().Add(time.Second)
-	for !manager.leaseLost.Load() {
+	for {
+		_, err := manager.Next(context.Background(), "user")
+		if errors.Is(err, ErrLeaseLost) {
+			return
+		}
 		if time.Now().After(deadline) {
-			t.Fatal("lease loss was not observed")
+			t.Fatalf("Next() error = %v, want ErrLeaseLost", err)
 		}
 		time.Sleep(time.Millisecond)
-	}
-	if _, err := manager.next(); !errors.Is(err, ErrLeaseLost) {
-		t.Fatalf("next() error = %v, want ErrLeaseLost", err)
 	}
 }
 
 func TestCloseWithInfraReleasesLease(t *testing.T) {
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
-	manager, err := newManager(context.Background(), lease, &fakeSlotCoordinator{}, Config{WorkerCache: t.TempDir()})
+	manager, err := newManagerWithInfra(Config{WorkerCache: t.TempDir()}, func() (leaseLifecycle, slotCoordinator) {
+		return lease, &fakeSlotCoordinator{}
+	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Next(context.Background(), "user"); err != nil {
 		t.Fatal(err)
 	}
 

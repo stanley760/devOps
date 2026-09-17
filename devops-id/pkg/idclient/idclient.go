@@ -6,7 +6,7 @@
 //   - 剩余低于水位 → 异步单飞补充
 //   - 缓冲耗尽且补充失败 → fail-fast 返回错误（同服务端哲学：宁可拒发不可重号）
 //
-// 多副本消费方各持独立缓冲：ID 趋势递增但跨副本交错（与 segment 语义一致）。
+// 多副本消费方各持独立缓冲：同一 biz_tag 内 ID 趋势递增，但跨副本交错。
 package idclient
 
 import (
@@ -64,7 +64,7 @@ func New(conn *grpc.ClientConn, cfg BufferConfig) *Client {
 }
 
 // Next 从本地预取缓冲取一个 ID。
-// bizTag 必须已在 devops-id 侧 t_leaf_alloc 注册（消费方 migrate 负责）。
+// bizTag 用于选择独立的 snowflake worker 空间。
 func (c *Client) Next(ctx context.Context, bizTag string) (int64, error) {
 	tb := c.get(bizTag)
 	tb.mu.Lock()

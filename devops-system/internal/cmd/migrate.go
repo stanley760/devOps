@@ -1,12 +1,18 @@
-// migrate 子命令：业务表 AutoMigrate + 复合唯一索引 + 号段注册 + 种子。
+// migrate 子命令：业务表 AutoMigrate + 复合唯一索引 + 种子。
 //
 // 模式A（shared，默认）：主库建全部表 + 全量种子。
-// 模式B（schema）：主库仅 t_tenant + 菜单母本（+ casbin/号段）；遍历 t_tenant
+// 模式B（schema）：主库仅 t_tenant + 菜单母本（+ casbin）；遍历 t_tenant
 // 各租户库 AutoMigrate + 菜单 fan-out 同步（tenantdb.MigrateAllTenants）。
 package cmd
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+
 	infracfg "devops-infra/config"
 	"devops-infra/database/mysql"
 	"devops-system/internal/authz"
@@ -14,11 +20,6 @@ import (
 	"devops-system/internal/db"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
-	"fmt"
-	"github.com/spf13/cobra"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-	"strings"
 )
 
 var migrateCmd = &cobra.Command{
@@ -48,18 +49,12 @@ var migrateCmd = &cobra.Command{
 		if err := db.EnsureCompositeUniques(gdb); err != nil {
 			return fmt.Errorf("创建唯一索引失败: %w", err)
 		}
-		if err := registerBizTags(gdb, cfg.Tenant); err != nil {
-			return err
-		}
 		if err := authz.Init(gdb); err != nil { // 建 casbin_rule 表并加载存量策略
 			return err
 		}
 		defer authz.Close()
 		if err := seed(gdb, schemaMode); err != nil {
 			return fmt.Errorf("种子数据初始化失败: %w", err)
-		}
-		if err := bumpSegmentsAfterSeed(gdb); err != nil {
-			return err
 		}
 		if schemaMode { // 各租户库迁移 + 菜单 fan-out（幂等）
 			if err := tenantdb.MigrateAllTenants(); err != nil {
@@ -93,48 +88,8 @@ func autoMigrate(gdb *gorm.DB, schemaMode bool) error {
 	)
 }
 
-// registerBizTags 同库部署时向 t_leaf_alloc 注册号段行（INSERT IGNORE 幂等；
-// 模式B 库拆分后改走 id 服务管理 API，Roadmap）。
-func registerBizTags(gdb *gorm.DB, cfg config.TenantConfig) error {
-	tags := []string{"user", "role", "menu", "dept", "post", "tenant"}
-	for _, tag := range tags {
-		if err := gdb.Exec(
-			"INSERT IGNORE INTO t_leaf_alloc (biz_tag, max_id, step, description) VALUES (?, 1, 1000, ?)",
-			tag, "devops-system 消费方",
-		).Error; err != nil {
-			return fmt.Errorf("注册 biz_tag %s 失败: %w", tag, err)
-		}
-	}
-	fmt.Printf("号段已注册：t_leaf_alloc biz_tag: %s\n", strings.Join(tags, ", "))
-	return nil
-}
-
-// bumpSegmentsAfterSeed 种子显式 ID 不消耗号段，若不推进 max_id，
-// API 创建的实体（从号段取号）会与种子主键冲突（如租户2超管角色取到 ID 2
-// 撞上租户1 common 角色的显式 ID 2）。此处把各 biz_tag 的 max_id
-// 推进到至少覆盖其表内显式种子 ID 的最大值（GREATEST 幂等，已推进则跳过）。
-func bumpSegmentsAfterSeed(gdb *gorm.DB) error {
-	menuMax := int64(0)
-	for _, m := range seedMenusData {
-		if m.ID > menuMax {
-			menuMax = m.ID
-		}
-	}
-	for tag, floor := range map[string]int64{
-		"user": 1, "role": 2, "menu": menuMax, "dept": 102, "post": 4, "tenant": 1,
-	} {
-		if err := gdb.Exec(
-			"UPDATE t_leaf_alloc SET max_id = GREATEST(max_id, ?) WHERE biz_tag = ?",
-			floor, tag,
-		).Error; err != nil {
-			return fmt.Errorf("推进 biz_tag %s 号段下限失败: %w", tag, err)
-		}
-	}
-	return nil
-}
-
 // seed 种子数据（幂等：菜单母本与 t_tenant 均非空才跳过）。
-// 显式 ID（admin=1、部门 100 起、菜单 1-7 等）——不消耗号段。
+// 显式 ID（admin=1、部门 100 起、菜单 1-7 等）——不调用发号服务。
 // 租户 1 业务数据落点：模式A 主库 / 模式B 租户库（tenant_default）。
 func seed(gdb *gorm.DB, schemaMode bool) error {
 	// 菜单母本：主库（模式A 即共享菜单表；模式B 供 fan-out）

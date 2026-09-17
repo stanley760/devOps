@@ -6,11 +6,6 @@ log:
   console: true       # 容器标准：日志走 stdout，由 docker/k8s 日志驱动收集
   format: json
 
-mysql:
-  host: mysql
-  username: root
-  password: "123456"   # TODO 生产必改，与 MySQL 容器环境变量一致
-
 nacos:
   enabled: true
   endpoints:
@@ -21,8 +16,9 @@ nacos:
     service_name: "devops-id"
 
 idgen:
-  mode: segment          # snowflake 时改这里，并加 --profile snowflake 启动 etcd
+  leaf_name: devops-id
+  worker_cache: data
 
-etcd:                 # 仅 idgen.mode=snowflake 时读取
+etcd:                 # snowflake worker 协调
   endpoints:
     - "etcd:2379"

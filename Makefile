@@ -12,9 +12,8 @@ build-system:
 
 build: build-id build-system
 
-# 一次性建表：号段表 → 业务表 + 种子（幂等，可重复执行）
+# 一次性建业务表与种子数据（幂等，可重复执行）
 migrate:
-	$(COMPOSE) run --rm devops-id migrate
 	$(COMPOSE) run --rm devops-system migrate
 
 up:

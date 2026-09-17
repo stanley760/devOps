@@ -13,17 +13,16 @@
 #   kubectl -n devops rollout status deploy/devops-id deploy/devops-system
 #
 # 设计要点：
-#   - devops-id 副本数 2：segment 模式靠 MySQL 行锁天然安全，
-#     snowflake 模式每实例经 etcd 抢占独立 worker 槽位，亦安全
+#   - devops-id 副本数 2：每个 leaf_name + biz_tag 下经 etcd 抢占独立 worker 槽位
 #   - devops-system 无状态（会话在 Redis），可任意水平扩
-#   - snowflake 模式强依赖时钟：节点须开 NTP/chrony，回拨会被拒绝发号
+#   - snowflake 强依赖时钟：节点须开 NTP/chrony，回拨会被拒绝发号
 #   - K8s ≥1.24 可用原生 grpc 探针探测 devops-id 健康状态
 apiVersion: v1
 kind: Namespace
 metadata:
   name: devops
 ---
-# devops-id 的 devops-id-prod.yaml（含 MySQL 密码，故入 Secret）
+# devops-id 的 devops-id-prod.yaml（含 etcd 地址，故入 Secret）
 apiVersion: v1
 kind: Secret
 metadata:
@@ -35,14 +34,11 @@ stringData:
       level: info
       console: true
       format: json
-    mysql:
-      host: YOUR_MYSQL_HOST      # TODO: 如 mysql.devops.svc.cluster.local 或 RDS 地址
-      username: devops
-      password: "YOUR_MYSQL_PASSWORD"
     nacos:
       enabled: false
     idgen:
-      mode: segment              # snowflake 时改此处并确认 etcd 段
+      leaf_name: devops-id
+      worker_cache: data
     etcd:
       endpoints:
         - "YOUR_ETCD_ENDPOINT:2379"
@@ -74,7 +70,7 @@ stringData:
     server:
       trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []
 ---
-# 建表迁移：init 容器先建号段表，主容器建业务表 + 种子（有先后依赖）
+# 建表迁移：业务表 + 种子数据
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -86,18 +82,6 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      initContainers:
-        - name: id-migrate
-          image: registry.example.com/devops/devops-id:0.1.0
-          args: ["migrate"]
-          env:
-            - name: APP_ENV
-              value: prod
-          volumeMounts:
-            - name: config
-              mountPath: /app/config/devops-id-prod.yaml
-              subPath: devops-id-prod.yaml
-              readOnly: true
       containers:
         - name: system-migrate
           image: registry.example.com/devops/devops-system:0.1.0

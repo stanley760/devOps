@@ -1,8 +1,7 @@
-# 单机容器化部署：MySQL + Redis + Nacos +（可选 etcd / Higress）+ devops-id + devops-system
+# 单机容器化部署：MySQL + Redis + Nacos + etcd / Higress + devops-id + devops-system
 #
 # 标准流程（也可用根目录 Makefile 快捷命令）：
 #   docker compose -f deploy/docker-compose.yml build
-#   docker compose -f deploy/docker-compose.yml run --rm devops-id migrate       # 号段表 + 注册 biz_tag
 #   docker compose -f deploy/docker-compose.yml run --rm devops-system migrate   # 业务表 + 种子数据
 #   docker compose -f deploy/docker-compose.yml up -d
 #   curl http://localhost:9999/healthz
@@ -12,9 +11,7 @@
 #   curl -H 'Host: api.devops.local' http://localhost:8080/healthz
 #   控制台 http://localhost:8001；Nacos 控制台 http://localhost:8848/nacos
 #
-# snowflake 发号模式：先把 config/id-prod.yaml 的 idgen.mode 改为 snowflake，
-# 再加 --profile snowflake 启动（会额外起单节点 etcd）：
-#   docker compose -f deploy/docker-compose.yml --profile snowflake up -d
+# devops-id 使用 snowflake，并按 leaf_name + biz_tag 在 etcd 中分配独立 worker：
 #   docker compose -f deploy/docker-compose.yml exec etcd etcdctl \
 #     --endpoints=http://etcd:2379 get --prefix idgen/snowflake/
 #
@@ -91,10 +88,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # 仅 snowflake 模式需要，默认不启动
+  # devops-id snowflake worker 协调依赖
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
-    profiles: ["snowflake"]
     command:
       - etcd
       - --name=etcd0
@@ -121,16 +117,13 @@ services:
       APP_ENV: prod
     volumes:
       - ./config/id-prod.yaml:/app/config/devops-id-prod.yaml:ro
-      # snowflake 槽位/发号水位缓存；容器重建后靠 etcd 重新抢占，符合设计
+      # per-biz_tag worker 缓存；容器重建后由 etcd 重新分配
       - id-data:/app/data
     depends_on:
-      mysql:
-        condition: service_healthy
       nacos:
         condition: service_healthy
       etcd:
-        condition: service_started
-        required: false      # 仅 --profile snowflake 时存在
+        condition: service_healthy
     # 优雅退出：程序收到 SIGTERM 后 revoke lease 立即释放 worker 槽位
     stop_grace_period: 30s
     restart: unless-stopped

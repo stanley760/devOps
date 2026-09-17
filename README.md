@@ -16,9 +16,7 @@ Go 工作区（go.work）三模块：**devops-infra**（共享基础设施）+ *
 - **多租户双模式**：
   - 模式A `shared`（默认）：共享 Schema + `tenant_id` 判别列，GORM 插件自动注入过滤（fail-closed，无租户上下文直接报错防串数据）
   - 模式B `schema`：每租户独立库（`tenant_{code}`），Resolver 按 ctx 路由连接池 + 建库自动 provision + 菜单 fan-out
-- **分布式 ID（美团 Leaf）**：
-  - `segment` 号段模式（默认）：MySQL `t_leaf_alloc` + 服务端双 buffer + 动态 step（消耗 <15min 翻倍、>30min 减半，写回表跨实例生效）
-  - `snowflake` 雪花模式：etcd 槽位抢占 workerID（lease 保活、宕机 TTL 释放）+ 时钟回拨保护（<5ms 自旋、≥5ms 拒发）
+- **分布式 ID（Snowflake）**：etcd 按 `leaf_name + biz_tag` 分配独立 worker ID（lease 保活、宕机 TTL 释放），同 `biz_tag` 内唯一且趋势递增；时钟回拨保护（<5ms 自旋、≥5ms 拒发）
 - **工程化**：统一响应信封、结构化异步日志（大小/时间双滚动）、CORS、优雅退出链、多环境配置（`APP_ENV` 覆盖）
 
 ## 目录 / TOC
@@ -38,9 +36,9 @@ Go 工作区（go.work）三模块：**devops-infra**（共享基础设施）+ *
 | 组件     | 用途                                                                 | 必需 |
 | -------- | -------------------------------------------------------------------- | ---- |
 | Go 1.26+ | 编译                                                                 | 是   |
-| MySQL 8  | 业务库（`t_tenant` + `t_system_*` + `casbin_rule` + `t_leaf_alloc`） | 是   |
+| MySQL 8  | 业务库（`t_tenant` + `t_system_*` + `casbin_rule`）                 | 是   |
 | Redis    | refresh 会话                                                         | 是   |
-| etcd     | 仅 `idgen.mode=snowflake`                                            | 否   |
+| etcd     | Snowflake worker 槽位协调                                            | 是   |
 
 建库（一次）：
 
@@ -54,14 +52,11 @@ GRANT CREATE ON `tenant\_%`.* TO 'devops'@'%';  -- 仅模式B需要（建租户�
 ### 启动
 
 ```bash
-cd devops-id && go run . migrate   # 建号段表 + 注册 biz_tag（user/role/menu/dept/post/tenant）
-cd devops-id && go run . server    # gRPC :9090（segment 模式默认）
+cd devops-id && go run . server    # gRPC :9090（Snowflake 发号）
 
 cd devops-system && go run . migrate  # 建业务表 + 种子（租户 default、admin/Admin@123、菜单树、角色）
 cd devops-system && go run . server   # HTTP :8080
 ```
-
-> 同库部署时 system 的 `migrate` 也会注册号段行，`devops-id migrate` 可省略。
 
 ### 验证
 
@@ -82,12 +77,10 @@ curl -s http://localhost:8080/api/v1/users?page_no=1&page_size=10 \
 ```text
 devops-system            用户权限系统
   server                 启动 HTTP 服务（:8080）
-  migrate                建表 + 复合唯一索引 + 号段注册 + 种子数据（幂等）
+  migrate                建表 + 复合唯一索引 + 种子数据（幂等）
 
 devops-id                分布式 ID 发号服务
-  server                 启动 gRPC 发号服务（:9090，segment | snowflake）
-  migrate                建号段表 t_leaf_alloc + 注册 biz_tag
-    --tags log,order     额外注册的 biz_tag，逗号分隔
+  server                 启动 gRPC Snowflake 发号服务（:9090）
 ```
 
 全局参数：`-f, --config-file` 指定配置路径（默认 `config/config.yaml`）；`--version` 查看版本。
@@ -126,10 +119,11 @@ protoc --proto_path=proto \
 
 请求约束和错误语义：
 
-- `biz_tag` 不能为空，且必须先由消费方 `migrate` 注册到 `t_leaf_alloc`。
+- `biz_tag` 不能为空，且必须是安全的路径组件；无需数据库预注册。
 - `BatchNext.count` 必须在 `1..100000`；客户端的 `batch` 只应配置为业务需要的较小预取批量。
-- 返回 ID 全局唯一、趋势递增；批内单调递增，但跨号段、服务重启或多副本缓冲时不保证严格连续。
-- `InvalidArgument` 表示参数非法，`NotFound` 表示 `biz_tag` 未注册，`Unavailable` 表示号段耗尽、时钟回拨或 lease 失效；只有 `Unavailable` 建议重试。
+- 同一 `biz_tag` 内 ID 唯一、趋势递增，批内单调递增；服务重启或多副本缓冲时不保证严格连续。
+- 不同 `biz_tag` 的 ID 空间独立，允许出现相同 ID。
+- `InvalidArgument` 表示参数非法，`Unavailable` 表示 etcd 不可用、时钟回拨或 lease 失效；只有 `Unavailable` 建议重试。
 
 ## 配置 / Configuration
 
@@ -150,29 +144,27 @@ devops-id 关键段：
 
 | 段      | 关键项                                               | 说明                   |
 | ------- | ---------------------------------------------------- | ---------------------- |
-| `idgen` | `mode`（segment \| snowflake）/ `step` / `low_water` | 发号模式与号段参数     |
-| `etcd`  | `endpoints` / `lease_ttl` / `worker_cache`           | 仅 snowflake：槽位分配 |
+| `idgen` | `leaf_name` / `worker_cache`                        | worker 命名空间与本地缓存目录 |
+| `etcd`  | `endpoints` / `lease_ttl`                           | worker 槽位协调与释放延迟 |
 
-snowflake 模式切换示例：
+devops-id 配置示例：
 
 ```yaml
 idgen:
-  mode: snowflake
+  leaf_name: devops-id
+  worker_cache: data
 etcd:
   endpoints: ["192.168.215.3:2379"]
+  lease_ttl: 10s
 ```
 
-snowflake 模式环境覆盖示例：创建 `devops-id/config/snowflake.yaml`（内容即上面两段），
-`APP_ENV=snowflake` 启动即生效：
+观察 worker 槽位：
 
 ```bash
-cd devops-id && APP_ENV=snowflake go run . server
-
-# 观察槽位持有与 lease TTL 释放
-etcdctl --endpoints=192.168.215.3:2379 get --prefix idgen/snowflake/
+etcdctl --endpoints=192.168.215.3:2379 get --prefix idgen/snowflake/devops-id/
 ```
 
-已按上述 etcd 完成运行时验收：双实例同启槽位不冲突（0/1）、`kill -9` 宕机 10s 后槽位自动释放、优雅退出 revoke 立即释放、新实例依序抢占释放的槽位、双实例 400+ 次并发发号零重复。
+每个 `biz_tag` 都会使用 `idgen/snowflake/{leaf_name}/{biz_tag}/` 独立槽位前缀。服务启动时不分配 worker，首次收到某个 `biz_tag` 的请求后才懒加载对应生成器。
 
 ## API
 
@@ -196,15 +188,15 @@ etcdctl --endpoints=192.168.215.3:2379 get --prefix idgen/snowflake/
 - **分层**：`cmd → router → api → service → dao → model`；基础设施（db/authz/store/logger）包级 `Init/Close` 单例，业务层构造注入
 - **租户隔离 fail-closed**：纯模型查询由 GORM `TenantPlugin` 自动注入 `tenant_id`；原生 JOIN 由 dao 显式过滤（插件注入裸列会歧义）；模式B 主库不建租户表，误路由表现为「表不存在」
 - **软删除改名**：删除用户/角色等唯一字段实体时改名（`admin` → `admin_del_1694...`），允许同名重建
-- **ID 双模式**：segment 趋势递增、可读；snowflake 高吞吐不依赖 DB。DTO 层 ID 字符串化一次到位，切换无感
+- **ID 空间隔离**：Snowflake worker 按 `leaf_name + biz_tag` 独立分配；同 `biz_tag` 唯一且趋势递增，不同 `biz_tag` 允许重号。DTO 层 ID 字符串化，避免 JavaScript 精度丢失
 - **事务边界**：DB 事务只管业务表（user_role/role_menu），casbin 策略在事务外同步更新（gorm-adapter 自持事务）；失败补偿 + 重试由调用方语义保证
-- **优雅退出**：system 先停 HTTP 排空在途请求，再关 resolver → authz → idclient → store → db；snowflake 退出 revoke lease 立即释放槽位
+- **优雅退出**：system 先停 HTTP 排空在途请求，再关 resolver → authz → idclient → store → db；snowflake 退出 revoke 所有已分配 tag 的 lease 并释放槽位
 
 ## 测试 / Testing
 
 ```bash
 go work sync
-go build ./... && go vet ./... && go test ./...
+go test ./devops-infra/... ./devops-id/... ./devops-system/...
 ```
 
 覆盖：infra（日志滚动、panic 恢复、CORS、响应信封）、id 集成测试（需本地 `:9090` 服务在跑，未启动自动 Skip）。

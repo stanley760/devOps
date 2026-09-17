@@ -5,7 +5,7 @@
 //
 // 路由规则（tenantdb.DB(ctx)）：
 //   - ctx 含租户（ID+Code）→ 租户库连接池 tenant_{code}
-//   - ctx 无租户 → 主库（t_tenant / casbin_rule / t_leaf_alloc / 菜单母本）
+//   - ctx 无租户 → 主库（t_tenant / casbin_rule / 菜单母本）
 //
 // 连接池 LRU 上限淘汰（tenant.max_pools）；池上同样注册 TenantPlugin
 // （租户库表结构含 tenant_id 列，双重隔离：物理切库 + 判别列过滤）。

@@ -37,3 +37,7 @@ log:
   max_age: 7             # 历史文件保留天数，0 不限制
   compress: gzip         # none | gzip | zstd
   rotation_interval: 24h  # 时间滚动间隔，留空或 0 仅按大小滚动
+
+idgen:
+  leaf_name: devops-id   # etcd 路径：idgen/snowflake/{leaf_name}/{biz_tag}/
+  worker_cache: data     # 本地 fallback 缓存：{worker_cache}/{leaf_name}/{biz_tag}/worker_id

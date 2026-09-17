@@ -106,7 +106,7 @@ func Execute(version string) {
 			panic(err)
 		}
 	})
-	rootCmd.AddCommand(serverCmd, migrateCmd)
+	rootCmd.AddCommand(serverCmd)
 	if err := rootCmd.Execute(); err != nil {
 		cobra.CheckErr(err)
 	}

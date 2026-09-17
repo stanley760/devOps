@@ -1,10 +1,10 @@
 // devops-id 发号服务 gRPC 契约。
 //
 // 语义约定：
-//   - biz_tag 业务标识（如 user/role/menu），须先在 t_leaf_alloc 注册（消费方 migrate 负责）
-//   - ID 全局唯一、趋势递增；跨号段边界时非严格连续（服务重启/多客户端缓冲导致）
-//   - 错误码：InvalidArgument（参数非法）/ NotFound（tag 未注册）/
-//     Unavailable（号段耗尽且回源失败、服务不可用）——仅 Unavailable 建议重试
+//   - biz_tag 业务标识（如 user/role/menu），用于选择独立 snowflake worker 空间
+//   - 同一 biz_tag 内 ID 唯一、趋势递增；不同 biz_tag 的 ID 空间独立，允许重号
+//   - 错误码：InvalidArgument（参数非法）/ Unavailable（时钟回拨、lease 失效、
+//     服务不可用）——仅 Unavailable 建议重试
 syntax = "proto3";
 
 package idgen;
@@ -17,7 +17,7 @@ service IdGen {
   rpc Next(NextRequest) returns (NextReply);
 
   // BatchNext 原子分配 count 个 ID（客户端预取缓冲用）。
-  // 返回单调递增；跨号段边界时非严格连续。
+  // 同一 biz_tag 内返回单调递增，但不保证连续。
   rpc BatchNext(BatchNextRequest) returns (BatchNextReply);
 }
 
@@ -31,7 +31,7 @@ message NextReply {
 
 message BatchNextRequest {
   string biz_tag = 1; // 业务标识，不可为空
-  int32 count = 2;    // 申请数量，1..step
+  int32 count = 2;    // 申请数量，1..100000
 }
 
 message BatchNextReply {
