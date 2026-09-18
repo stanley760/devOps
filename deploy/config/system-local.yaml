@@ -1,0 +1,56 @@
+# 本地进程开发配置：依赖运行在 Docker，devops-system 由 IDE 在宿主机启动。
+# 启动前设置 NACOS_REGISTER_IP=<宿主机局域网 IPv4>，例如 192.168.1.20。
+# 该地址必须能从 Higress 容器访问，不能使用 127.0.0.1。
+log:
+  level: debug
+  console: true
+  format: text
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  username: devops
+  password: "devopspwd"
+  database: devops
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: "123456"
+  db: 0
+
+nacos:
+  enabled: true
+  endpoints:
+    - "127.0.0.1:8848"
+  namespace: public
+  group: "DEVOPS_GROUP"
+  registry:
+    service_name: "devops-system"
+
+jwt:
+  signing_key: "kwi0hd0nvjXX/okQVo5VlVgfJGrKJdDH6NlkLUldLfE="
+  issuer: devops
+  access_expire: 2h
+  refresh_expire: 168h
+
+tenant:
+  mode: shared
+  schema_template: "tenant_{code}"
+  max_pools: 64
+  default_code: "default"
+
+idclient:
+  endpoint: "nacos://127.0.0.1"
+  batch: 100
+  low_water: 0.2
+  dial_timeout: 3s
+  call_timeout: 3s
+
+server:
+  port: 9999
+  # Higress 容器需要访问宿主机进程，因此服务必须监听所有网卡。
+  # 应用当前使用 :port 监听，不要改成仅绑定 127.0.0.1。
+  trusted_proxies:
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"

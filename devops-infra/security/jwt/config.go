@@ -1,21 +1,34 @@
 package jwt
 
 import (
+	"crypto/rsa"
+	"errors"
 	"time"
 
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
 
-// Config holds the shared JWT signing and expiry settings.
+var ErrInvalidConfig = errors.New("jwt: invalid config")
+var ErrInvalidToken = errors.New("jwt: invalid token")
+
+// KeySet resolves public RSA keys by the key id in a token header.
+type KeySet interface {
+	Lookup(kid string) (*rsa.PublicKey, error)
+}
+
+// Config holds the signing key and token validation settings.
 type Config struct {
-	SigningKey    string
+	PrivateKeyPEM []byte
+	KeyID         string
 	Issuer        string
 	AccessExpire  time.Duration
 	RefreshExpire time.Duration
+	KeySet        KeySet
 }
 
 func (c Config) Validate() error {
-	if c.SigningKey == "" || c.Issuer == "" || c.AccessExpire <= 0 || c.RefreshExpire <= 0 {
+	if len(c.PrivateKeyPEM) == 0 || c.KeyID == "" || c.Issuer == "" ||
+		c.AccessExpire <= 0 || c.RefreshExpire <= 0 || c.KeySet == nil {
 		return ErrInvalidConfig
 	}
 	return nil

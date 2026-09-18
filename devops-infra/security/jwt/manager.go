@@ -2,6 +2,9 @@ package jwt
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"strconv"
 	"time"
@@ -9,83 +12,87 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
 
-var ErrInvalidConfig = errors.New("jwt: invalid config")
-var ErrInvalidToken = errors.New("jwt: invalid token")
-
-// Manager issues and parses access tokens.
+// Manager issues RS256 access tokens and verifies them using a KeySet.
 type Manager struct {
-	config Config
+	config     Config
+	privateKey *rsa.PrivateKey
 }
 
 func NewManager(config Config) (*Manager, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &Manager{config: config}, nil
+	block, _ := pem.Decode(config.PrivateKeyPEM)
+	if block == nil {
+		return nil, ErrInvalidConfig
+	}
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		if parsed, parseErr := x509.ParsePKCS8PrivateKey(block.Bytes); parseErr == nil {
+			var ok bool
+			key, ok = parsed.(*rsa.PrivateKey)
+			if !ok {
+				return nil, ErrInvalidConfig
+			}
+		} else {
+			return nil, ErrInvalidConfig
+		}
+	}
+	return &Manager{config: config, privateKey: key}, nil
 }
 
 func (m *Manager) Issue(ctx context.Context, subject Subject, sessionID string) (TokenPair, error) {
-	if m == nil {
+	if m == nil || m.privateKey == nil {
 		return TokenPair{}, ErrInvalidConfig
 	}
-	if err := m.config.Validate(); err != nil {
-		return TokenPair{}, err
-	}
 	_ = ctx
-
 	now := time.Now()
 	claims := Claims{
-		UID:        subject.UserID,
-		Username:   subject.Username,
-		SessionID:  sessionID,
-		TenantID:   subject.TenantID,
-		TenantCode: subject.TenantCode,
+		UID: subject.UserID, Username: subject.Username, SessionID: sessionID,
+		TenantID: subject.TenantID, TenantCode: subject.TenantCode,
 		RegisteredClaims: jwtlib.RegisteredClaims{
-			Issuer:    m.config.Issuer,
-			Subject:   strconv.FormatInt(subject.UserID, 10),
-			IssuedAt:  jwtlib.NewNumericDate(now),
-			NotBefore: jwtlib.NewNumericDate(now),
+			Issuer: m.config.Issuer, Subject: strconv.FormatInt(subject.UserID, 10),
+			IssuedAt: jwtlib.NewNumericDate(now), NotBefore: jwtlib.NewNumericDate(now),
 			ExpiresAt: jwtlib.NewNumericDate(now.Add(m.config.AccessExpire)),
 		},
 	}
-
-	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(m.config.SigningKey))
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, claims)
+	token.Header["kid"] = m.config.KeyID
+	signed, err := token.SignedString(m.privateKey)
 	if err != nil {
 		return TokenPair{}, err
 	}
-
-	return TokenPair{
-		AccessToken:     signed,
-		SessionID:       sessionID,
-		AccessExpiresIn: int64(m.config.AccessExpire.Seconds()),
-	}, nil
+	return TokenPair{AccessToken: signed, SessionID: sessionID,
+		AccessExpiresIn: int64(m.config.AccessExpire.Seconds())}, nil
 }
 
 func (m *Manager) ParseAccess(tokenString string) (*Claims, error) {
-	if m == nil {
+	if m == nil || m.config.KeySet == nil {
 		return nil, ErrInvalidConfig
-	}
-	if err := m.config.Validate(); err != nil {
-		return nil, err
 	}
 	if tokenString == "" {
 		return nil, ErrInvalidToken
 	}
-
 	claims := new(Claims)
 	parsed, err := jwtlib.ParseWithClaims(tokenString, claims, func(token *jwtlib.Token) (any, error) {
-		if token.Method.Alg() != jwtlib.SigningMethodHS256.Alg() {
+		if token.Method != jwtlib.SigningMethodRS256 {
 			return nil, ErrInvalidToken
 		}
-		return []byte(m.config.SigningKey), nil
+		kid, ok := token.Header["kid"].(string)
+		if !ok || kid == "" {
+			return nil, ErrInvalidToken
+		}
+		key, lookupErr := m.config.KeySet.Lookup(kid)
+		if lookupErr != nil || key == nil {
+			return nil, ErrInvalidToken
+		}
+		return key, nil
 	}, jwtlib.WithIssuer(m.config.Issuer))
-	if err != nil {
+	if err != nil || parsed == nil || !parsed.Valid {
+		if errors.Is(err, ErrInvalidToken) {
+			return nil, ErrInvalidToken
+		}
 		return nil, err
 	}
-	if !parsed.Valid {
-		return nil, ErrInvalidToken
-	}
-
 	return claims, nil
 }

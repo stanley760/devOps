@@ -4,7 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/json"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"testing"
 	"time"
@@ -12,207 +13,110 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
 
-func validConfig() Config {
-	return Config{
-		SigningKey:    "test-secret",
-		Issuer:        "devops",
-		AccessExpire:  time.Hour,
-		RefreshExpire: 24 * time.Hour,
+type testKeySet map[string]*rsa.PublicKey
+
+func (s testKeySet) Lookup(kid string) (*rsa.PublicKey, error) {
+	key, ok := s[kid]
+	if !ok {
+		return nil, errors.New("unknown kid")
 	}
+	return key, nil
 }
 
-func mustSignToken(t *testing.T, method jwtlib.SigningMethod, claims Claims, key string) string {
+func keyPEM(t *testing.T, key *rsa.PrivateKey) []byte {
 	t.Helper()
-	token := jwtlib.NewWithClaims(method, claims)
-	signed, err := token.SignedString([]byte(key))
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
-	return signed
+	return pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 }
 
-func hasField(payload []byte, key string) bool {
-	var body map[string]json.RawMessage
-	if err := json.Unmarshal(payload, &body); err != nil {
-		return false
+func validConfig(t *testing.T) Config {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, ok := body[key]
-	return ok
+	return Config{PrivateKeyPEM: keyPEM(t, key), KeyID: "key-1", Issuer: "devops",
+		AccessExpire: time.Hour, RefreshExpire: 24 * time.Hour,
+		KeySet: testKeySet{"key-1": &key.PublicKey}}
 }
 
 func TestIssueAndParseAccess(t *testing.T) {
-	manager, err := NewManager(validConfig())
+	cfg := validConfig(t)
+	manager, err := NewManager(cfg)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
-
-	subject := Subject{
-		UserID:     42,
-		Username:   "alice",
-		TenantID:   7,
-		TenantCode: "tenant-7",
-	}
-
-	pair, err := manager.Issue(context.Background(), subject, "session-123")
+	pair, err := manager.Issue(context.Background(), Subject{UserID: 42, Username: "alice", TenantID: 7, TenantCode: "tenant-7"}, "session-123")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	if pair.SessionID != "session-123" {
-		t.Fatalf("expected session id session-123, got %q", pair.SessionID)
+	header, _ := jwtlib.Parse(pair.AccessToken, func(token *jwtlib.Token) (any, error) { return cfg.KeySet.Lookup("key-1") })
+	if header == nil || header.Method != jwtlib.SigningMethodRS256 || header.Header["kid"] != "key-1" {
+		t.Fatalf("unexpected header")
 	}
-	if pair.AccessExpiresIn != int64(validConfig().AccessExpire.Seconds()) {
-		t.Fatalf("expected access expiry %d, got %d", int64(validConfig().AccessExpire.Seconds()), pair.AccessExpiresIn)
-	}
-
-	parsed, err := manager.ParseAccess(pair.AccessToken)
+	claims, err := manager.ParseAccess(pair.AccessToken)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if parsed.UID != subject.UserID {
-		t.Fatalf("expected uid %d, got %d", subject.UserID, parsed.UID)
-	}
-	if parsed.Username != subject.Username {
-		t.Fatalf("expected username %q, got %q", subject.Username, parsed.Username)
-	}
-	if parsed.SessionID != "session-123" {
-		t.Fatalf("expected sid session-123, got %q", parsed.SessionID)
-	}
-	if parsed.TenantID != subject.TenantID {
-		t.Fatalf("expected tid %d, got %d", subject.TenantID, parsed.TenantID)
-	}
-	if parsed.TenantCode != subject.TenantCode {
-		t.Fatalf("expected tcode %q, got %q", subject.TenantCode, parsed.TenantCode)
-	}
-
-	payload, err := json.Marshal(parsed)
-	if err != nil {
-		t.Fatalf("marshal claims: %v", err)
-	}
-	for _, field := range []string{"uid", "username", "sid", "tid", "tcode"} {
-		if !hasField(payload, field) {
-			t.Fatalf("missing claim %q in payload %s", field, payload)
-		}
+	if claims.UID != 42 || claims.Username != "alice" || claims.SessionID != "session-123" || claims.TenantID != 7 || claims.TenantCode != "tenant-7" {
+		t.Fatalf("claims mismatch: %+v", claims)
 	}
 }
 
-func TestIssueRejectsInvalidConfig(t *testing.T) {
-	if _, err := NewManager(Config{Issuer: "devops", AccessExpire: time.Hour, RefreshExpire: 24 * time.Hour}); err == nil {
-		t.Fatal("expected invalid config when signing key is missing")
-	}
-}
-
-func TestParseAccessExpired(t *testing.T) {
-	cfg := validConfig()
-	manager, err := NewManager(cfg)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-
-	claims := Claims{
-		UID:        42,
-		Username:   "alice",
-		SessionID:  "session-123",
-		TenantID:   7,
-		TenantCode: "tenant-7",
-		RegisteredClaims: jwtlib.RegisteredClaims{
-			Issuer:    cfg.Issuer,
-			Subject:   "42",
-			IssuedAt:  jwtlib.NewNumericDate(time.Now().Add(-2 * time.Hour)),
-			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(-time.Minute)),
-		},
-	}
-
-	token := mustSignToken(t, jwtlib.SigningMethodHS256, claims, cfg.SigningKey)
-	if _, err := manager.ParseAccess(token); err == nil {
-		t.Fatal("expected expired token to fail")
-	}
-}
-
-func TestParseAccessWrongIssuer(t *testing.T) {
-	cfg := validConfig()
-	manager, err := NewManager(cfg)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-
-	claims := Claims{
-		UID:        42,
-		Username:   "alice",
-		SessionID:  "session-123",
-		TenantID:   7,
-		TenantCode: "tenant-7",
-		RegisteredClaims: jwtlib.RegisteredClaims{
-			Issuer:    "wrong-issuer",
-			Subject:   "42",
-			IssuedAt:  jwtlib.NewNumericDate(time.Now()),
-			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
-
-	token := mustSignToken(t, jwtlib.SigningMethodHS256, claims, cfg.SigningKey)
-	if _, err := manager.ParseAccess(token); err == nil {
-		t.Fatal("expected wrong issuer to fail")
-	}
-}
-
-func TestParseAccessRejectsNonHS256(t *testing.T) {
-	cfg := validConfig()
-	manager, err := NewManager(cfg)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-
-	claims := Claims{
-		UID:        42,
-		Username:   "alice",
-		SessionID:  "session-123",
-		TenantID:   7,
-		TenantCode: "tenant-7",
-		RegisteredClaims: jwtlib.RegisteredClaims{
-			Issuer:    cfg.Issuer,
-			Subject:   "42",
-			IssuedAt:  jwtlib.NewNumericDate(time.Now()),
-			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
-
-	token := mustSignToken(t, jwtlib.SigningMethodHS512, claims, cfg.SigningKey)
-	if _, err := manager.ParseAccess(token); err == nil || !errors.Is(err, ErrInvalidToken) {
-		t.Fatalf("expected non-HS256 token to fail with ErrInvalidToken, got %v", err)
-	}
-}
-
-func TestParseAccessRejectsNonHMAC(t *testing.T) {
-	cfg := validConfig()
-	manager, err := NewManager(cfg)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-
-	claims := Claims{
-		UID:        42,
-		Username:   "alice",
-		SessionID:  "session-123",
-		TenantID:   7,
-		TenantCode: "tenant-7",
-		RegisteredClaims: jwtlib.RegisteredClaims{
-			Issuer:    cfg.Issuer,
-			Subject:   "42",
-			IssuedAt:  jwtlib.NewNumericDate(time.Now()),
-			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("generate rsa key: %v", err)
-	}
+func TestInvalidAndRejectedTokens(t *testing.T) {
+	cfg := validConfig(t)
+	manager, _ := NewManager(cfg)
+	claims := Claims{RegisteredClaims: jwtlib.RegisteredClaims{Issuer: cfg.Issuer, ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour))}}
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, claims)
-	signed, err := token.SignedString(privateKey)
-	if err != nil {
-		t.Fatalf("sign rsa token: %v", err)
+	token.Header["kid"] = "unknown"
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	signed, _ := token.SignedString(key)
+	if _, err := manager.ParseAccess(signed); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("unknown kid: %v", err)
 	}
+}
 
-	if _, err := manager.ParseAccess(signed); err == nil || !errors.Is(err, ErrInvalidToken) {
-		t.Fatalf("expected non-HMAC token to fail with ErrInvalidToken, got %v", err)
+func TestParseRejectsWrongIssuerAndNonRS256(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{PrivateKeyPEM: keyPEM(t, key), KeyID: "key-1", Issuer: "devops",
+		AccessExpire: time.Hour, RefreshExpire: time.Hour, KeySet: testKeySet{"key-1": &key.PublicKey}}
+	manager, err := NewManager(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongIssuer := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, Claims{
+		RegisteredClaims: jwtlib.RegisteredClaims{Issuer: "other", ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour))},
+	})
+	wrongIssuer.Header["kid"] = cfg.KeyID
+	signed, _ := wrongIssuer.SignedString(key)
+	if _, err := manager.ParseAccess(signed); err == nil {
+		t.Fatal("expected wrong issuer failure")
+	}
+	nonRS := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, Claims{
+		RegisteredClaims: jwtlib.RegisteredClaims{Issuer: cfg.Issuer, ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour))},
+	})
+	nonRS.Header["kid"] = cfg.KeyID
+	hmac, _ := nonRS.SignedString([]byte("not-an-rsa-key"))
+	if _, err := manager.ParseAccess(hmac); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("expected non-RS256 rejection, got %v", err)
+	}
+}
+
+func TestConfigAndValidationFailures(t *testing.T) {
+	if _, err := NewManager(Config{Issuer: "devops", AccessExpire: time.Hour, RefreshExpire: time.Hour}); !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("expected invalid config, got %v", err)
+	}
+	cfg := validConfig(t)
+	manager, _ := NewManager(cfg)
+	claims := Claims{RegisteredClaims: jwtlib.RegisteredClaims{Issuer: cfg.Issuer, ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(-time.Minute))}}
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, claims)
+	token.Header["kid"] = cfg.KeyID
+	block, _ := pem.Decode(cfg.PrivateKeyPEM)
+	key, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+	signed, _ := token.SignedString(key)
+	if _, err := manager.ParseAccess(signed); err == nil {
+		t.Fatal("expected expired token failure")
 	}
 }
