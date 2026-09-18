@@ -91,7 +91,7 @@ func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 
 		// 平台路由：JWT → PlatformPerm（g2 平台管理员 + dom="*" Enforce）。
 		// 不挂 Tenant 中间件：不注入租户 ctx，直接操作全局表 t_tenant；
-		// platform:tenant:* 权限标识不进入菜单表（防租户超管越权，方案 6.3）。
+		// platform:tenant:* 权限标识不进入菜单表（防租户超管越权）。
 		plat := logged.Group("/tenants")
 		plat.GET("", middleware.PlatformPerm("platform:tenant:list"), wrap(tenantH.List))
 		plat.GET("/:id", middleware.PlatformPerm("platform:tenant:query"), wrap(tenantH.Get))

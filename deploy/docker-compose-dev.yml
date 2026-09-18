@@ -108,8 +108,8 @@ services:
       context: ..
       dockerfile: devops-system/Dockerfile
     image: devops-system:dev
-    ports:
-      - "9999:9999"
+    expose:
+      - "9999"                # 仅供 Higress/容器网络访问
     environment:
       APP_ENV: dev
     volumes:

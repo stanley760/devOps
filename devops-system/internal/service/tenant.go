@@ -8,14 +8,11 @@
 package service
 
 import (
-	"context"
 	"fmt"
-
+	"context"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-
 	"devops-infra/errs"
-
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
@@ -24,6 +21,7 @@ import (
 	"devops-system/internal/store"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
+	infratenant "devops-infra/tenant"
 )
 
 // Tenant 租户管理服务。
@@ -99,7 +97,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 	}
 
 	// 租户初始超管：注入新租户 ctx（平台路由 ctx 无租户；模式B 据此路由到租户库）
-	tctx := tenantdb.With(ctx, t.ID, t.Code)
+	tctx := infratenant.With(ctx, t.ID, t.Code)
 	admin := &model.User{
 		BaseTenantModel: model.BaseTenantModel{
 			BaseModel: model.BaseModel{Creator: claims.Username, Updater: claims.Username},

@@ -10,8 +10,8 @@ import (
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
 	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
+	infratenant "devops-infra/tenant"
 )
 
 // Menu 菜单管理服务。
@@ -173,7 +173,7 @@ func (s *Menu) rebuildReferencingRoles(ctx context.Context, menuID int64) error 
 
 // tenantOfCtx 从 ctx 取租户（service 层便捷封装）。
 func tenantOfCtx(ctx context.Context) (int64, bool) {
-	tc, ok := tenantdb.From(ctx)
+	tc, ok := infratenant.From(ctx)
 	return tc.ID, ok
 }
 

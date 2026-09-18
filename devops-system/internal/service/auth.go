@@ -18,6 +18,8 @@ import (
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
+
+	infratenant "devops-infra/tenant"
 )
 
 // Auth 认证服务。
@@ -54,7 +56,7 @@ func (s *Auth) Login(ctx context.Context, req types.LoginReq, clientIP string) (
 	}
 
 	// 公开路由无 Tenant 中间件：解析出租户后显式注入 ctx（TenantPlugin/Resolver 依据）
-	ctx = tenantdb.With(ctx, t.ID, t.Code)
+	ctx = infratenant.With(ctx, t.ID, t.Code)
 
 	u, err := dao.GetUserByUsername(ctx, req.Username)
 	if err != nil {
@@ -96,7 +98,7 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) {
 		return nil, errs.New(errs.CodeForbidden, "租户已过期")
 	}
-	ctx = tenantdb.With(ctx, tid, t.Code)
+	ctx = infratenant.With(ctx, tid, t.Code)
 
 	u, err := dao.GetUserByID(ctx, uid)
 	if err != nil {

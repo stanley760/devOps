@@ -4,7 +4,8 @@
 #   docker compose -f deploy/docker-compose.yml build
 #   docker compose -f deploy/docker-compose.yml run --rm devops-system migrate   # 业务表 + 种子数据
 #   docker compose -f deploy/docker-compose.yml up -d
-#   curl http://localhost:9999/healthz
+#   后端不直接发布到宿主机，统一通过 Higress 访问：
+#   curl -H 'Host: api.devops.local' http://localhost:8080/healthz
 #
 # Higress 网关（可选）：
 #   docker compose -f deploy/docker-compose.yml --profile gateway up -d
@@ -133,8 +134,8 @@ services:
       context: ..
       dockerfile: devops-system/Dockerfile
     image: devops-system:latest
-    ports:
-      - "9999:9999"           # 对外 HTTP 入口
+    expose:
+      - "9999"                # 仅供 Higress/容器网络访问，不发布到宿主机
     environment:
       APP_ENV: prod
     volumes:

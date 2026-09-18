@@ -27,6 +27,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+	infratenant "devops-infra/tenant"
 )
 
 var currentResolver *resolver
@@ -81,7 +82,7 @@ func SchemaEnabled() bool { return currentResolver != nil }
 // resolve 模式B路由：租户 ctx → 租户池；无租户 → 主库。
 // 租户库打开失败时返回主库并记日志：租户表在主库不存在，查询自然失败（fail-closed）。
 func (r *resolver) resolve(ctx context.Context) *gorm.DB {
-	tc, ok := From(ctx)
+	tc, ok := infratenant.From(ctx)
 	if !ok || tc.Code == "" {
 		return client.Get().WithContext(ctx)
 	}

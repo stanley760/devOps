@@ -31,6 +31,8 @@ curl -i -H 'Host: api.devops.local' http://localhost:8080/healthz
 
 - `mcpbridges/default.yaml`：使用 `nacos2` 协议对接 Nacos，并订阅 `DEVOPS_GROUP`。
 - `ingresses/devops-system.yaml`：将 `api.devops.local` 路由到 Nacos 服务 `devops-system`。
+- Higress 是后端服务的唯一外部入口；`devops-system:9999` 仅在容器/Kubernetes
+  内部网络暴露，不应通过宿主机端口或公网负载均衡直接发布。
 - `ingresses/devops-system-canary.yaml`：将约 10% 流量路由到 `devops-system-gray`。
 - `wasmplugins/cluster-key-rate-limit.yaml`：通过 Redis 实现集群级每 IP 100 QPS 限流。
 - `wasmplugins/cors.yaml`：在网关层统一处理跨域，应用侧不再包含 CORS 配置与实现，避免响应头重复。
@@ -63,6 +65,23 @@ Compose 环境中 Redis 服务名为 `redis`、端口为 `6379`，默认密码�
 ## 跨域策略
 
 CORS 已由 Higress 统一处理，应用侧不再实现或配置 CORS，避免应用侧与网关侧重复输出 CORS 响应头。新增来源域名时，应更新 `wasmplugins/cors.yaml` 并由 Higress 生效。
+
+## JWT 认证
+
+生产环境应在 Higress 的认证阶段为 `api.devops.local` 配置 `jwt-auth`：
+
+1. 从 `Authorization: Bearer <token>` 读取 JWT；
+2. 校验签名、`issuer=devops`、`exp` 和 `iat`；
+3. 通过 `claims_to_headers` 将 `tid`、`tcode` 等 Claims 转发为内部 Header；
+4. 使用 `override=true` 覆盖客户端同名 Header，避免伪造租户身份。
+
+网关认证通过后仍需保留 `devops-system` 的 JWT 中间件。system 还负责
+Redis 会话吊销检查、租户状态/过期检查以及租户上下文注入，不能仅凭
+`X-Tenant-ID` 信任客户端身份。
+
+当前 system 使用 HS256 时，Higress 需要配置同一对称 JWK；生产推荐改用
+RS256，让 system 只持有私钥，Higress 只配置公钥 JWKS。JWT 密钥不得写入
+本目录的公开配置文件。
 
 ## Kubernetes 部署
 

@@ -61,8 +61,8 @@ sh deploy/dev.sh down
 
 | 服务 | 地址 |
 | --- | --- |
-| devops-system | `http://localhost:9999/healthz` |
-| Higress 网关 | `http://localhost:8080/healthz` |
+| devops-system | 仅容器网络可达，不发布宿主机端口 |
+| Higress 网关 | `http://localhost:8080/healthz`（Host: `api.devops.local`） |
 | Higress 控制台 | `http://localhost:8001` |
 | Nacos 控制台 | `http://localhost:8848/nacos` |
 

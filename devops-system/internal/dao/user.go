@@ -15,11 +15,12 @@ import (
 
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
+	infratenant "devops-infra/tenant"
 )
 
 // tenantOf 取 ctx 中的租户（原生 JOIN 查询显式过滤用；缺失即调用方误用，fail-fast）。
 func tenantOf(ctx context.Context) (int64, error) {
-	tc, ok := tenantdb.From(ctx)
+	tc, ok := infratenant.From(ctx)
 	if !ok {
 		return 0, errs.New(errs.CodeInternal, "dao 缺少租户上下文")
 	}

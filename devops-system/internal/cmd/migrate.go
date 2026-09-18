@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	infracfg "devops-infra/config"
+	infratenant "devops-infra/tenant"
 	"devops-infra/database/mysql"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
@@ -130,7 +131,7 @@ func seed(gdb *gorm.DB, schemaMode bool) error {
 	}
 
 	// 租户 1 业务数据：tenantdb.DB 按模式路由（模式A 主库 / 模式B tenant_default 池）
-	tctx := tenantdb.With(context.Background(), 1, "default")
+	tctx := infratenant.With(context.Background(), 1, "default")
 	if err := seedTenantData(tenantdb.DB(tctx), pwd); err != nil {
 		_ = gdb.Unscoped().Delete(&model.Tenant{}, 1).Error
 		return err
