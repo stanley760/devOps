@@ -31,7 +31,38 @@ redis:
   pool_size: 100
 
 jwt:
-  signing_key: "kwi0hd0nvjXX/okQVo5VlVgfJGrKJdDH6NlkLUldLfE="  # HS256 密钥
+  # RS256 私钥（PKCS#8 PEM）。存量 HS256 token 升级时整体失效，refresh 会话不受影响；
+  # 公钥经 /.well-known/jwks.json 暴露给 Higress（jwt-auth 插件 jwksFromUrl）与服务验签。
+  signing_key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDHFfzn5JLlNA4a
+    /ksgJWIKb5ds54fOZoqErGaKRk6c3W88ctOAAsbcE1lQvp0CEmVBizYWLvy8lAhn
+    l3HaW42sOul5eNjsFHV2Pn/Vf9MyAoc5QMsLrwTWfhJEsaxD9jMSveRcrDFRZYzT
+    A8oWSn/8uTwlvSIPv8nuSu8QdniHgGQr9XOwMbjWcvaVzwz6gMXc/dA31ZXRdEYM
+    OeKGCe+u82QPUoJHlYOCgodiND5CxwjhpJRKgWSN4OkTVgtrgpwnkp5kHTSbbrbX
+    sC6wmXqnOX2H/ifPXRjhOyzBWRILzx9L8KpOnLIHYZYC9s/IOye15HkxDJIle3R1
+    COfglRQhAgMBAAECggEAARvAWxao0jWcW/5dMvY+Ud5N7qVp2kZ0IDm4/u1WB/XM
+    Jh8iChEJ5CUH7uUGyQGK9obUw+IaVl7xHomHcN6oXuR7kwlvFL5m6oP90HWcGofM
+    0q7nin68lUihp6gBFGZJIcI0pKbxRdmdw3l+jSn4RTMPUIr5ZvLLiCP66YGtWVzF
+    Pm2EHhmSaXjT/tDlxsrZSZ3wAm4ULX3+jDekfEuGKACodzNjjYRqC3ptpm1Vj3Hq
+    lUEsNk3OgEX0pA4ubmQGaViLDSxSp5NYhiJHCHun/G2cWLDORA7EOi9vHMpDfks2
+    pkQCfUKe+SUBdbX84oKWPUb7AaCJn/5D6HAg3pAHYQKBgQDkNRAiUj7G9CVXaSnn
+    cymopVi/MzE1vj88A3VV9E4AcemJe0C3CE7AI9QEkw5p/GtB1YFp0qZz55s6OcxB
+    JTQ3ELnJWFvEMUfNHseloKvusRzUNBR+zc+RTNM7hmh3kxiQlCpkvr/EXIWaTAOc
+    4+u16ahlZcMjpY6KUP9VMl/p8QKBgQDfVP4EjAjcoSXqfxJbgdCcq93O5YisgC/W
+    Osymkpq63LKGkmrlXD2vtmbbUEFJ3Jtt0rBjZxdT3wuY6q1RjA82nEW91CdLIAtO
+    ERmH6ivWGPL8brryKDTWzsoiXHDjDEHHeahzJxH/z4iBkfoPX9BHLr6Nn5StiQki
+    1B20OUkdMQKBgH+03jGGuxDVYew3sraOMNrqpO5itIAx1es8uDYAwIHpPVqtebqz
+    0HYf1q80qFVRZ6hw1bolovarvqdn3tD6A+1o079ETh5NwbOdLPaYIn8x6EMsXefU
+    Pvs99duSzPVVgOKvt8WnJWO6rx14unDa73ZeqtkLiJdzN4BZ8Xl49knRAoGASK7v
+    kOlGRQ/JOD0s600faK3inWBEj+eUKgOu8RNLej8zduqWEZlolhQl+4BuDyzWBPMJ
+    5v/5Lpmru5O83opXtS084V/3fdKq+zhDd+F1bNNn2VHsU71UHQjl7jLppmspyVLF
+    yNxRVlDjm0+382L6dQA4kfz6tVOg/o3MMQhnzDECgYEAwk/QBlvLLu2vd4SEc6Kb
+    AZd+iLWcnG295SHGhpPSZTYmxn0nytz6Zbtg7b4Zh5CaFaRshxTYbUyM5QAOdG7/
+    3cFSqdH9MUNG07CJl8FktzlZAZsqXWsBhi5gdsskLpqjXkhfCOX6YUW/exDJzFIB
+    3FDnbNOfwXsttOnMEuqnODM=
+    -----END PRIVATE KEY-----
+  key_id: devops-system-rs256-1
   issuer: devops
   access_expire: 2h      # access token 有效期
   refresh_expire: 168h   # refresh token（会话）有效期

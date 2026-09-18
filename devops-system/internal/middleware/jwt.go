@@ -1,4 +1,11 @@
-// Package middleware devops-system 业务中间件：JWT / Tenant。
+// Package middleware devops-system 业务中间件：JWT / Tenant / Casbin。
+//
+// 认证与鉴权决策由共享安全包承担，本包只保留 Gin 装配与系统响应信封：
+//
+//	JWT     → devops-infra/security/middleware.Authenticator（Bearer 解析 →
+//	          RS256 解析 → Redis 会话态），401 文案保持原状
+//	Tenant  → 租户状态校验（业务关注点，留在本服务）
+//	Perm/PlatformPerm → authz 门面（路由到共享 Casbin authorizer，fail-closed）
 //
 // 统一中间件链：Recovery → AccessLog（CORS 由 Higress 网关统一处理）
 //
@@ -8,12 +15,14 @@
 package middleware
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"devops-infra/http/response"
+	securitymiddleware "devops-infra/security/middleware"
 
 	"devops-system/internal/auth"
 )
@@ -30,31 +39,28 @@ func CurrentClaims(c *gin.Context) *auth.AccessClaims {
 	return claims
 }
 
-// JWT 解析 Authorization: Bearer <access> → 校验 Redis 会话态 → 注入 claims。
-// 会话被撤销（logout/改密/停用）时立即 401。
+// JWT 共享认证决策 + 系统响应信封：
+// 认证失败（缺失头/非法 token/签名不过）→ 401「未登录或会话已过期」；
+// 会话失效（logout/改密/停用踢下线）→ 401「登录状态已失效，请重新登录」；
+// 基础设施错误（Redis 故障等）fail-closed，保持 401 并记录底层错误。
 func JWT(m *auth.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		h := c.GetHeader("Authorization")
-		token, ok := strings.CutPrefix(h, "Bearer ")
-		if !ok || token == "" {
-			response.Fail(c, http.StatusUnauthorized, "未登录或会话已过期")
-			c.Abort()
-			return
-		}
-
-		claims, err := m.Parse(token)
+		shared, err := m.Authenticate(c.Request.Context(), c.GetHeader("Authorization"))
 		if err != nil {
-			response.Fail(c, http.StatusUnauthorized, "未登录或会话已过期")
-			c.Abort()
-			return
-		}
-		if !m.SessionActive(c.Request.Context(), claims) {
-			response.Fail(c, http.StatusUnauthorized, "登录状态已失效，请重新登录")
+			switch {
+			case errors.Is(err, securitymiddleware.ErrInfrastructure):
+				slog.Error("认证基础设施错误", "err", err, "path", c.Request.URL.Path)
+				response.Fail(c, http.StatusUnauthorized, "登录状态已失效，请重新登录")
+			case errors.Is(err, securitymiddleware.ErrSessionInactive):
+				response.Fail(c, http.StatusUnauthorized, "登录状态已失效，请重新登录")
+			default:
+				response.Fail(c, http.StatusUnauthorized, "未登录或会话已过期")
+			}
 			c.Abort()
 			return
 		}
 
-		c.Set(KeyClaims, claims)
+		c.Set(KeyClaims, auth.FromShared(shared))
 		c.Next()
 	}
 }

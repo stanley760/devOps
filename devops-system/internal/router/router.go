@@ -9,6 +9,8 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	httpinfra "devops-infra/http"
@@ -34,6 +36,9 @@ func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 	tenantH := apiv1.NewTenantHandler(tenantSvc)
 
 	return func(r *gin.Engine) {
+		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
+		r.GET("/.well-known/jwks.json", jwksHandler(authM))
+
 		api := r.Group("/api/v1")
 
 		// 公开：登录 / 刷新
@@ -104,3 +109,15 @@ func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 
 // wrap 适配 response.Handler → gin.HandlerFunc（统一错误出口）。
 func wrap(h response.Handler) gin.HandlerFunc { return response.Wrap(h) }
+
+// jwksHandler 输出 RS256 验签公钥的 JWKS 文档（仅公钥材料，n/e）。
+func jwksHandler(m *auth.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		doc, err := m.JWKS()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "jwks unavailable"})
+			return
+		}
+		c.JSON(http.StatusOK, doc)
+	}
+}

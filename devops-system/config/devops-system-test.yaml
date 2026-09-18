@@ -32,7 +32,10 @@ redis:
   pool_size: 100
 
 jwt:
-  signing_key: "请替换为至少32位随机串"  # HS256 密钥
+  # RS256 私钥（PKCS#8 PEM），部署时由密钥管理注入，禁止将真实私钥提交入库。
+  # 生成：openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048
+  signing_key: "REPLACE_WITH_RSA_PRIVATE_KEY_PEM"
+  key_id: devops-system-rs256-1
   issuer: devops
   access_expire: 2h      # access token 有效期
   refresh_expire: 168h   # refresh token（会话）有效期

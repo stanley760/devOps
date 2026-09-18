@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	ErrUnauthorized  = errors.New("middleware: unauthorized")
-	ErrForbidden     = errors.New("middleware: forbidden")
-	ErrInfrastructure = errors.New("middleware: infrastructure error")
+	ErrUnauthorized    = errors.New("middleware: unauthorized")
+	ErrSessionInactive = errors.New("middleware: session inactive")
+	ErrForbidden       = errors.New("middleware: forbidden")
+	ErrInfrastructure  = errors.New("middleware: infrastructure error")
 )
 
 type TokenParser interface {
@@ -63,7 +64,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, bearerHeader string) (
 		return nil, fmt.Errorf("%w: %v", ErrInfrastructure, err)
 	}
 	if !active {
-		return nil, ErrUnauthorized
+		return nil, ErrSessionInactive
 	}
 
 	return claims, nil

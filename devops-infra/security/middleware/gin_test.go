@@ -88,14 +88,14 @@ func TestAuthenticatorAuthenticate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		header       string
-		parserErr    error
-		sessionOK    bool
-		sessionErr   error
-		wantErr      error
-		wantToken    string
-		wantSession  securitysession.SessionRef
+		name        string
+		header      string
+		parserErr   error
+		sessionOK   bool
+		sessionErr  error
+		wantErr     error
+		wantToken   string
+		wantSession securitysession.SessionRef
 	}{
 		{
 			name:    "missing header",
@@ -119,11 +119,11 @@ func TestAuthenticatorAuthenticate(t *testing.T) {
 			wantToken: "bad-token",
 		},
 		{
-			name:       "inactive session",
-			header:     "Bearer active-token",
-			sessionOK:  false,
-			wantErr:    ErrUnauthorized,
-			wantToken:  "active-token",
+			name:      "inactive session",
+			header:    "Bearer active-token",
+			sessionOK: false,
+			wantErr:   ErrSessionInactive,
+			wantToken: "active-token",
 			wantSession: securitysession.SessionRef{
 				TenantID:  7,
 				UserID:    42,

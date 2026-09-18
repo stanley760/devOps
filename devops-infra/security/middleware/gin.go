@@ -14,8 +14,8 @@ import (
 const ClaimsContextKey = "security.claims"
 
 type GinOptions struct {
-	OnUnauthorized      func(c *gin.Context, err error)
-	OnForbidden         func(c *gin.Context, err error)
+	OnUnauthorized        func(c *gin.Context, err error)
+	OnForbidden           func(c *gin.Context, err error)
 	OnInfrastructureError func(c *gin.Context, err error)
 }
 

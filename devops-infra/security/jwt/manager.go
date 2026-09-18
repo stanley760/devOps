@@ -87,7 +87,7 @@ func (m *Manager) ParseAccess(tokenString string) (*Claims, error) {
 			return nil, ErrInvalidToken
 		}
 		return key, nil
-	}, jwtlib.WithIssuer(m.config.Issuer))
+	}, jwtlib.WithIssuer(m.config.Issuer), jwtlib.WithExpirationRequired())
 	if err != nil || parsed == nil || !parsed.Valid {
 		if errors.Is(err, ErrInvalidToken) {
 			return nil, ErrInvalidToken

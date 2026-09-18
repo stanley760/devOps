@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"log/slog"
 
@@ -15,6 +16,8 @@ import (
 	httpinfra "devops-infra/http"
 	"devops-infra/logging"
 	"devops-infra/nacos"
+	securityjwt "devops-infra/security/jwt"
+	securitysession "devops-infra/security/session"
 
 	"devops-id/pkg/idclient"
 	client "devops-infra/database/mysql"
@@ -134,7 +137,7 @@ var serverCmd = &cobra.Command{
 		}
 
 		// 装配链（方案 11.1）：db → TenantPlugin(fail-closed) → [模式B Resolver] → authz
-		//   → store(Redis 会话) → idclient（发号）→ auth/service → httpx
+		//   → store(Redis 会话) → 共享安全(RS256 JWT + session) → idclient（发号）→ auth/service → httpx
 		if err := client.Init(cfg.Mysql); err != nil {
 			return err
 		}
@@ -152,6 +155,24 @@ var serverCmd = &cobra.Command{
 		if err := store.Init(cfg.Redis); err != nil {
 			return err
 		}
+
+		// 共享安全装配：配置私钥 → 自验签 KeySet（单签发方；轮换期可扩展多公钥/JWKS）
+		pub, err := securityjwt.PublicKeyFromPrivatePEM([]byte(cfg.JWT.SigningKey))
+		if err != nil {
+			return fmt.Errorf("解析 JWT 私钥失败（jwt.signing_key 须为 RSA 私钥 PEM）: %w", err)
+		}
+		keySet, err := securityjwt.NewStaticKeySet(map[string]*rsa.PublicKey{
+			cfg.JWT.EffectiveKeyID(): pub,
+		})
+		if err != nil {
+			return fmt.Errorf("构建 JWT KeySet 失败: %w", err)
+		}
+		tokenMgr, err := securityjwt.NewManager(cfg.JWT.SharedJWTConfig(keySet))
+		if err != nil {
+			return fmt.Errorf("初始化共享 JWT 管理器失败: %w", err)
+		}
+		sessionStore := securitysession.NewRedisClientStore(store.Get(), cfg.JWT.RefreshExpire)
+		authM := auth.New(cfg.JWT, tokenMgr, sessionStore)
 		conn, err := grpcinfra.Dial(cmd.Context(), cfg.IDClient.Endpoint, cfg.IDClient.DialTimeout)
 		if err != nil {
 			return err
@@ -163,7 +184,6 @@ var serverCmd = &cobra.Command{
 		})
 		model.SetIDGenerator(idc)
 
-		authM := auth.New(cfg.JWT)
 		authSvc := service.NewAuth(cfg, authM)
 		userSvc := service.NewUser(authM)
 		roleSvc := service.NewRole()
