@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/stats"
 
 	"devops-infra/grpc/interceptor"
 )
@@ -26,17 +27,27 @@ import (
 type ServerConfig struct {
 	Listen     string // 监听地址，如 ":9090"
 	Reflection bool   // 是否开启 reflection（建议 dev 环境）
+
+	// StatsHandler 可选 OTel stats handler（otelgrpc.NewServerHandler()），
+	// 非空时注入：trace + RED metrics 一次到位，与 HTTP 侧同口径。
+	StatsHandler stats.Handler
+	// UnaryInterceptors 追加在 Recovery/AccessLog 之后的自定义一元拦截器。
+	UnaryInterceptors []grpc.UnaryServerInterceptor
 }
 
 // Run 启动 gRPC 服务，收到 SIGINT/SIGTERM 后优雅退出。
 // register 由各服务调用，用于注册自身的 gRPC 服务实现与健康状况。
 func Run(cfg ServerConfig, register func(s *grpc.Server, hc *health.Server)) error {
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
+	opts := []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(append([]grpc.UnaryServerInterceptor{
 			interceptor.Recovery(),
 			interceptor.AccessLog(),
-		),
-	)
+		}, cfg.UnaryInterceptors...)...),
+	}
+	if cfg.StatsHandler != nil {
+		opts = append(opts, grpc.StatsHandler(cfg.StatsHandler))
+	}
+	s := grpc.NewServer(opts...)
 
 	hc := health.NewServer()
 	healthpb.RegisterHealthServer(s, hc)
