@@ -6,5 +6,3 @@
 !mcpbridges/*.yaml
 !ingresses/
 !ingresses/*.yaml
-!wasmplugins/
-!wasmplugins/*.yaml

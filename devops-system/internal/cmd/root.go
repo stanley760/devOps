@@ -5,9 +5,11 @@
 package cmd
 
 import (
+	"context"
 	"crypto/rsa"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +18,7 @@ import (
 	httpinfra "devops-infra/http"
 	"devops-infra/logging"
 	"devops-infra/nacos"
+	"devops-infra/observability"
 	securityjwt "devops-infra/security/jwt"
 	securitysession "devops-infra/security/session"
 
@@ -33,6 +36,8 @@ import (
 
 var confFile string
 
+var obsRuntime *observability.Runtime
+
 var rootCmd = &cobra.Command{
 	Use:   "devops-system",
 	Short: "devOps 用户权限系统",
@@ -49,6 +54,17 @@ var rootCmd = &cobra.Command{
 		if err := logging.Init(cfg.Log); err != nil {
 			return err
 		}
+		obs, err := observability.Init(cmd.Context(), observability.Config{
+			ServiceName:    cfg.Nacos.Registry.ServiceName,
+			Env:            infracfg.Env(),
+			OTLPEndpoint:   cfg.Observability.OTLPEndpoint,
+			SamplerRatio:   cfg.Observability.SamplerRatio,
+			MetricsEnabled: cfg.Observability.MetricsEnabled,
+		})
+		if err != nil {
+			return err
+		}
+		obsRuntime = obs
 
 		slog.Debug("初始化完成",
 			"service", "devops-system",
@@ -62,6 +78,10 @@ var rootCmd = &cobra.Command{
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 		_ = nacos.Close()
+		if obsRuntime != nil {
+			_ = obsRuntime.ShutdownWithTimeout(context.Background(), 5*time.Second)
+			obsRuntime = nil
+		}
 		return logging.Close()
 	},
 
@@ -141,6 +161,9 @@ var serverCmd = &cobra.Command{
 		if err := client.Init(cfg.Mysql); err != nil {
 			return err
 		}
+		if err := obsRuntime.InstrumentGORM(client.Get(), cfg.Mysql.Database); err != nil {
+			return err
+		}
 		if err := tenantdb.RegisterPlugin(client.Get()); err != nil {
 			return fmt.Errorf("注册租户过滤插件失败: %w", err)
 		}
@@ -153,6 +176,9 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 		if err := store.Init(cfg.Redis); err != nil {
+			return err
+		}
+		if err := obsRuntime.InstrumentRedis(store.Get()); err != nil {
 			return err
 		}
 
@@ -205,8 +231,8 @@ var serverCmd = &cobra.Command{
 			{Name: "redis", Check: store.Ping},
 			{Name: "devops-id", Check: idc.Ping},
 		}
-		err = httpinfra.Run(cfg.Server, router.Register(authM, authSvc, userSvc,
-			roleSvc, menuSvc, deptSvc, postSvc, tenantSvc), readiness...)
+		err = httpinfra.RunWithOptions(cfg.Server, router.Register(cfg.APIDoc, authM, authSvc,
+			userSvc, roleSvc, menuSvc, deptSvc, postSvc, tenantSvc), obsRuntime, readiness...)
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
 		_ = nacos.Deregister(serviceName, cfg.Server.Port)

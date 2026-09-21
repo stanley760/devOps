@@ -74,8 +74,18 @@ tenant:
   default_code: "default"          # 登录未指定租户时的默认租户 code
 
 idclient:                          # devops-id 发号服务接入
-  endpoint: "nacos://devops-id"       # 启用 Nacos 时改为 nacos://devops-id
+  endpoint: "nacos://127.0.0.1"       # 本地启动：Nacos 也在宿主机
   batch: 100                       # 预取批量（1 = 关闭预取，逐次 RPC）
   low_water: 0.2                   # 剩余比例低于 20% 时异步补充
   dial_timeout: 3s
   call_timeout: 3s
+
+# 本地进程开发：Jaeger/Prometheus 由 dev compose 暴露在宿主机端口（4318/9090）。
+observability:
+  otlp_endpoint: "http://127.0.0.1:4318"
+  sampler_ratio: 1.0
+  metrics_enabled: true       # /metrics 与 /healthz 同级，仅本机访问，不经 Higress
+
+apidoc:
+  enabled: true
+  base_path: /apidoc

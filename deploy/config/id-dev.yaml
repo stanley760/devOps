@@ -24,3 +24,10 @@ etcd:
     - "etcd:2379"
   dial_timeout: 5s
   lease_ttl: 10s
+
+# gRPC 服务的指标走独立 HTTP 端口（gRPC 端口无法承载 /metrics），供 Prometheus 抓取。
+observability:
+  otlp_endpoint: "http://jaeger:4318"
+  sampler_ratio: 1.0
+  metrics_enabled: true
+  metrics_listen: ":9091"

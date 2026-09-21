@@ -1,5 +1,5 @@
-# Docker 单节点开发环境配置。
-# 容器之间使用 Compose 服务名通信，不要改为 127.0.0.1。
+# Docker 容器环境覆盖（仅 migrate 一次性容器使用）。
+# 业务服务改为本地 go run 启动，加载仓库内 devops-system/config/devops-system-dev.yaml（地址 127.0.0.1）。
 log:
   level: debug
   dir: /app/logs
@@ -61,9 +61,22 @@ jwt:
     3FDnbNOfwXsttOnMEuqnODM=
     -----END PRIVATE KEY-----
   key_id: devops-system-rs256-1
+  issuer: devops
+  access_expire: 2h        # access token 有效期
+  refresh_expire: 168h     # refresh token（会话）有效期
 
 idclient:
   endpoint: "nacos://devops-id"
+
+# 可观测性：trace 走 OTLP HTTP 发往 compose 内 Jaeger；指标由 Prometheus 抓取 /metrics。
+observability:
+  otlp_endpoint: "http://jaeger:4318"
+  sampler_ratio: 1.0          # dev 全量采样，便于排查
+  metrics_enabled: true
+
+apidoc:
+  enabled: true               # dev 开启交互式文档（/apidoc），prod 必须关闭
+  base_path: /apidoc
 
 server:
   trusted_proxies:

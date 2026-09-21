@@ -1,0 +1,10 @@
+# 仪表盘 provisioning：自动加载本目录下的 JSON 面板（devops-red.json）。
+apiVersion: 1
+providers:
+  - name: devops
+    folder: DevOps
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards

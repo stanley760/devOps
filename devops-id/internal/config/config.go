@@ -10,11 +10,12 @@ import (
 
 // Config devops-id 服务根配置，对应 config/config.yaml 顶层结构
 type Config struct {
-	Grpc  GrpcConfig         `mapstructure:"grpc"`
-	Log   config.LogConfig   `mapstructure:"log"`
-	IDGen IDGenConfig        `mapstructure:"idgen"`
-	Etcd  config.EtcdConfig  `mapstructure:"etcd"`
-	Nacos config.NacosConfig `mapstructure:"nacos"`
+	Grpc          GrpcConfig          `mapstructure:"grpc"`
+	Log           config.LogConfig    `mapstructure:"log"`
+	IDGen         IDGenConfig         `mapstructure:"idgen"`
+	Etcd          config.EtcdConfig   `mapstructure:"etcd"`
+	Nacos         config.NacosConfig  `mapstructure:"nacos"`
+	Observability ObservabilityConfig `mapstructure:"observability"`
 }
 
 // GrpcConfig gRPC 服务配置
@@ -27,4 +28,12 @@ type GrpcConfig struct {
 type IDGenConfig struct {
 	LeafName    string `mapstructure:"leaf_name"`
 	WorkerCache string `mapstructure:"worker_cache"`
+}
+
+// ObservabilityConfig 服务级观测配置；ServiceName 由 nacos.registry.service_name 派生。
+type ObservabilityConfig struct {
+	OTLPEndpoint   string  `mapstructure:"otlp_endpoint"`
+	SamplerRatio   float64 `mapstructure:"sampler_ratio"`
+	MetricsEnabled bool    `mapstructure:"metrics_enabled"`
+	MetricsListen  string  `mapstructure:"metrics_listen"`
 }

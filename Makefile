@@ -29,11 +29,10 @@ logs:
 ps:
 	$(COMPOSE) ps
 
+# dev-up 只启动中间件 + 网关 + 可观测栈；业务服务由本地 go run 启动
 dev-up:
-	$(DEV_COMPOSE) build
-	$(DEV_COMPOSE) up -d mysql redis nacos etcd
-	$(DEV_COMPOSE) run --rm devops-system migrate
-	$(DEV_COMPOSE) up -d devops-id devops-system
+	$(DEV_COMPOSE) up -d mysql redis nacos etcd higress
+	$(DEV_COMPOSE) up -d jaeger prometheus grafana
 
 dev-down:
 	$(DEV_COMPOSE) down
@@ -44,5 +43,7 @@ dev-logs:
 dev-ps:
 	$(DEV_COMPOSE) ps
 
+# dev-migrate 用一次性容器执行数据库迁移（devops-system 服务在 app profile 下）
 dev-migrate:
-	$(DEV_COMPOSE) run --rm devops-system migrate
+	$(DEV_COMPOSE) build devops-system
+	$(DEV_COMPOSE) --profile app run --rm devops-system migrate

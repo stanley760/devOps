@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -17,14 +16,14 @@ func Middleware(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
 	return otelgin.Middleware(serviceName, opts...)
 }
 
-var (
-	meter            = otel.Meter("devops-infra/observability")
-	httpRequests     metric.Int64Counter
-	httpDuration     metric.Float64Histogram
-	httpInFlight     metric.Int64UpDownCounter
-	metricsInitOnce  bool
-	metricsInitError error
-)
+// Middleware 返回当前 Runtime 的 gin 入口 trace 埋点。
+// Runtime 关闭指标或未启用时保持直通，确保可观测性故障不影响业务请求。
+func (rt *Runtime) Middleware(opts ...otelgin.Option) gin.HandlerFunc {
+	if rt == nil || rt.serviceName == "" {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return otelgin.Middleware(rt.serviceName, opts...)
+}
 
 // RED 指标口径（经 Prometheus exporter 输出）：
 //
@@ -34,42 +33,50 @@ var (
 //
 // 标签基数控制：route 取 gin 路由模板（/users/:id），原始 path 不进标签；
 // status 为有界 HTTP 状态码。禁止把 uid/tid 等高基数值放进指标标签。
-func initMetrics() {
-	if metricsInitOnce {
-		return
+func (rt *Runtime) initHTTPMetrics() error {
+	if rt == nil || rt.meterProvider == nil {
+		return nil
 	}
-	metricsInitOnce = true
-	httpRequests, metricsInitError = meter.Int64Counter("http_server_requests",
+	meter := rt.meterProvider.Meter("devops-infra/observability")
+
+	httpRequests, err := meter.Int64Counter("http_server_requests",
 		metric.WithDescription("HTTP 请求总数"))
-	if metricsInitError != nil {
-		return
+	if err != nil {
+		return err
 	}
-	httpDuration, metricsInitError = meter.Float64Histogram("http_server_request_duration",
+	httpDuration, err := meter.Float64Histogram("http_server_request_duration",
 		metric.WithDescription("HTTP 请求耗时"),
 		metric.WithUnit("s"))
-	if metricsInitError != nil {
-		return
+	if err != nil {
+		return err
 	}
-	httpInFlight, metricsInitError = meter.Int64UpDownCounter("http_server_in_flight",
+	httpInFlight, err := meter.Int64UpDownCounter("http_server_in_flight",
 		metric.WithDescription("进行中请求数"))
+	if err != nil {
+		return err
+	}
+
+	rt.httpRequests = httpRequests
+	rt.httpDuration = httpDuration
+	rt.httpInFlight = httpInFlight
+	return nil
 }
 
 // MetricsMiddleware RED 埋点：挂在 trace 中间件之后。
 // metrics 装配失败（MeterProvider 异常）时静默降级为直通，不影响业务请求。
-func MetricsMiddleware() gin.HandlerFunc {
-	initMetrics()
-	broken := metricsInitError != nil
+func (rt *Runtime) MetricsMiddleware() gin.HandlerFunc {
+	if rt == nil || rt.httpRequests == nil || rt.httpDuration == nil || rt.httpInFlight == nil {
+		return func(c *gin.Context) { c.Next() }
+	}
+	httpRequests := rt.httpRequests
+	httpDuration := rt.httpDuration
+	httpInFlight := rt.httpInFlight
 
 	return func(c *gin.Context) {
-		if broken || httpRequests == nil {
-			c.Next()
-			return
-		}
-
 		httpInFlight.Add(c.Request.Context(), 1)
+		defer httpInFlight.Add(c.Request.Context(), -1)
 		startedAt := time.Now()
 		c.Next()
-		httpInFlight.Add(c.Request.Context(), -1)
 
 		attrs := metric.WithAttributes(
 			attribute.String("method", c.Request.Method),

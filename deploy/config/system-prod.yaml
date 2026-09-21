@@ -29,9 +29,23 @@ jwt:
   # 生成：openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048
   signing_key: "REPLACE_WITH_RSA_PRIVATE_KEY_PEM"
   key_id: devops-system-rs256-1
+  issuer: devops
+  access_expire: 2h        # access token 有效期
+  refresh_expire: 168h     # refresh token（会话）有效期
 
 idclient:
   endpoint: "nacos://devops-id"
+
+# 生产观测口径：采样 0.1 起步（问题排查临时调高）；/metrics 仅内网抓取，不经 Higress。
+# otlp_endpoint 留空 = 本地 span 不上报；接入 Jaeger/Tempo/otel-collector 后填写其 OTLP HTTP 地址。
+observability:
+  otlp_endpoint: ""
+  sampler_ratio: 0.1
+  metrics_enabled: true
+
+apidoc:
+  enabled: false              # prod 必须关闭接口文档
+  base_path: /apidoc
 
 server:
   # Higress/Docker 默认网段；K8s 部署时按实际 Pod/Service 网段调整

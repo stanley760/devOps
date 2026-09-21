@@ -3,11 +3,15 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -16,6 +20,7 @@ import (
 	etcdinfra "devops-infra/etcd"
 	grpcinfra "devops-infra/grpc"
 	"devops-infra/nacos"
+	"devops-infra/observability"
 
 	"devops-id/internal/config"
 	"devops-id/internal/server"
@@ -69,14 +74,64 @@ var serverCmd = &cobra.Command{
 			_ = nacos.Deregister(serviceName, port)
 		}()
 
-		return grpcinfra.Run(grpcinfra.ServerConfig{
-			Listen:     cfg.Grpc.Listen,
-			Reflection: reflection,
-		}, func(s *grpc.Server, hc *health.Server) {
-			idgenpb.RegisterIdGenServer(s, server.NewIdGenServer(sf))
-			hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
-		})
+		grpcErr := make(chan error, 1)
+		go func() {
+			grpcErr <- grpcinfra.Run(grpcinfra.ServerConfig{
+				Listen:       cfg.Grpc.Listen,
+				Reflection:   reflection,
+				StatsHandler: otelgrpc.NewServerHandler(),
+			}, func(s *grpc.Server, hc *health.Server) {
+				idgenpb.RegisterIdGenServer(s, server.NewIdGenServer(sf))
+				hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
+			})
+		}()
+
+		metricsServer, metricsErr, err := startMetricsServer(obsRuntime, cfg.Observability.MetricsListen)
+		if err != nil {
+			return err
+		}
+		defer stopMetricsServer(metricsServer)
+
+		select {
+		case err := <-metricsErr:
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			return <-grpcErr
+		case err := <-grpcErr:
+			return err
+		}
 	},
+}
+
+func startMetricsServer(obs *observability.Runtime, listen string) (*http.Server, <-chan error, error) {
+	if listen == "" || obs == nil || obs.MetricsHandler == nil {
+		return nil, make(chan error, 1), nil
+	}
+	listener, err := net.Listen("tcp", listen)
+	if err != nil {
+		return nil, nil, fmt.Errorf("监听 metrics %s 失败: %w", listen, err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", obs.MetricsHandler)
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+	}
+	errCh := make(chan error, 1)
+	go func() { errCh <- server.Serve(listener) }()
+	return server, errCh, nil
+}
+
+func stopMetricsServer(server *http.Server) {
+	if server == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
 }
 
 func listenPort(listen string) (int, error) {

@@ -42,6 +42,12 @@ stringData:
     etcd:
       endpoints:
         - "YOUR_ETCD_ENDPOINT:2379"
+    # otlp_endpoint 留空 = 本地 span 不上报；接入集群内 Jaeger/Tempo/otel-collector 后填其 OTLP HTTP 地址
+    observability:
+      otlp_endpoint: ""
+      sampler_ratio: 0.1
+      metrics_enabled: true
+      metrics_listen: ":9091"
 ---
 # devops-system 的 devops-system-prod.yaml（含 MySQL/Redis 密码与 JWT 密钥，故入 Secret）
 apiVersion: v1
@@ -67,6 +73,14 @@ stringData:
       signing_key: "YOUR_JWT_SIGNING_KEY_MIN_32_CHARS"
     idclient:
       endpoint: "devops-id.devops.svc.cluster.local:9090"
+    # otlp_endpoint 留空 = 本地 span 不上报；接入集群内 Jaeger/Tempo/otel-collector 后填其 OTLP HTTP 地址
+    observability:
+      otlp_endpoint: ""
+      sampler_ratio: 0.1
+      metrics_enabled: true
+    apidoc:
+      enabled: false          # prod 必须关闭接口文档
+      base_path: /apidoc
     server:
       trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []
 ---
@@ -119,6 +133,11 @@ spec:
     metadata:
       labels:
         app: devops-id
+      annotations:
+        # Prometheus 按注解发现并抓取（或改用 prometheus-operator ServiceMonitor）
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"   # OTel 指标独立 HTTP 端口（gRPC 端口无法承载 /metrics）
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true
@@ -130,6 +149,8 @@ spec:
           ports:
             - name: grpc
               containerPort: 9090
+            - name: metrics
+              containerPort: 9091
           env:
             - name: APP_ENV
               value: prod
@@ -178,6 +199,9 @@ spec:
     - name: grpc
       port: 9090
       targetPort: grpc
+    - name: metrics
+      port: 9091
+      targetPort: metrics
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -195,6 +219,11 @@ spec:
     metadata:
       labels:
         app: devops-system
+      annotations:
+        # /metrics 与业务同一 HTTP 端口（9999），仅集群内抓取，不经公网 ingress
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9999"
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true

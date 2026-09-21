@@ -111,7 +111,7 @@ func TestNew_CustomDocsPath(t *testing.T) {
 
 func TestNew_BasePathServer(t *testing.T) {
 	r := newEngine()
-	_ = apidoc.New(r, apidoc.Options{BasePath: "https://ops.example.com"})
+	_ = apidoc.New(r, apidoc.Options{ServerURL: "https://ops.example.com"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
@@ -120,6 +120,20 @@ func TestNew_BasePathServer(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "https://ops.example.com") {
 		t.Fatalf("openapi.json servers 未包含 BasePath: %s", w.Body.String())
+	}
+}
+
+func TestNew_BasePathLegacyServerAlias(t *testing.T) {
+	r := newEngine()
+	_ = apidoc.New(r, apidoc.Options{BasePath: "https://legacy.example.com"})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("openapi.json: got %d, want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "https://legacy.example.com") {
+		t.Fatalf("openapi.json servers 未包含兼容 BasePath: %s", w.Body.String())
 	}
 }
 
@@ -146,7 +160,7 @@ func TestNew_BearerAuth(t *testing.T) {
 
 func TestMount_Deprecated(t *testing.T) {
 	r := newEngine()
-	_ =  apidoc.New(r, apidoc.Options{Title: "mounted"})
+	_ = apidoc.New(r, apidoc.Options{Title: "mounted"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
@@ -159,5 +173,38 @@ func TestDefaults_Fill(t *testing.T) {
 	got := apidoc.Options{}.Defaults()
 	if got.Title != "API" || got.Version != "v1" || got.DocsPath != "/apidoc" {
 		t.Fatalf("Defaults 填充不符: %+v", got)
+	}
+}
+
+func TestNewTenantHeader(t *testing.T) {
+	r := newEngine()
+	_ = apidoc.New(r, apidoc.Options{
+		TenantHeader: "X-Tenant-ID",
+	})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("openapi.json: got %d, want 200", w.Code)
+	}
+
+	var doc struct {
+		Components struct {
+			SecuritySchemes map[string]struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+				In   string `json:"in"`
+			} `json:"securitySchemes"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("openapi.json 不是合法 JSON: %v", err)
+	}
+	scheme, ok := doc.Components.SecuritySchemes["tenantId"]
+	if !ok {
+		t.Fatalf("openapi.json 缺少 tenantId 安全方案: %+v", doc.Components.SecuritySchemes)
+	}
+	if scheme.Type != "apiKey" || scheme.Name != "X-Tenant-ID" || scheme.In != "header" {
+		t.Fatalf("tenantId 安全方案不符: %+v", scheme)
 	}
 }

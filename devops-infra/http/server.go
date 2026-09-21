@@ -16,6 +16,7 @@ import (
 	"devops-infra/errs"
 	"devops-infra/http/middleware"
 	"devops-infra/http/response"
+	"devops-infra/observability"
 )
 
 type Register func(r *gin.Engine)
@@ -26,8 +27,14 @@ type ReadinessCheck struct {
 }
 
 func Run(cfg config.ServerConfig, register Register, readiness ...ReadinessCheck) error {
+	return RunWithOptions(cfg, register, nil, readiness...)
+}
+
+// RunWithOptions 在现有 HTTP 装配上接入 OTel trace/RED 中间件与 /metrics。
+// observability 运行时可为 nil，保持既有调用方零改动。
+func RunWithOptions(cfg config.ServerConfig, register Register, obs *observability.Runtime, readiness ...ReadinessCheck) error {
 	gin.SetMode(ginMode())
-	r, err := newRouter(cfg, register, readiness)
+	r, err := newRouter(cfg, register, readiness, obs)
 	if err != nil {
 		return err
 	}
@@ -61,10 +68,14 @@ func Run(cfg config.ServerConfig, register Register, readiness ...ReadinessCheck
 	return nil
 }
 
-func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck) (*gin.Engine, error) {
+func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck, obs ...*observability.Runtime) (*gin.Engine, error) {
 	r := gin.New()
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("配置可信代理失败: %w", err)
+	}
+	if len(obs) > 0 && obs[0] != nil {
+		r.Use(obs[0].Middleware())
+		r.Use(obs[0].MetricsMiddleware())
 	}
 	r.Use(gin.Logger())
 	r.Use(middleware.Recovery())
@@ -73,6 +84,9 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 	r.NoRoute(func(c *gin.Context) { response.Fail(c, errs.CodeNotFound, "接口不存在") })
 	r.NoMethod(func(c *gin.Context) { response.Fail(c, errs.CodeMethodNotAllowed, errs.ErrMethodNotAllowed.Msg) })
 	r.GET("/healthz", func(c *gin.Context) { response.OK(c, gin.H{"status": "ok"}) })
+	if len(obs) > 0 && obs[0] != nil && obs[0].MetricsHandler != nil {
+		r.GET("/metrics", gin.WrapH(obs[0].MetricsHandler))
+	}
 	r.GET("/readyz", func(c *gin.Context) {
 		var ready, unready []string
 		for _, check := range readiness {

@@ -69,12 +69,129 @@ func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
 	m := auth.New(cfg, tokens, securitysession.NewRedisClientStore(client, cfg.RefreshExpire))
 
 	svcCfg := config.Config{}
-	reg := Register(m,
+	reg := Register(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, m,
 		service.NewAuth(svcCfg, m), service.NewUser(m), service.NewRole(),
 		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, m))
 	r := gin.New()
 	reg(r)
 	return m, pub, r
+}
+
+func TestRegisterAPIDoc(t *testing.T) {
+	_, _, r := jwksEnv(t)
+
+	docResponse := httptest.NewRecorder()
+	r.ServeHTTP(docResponse, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
+	if docResponse.Code != http.StatusOK {
+		t.Fatalf("openapi.json status = %d, body = %s", docResponse.Code, docResponse.Body.String())
+	}
+
+	var doc struct {
+		Paths map[string]map[string]struct {
+			OperationID string             `json:"operationId"`
+			Security    []map[string][]any `json:"security"`
+		} `json:"paths"`
+		Components struct {
+			SecuritySchemes map[string]struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+				In   string `json:"in"`
+			} `json:"securitySchemes"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(docResponse.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("openapi.json is not valid JSON: %v", err)
+	}
+	if _, ok := doc.Paths["/api/v1/auth/login"]; !ok {
+		t.Fatalf("login operation missing: %+v", doc.Paths)
+	}
+	if _, ok := doc.Paths["/api/v1/auth/refresh"]; !ok {
+		t.Fatalf("refresh operation missing: %+v", doc.Paths)
+	}
+	bearer, ok := doc.Components.SecuritySchemes["bearerAuth"]
+	if !ok || bearer.Type != "http" {
+		t.Fatalf("bearerAuth scheme missing or invalid: %+v", doc.Components.SecuritySchemes)
+	}
+	tenant, ok := doc.Components.SecuritySchemes["tenantId"]
+	if !ok || tenant.Type != "apiKey" || tenant.Name != "X-Tenant-ID" || tenant.In != "header" {
+		t.Fatalf("tenantId scheme missing or invalid: %+v", doc.Components.SecuritySchemes)
+	}
+}
+
+// TestRegisterAPIDocEnabledKeepsAuthRoutes 回归：apidoc 开启时 login/refresh 改由
+// huma 注册，其余 auth 路由（gin 注册）必须仍然可用——早期版本 authH 在开启时为 nil，
+// logout/info 等路由调用即 panic（nil handler 解引用）。
+func TestRegisterAPIDocEnabledKeepsAuthRoutes(t *testing.T) {
+	_, _, r := jwksEnv(t)
+
+	// 无 token：JWT 中间件应返回 401 信封，而不是 nil handler panic
+	logout := httptest.NewRecorder()
+	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil))
+	if logout.Code != http.StatusUnauthorized {
+		t.Fatalf("logout without token status = %d, want 401, body = %s", logout.Code, logout.Body.String())
+	}
+
+	info := httptest.NewRecorder()
+	r.ServeHTTP(info, httptest.NewRequest(http.MethodGet, "/api/v1/auth/info", nil))
+	if info.Code != http.StatusUnauthorized {
+		t.Fatalf("info without token status = %d, want 401, body = %s", info.Code, info.Body.String())
+	}
+
+	// huma 注册的 login 路由可达：请求应命中（参数校验/内容协商错误均可），而非 404
+	login := httptest.NewRecorder()
+	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader("{}")))
+	if login.Code == http.StatusNotFound {
+		t.Fatalf("huma login route missing: %s", login.Body.String())
+	}
+}
+
+func TestRegisterAPIDocDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	defer func() { _ = client.Close() }()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	jwtCfg := config.JWTConfig{
+		SigningKey:    string(pemKey),
+		KeyID:         "router-test-key",
+		Issuer:        "devops",
+		AccessExpire:  time.Hour,
+		RefreshExpire: 24 * time.Hour,
+	}
+	pub, err := securityjwt.PublicKeyFromPrivatePEM(pemKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keySet, err := securityjwt.NewStaticKeySet(map[string]*rsa.PublicKey{jwtCfg.EffectiveKeyID(): pub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenMgr, err := securityjwt.NewManager(jwtCfg.SharedJWTConfig(keySet))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authMgr := auth.New(jwtCfg, tokenMgr, securitysession.NewRedisClientStore(client, jwtCfg.RefreshExpire))
+	svcCfg := config.Config{}
+
+	r := gin.New()
+	Register(config.APIDocConfig{}, authMgr,
+		service.NewAuth(svcCfg, authMgr), service.NewUser(authMgr), service.NewRole(),
+		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, authMgr))(r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("disabled apidoc status = %d, want 404", rec.Code)
+	}
 }
 
 // TestJWKSEndpointVerifiesIssuedToken 模拟 Higress jwt-auth 完整验签路径：

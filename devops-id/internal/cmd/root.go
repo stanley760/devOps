@@ -5,19 +5,24 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	infracfg "devops-infra/config"
 	"devops-infra/logging"
 	"devops-infra/nacos"
+	"devops-infra/observability"
 
 	"devops-id/internal/config"
 )
 
 var confFile string
+
+var obsRuntime *observability.Runtime
 
 var rootCmd = &cobra.Command{
 	Use:   "devops-id",
@@ -35,6 +40,17 @@ var rootCmd = &cobra.Command{
 		if err := logging.Init(cfg.Log); err != nil {
 			return err
 		}
+		obs, err := observability.Init(cmd.Context(), observability.Config{
+			ServiceName:    cfg.Nacos.Registry.ServiceName,
+			Env:            infracfg.Env(),
+			OTLPEndpoint:   cfg.Observability.OTLPEndpoint,
+			SamplerRatio:   cfg.Observability.SamplerRatio,
+			MetricsEnabled: cfg.Observability.MetricsEnabled,
+		})
+		if err != nil {
+			return err
+		}
+		obsRuntime = obs
 
 		slog.Debug("初始化完成",
 			"service", "devops-id",
@@ -48,6 +64,10 @@ var rootCmd = &cobra.Command{
 	// 所有子命令执行后统一收尾，保证日志不丢
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 		_ = nacos.Close()
+		if obsRuntime != nil {
+			_ = obsRuntime.ShutdownWithTimeout(context.Background(), 5*time.Second)
+			obsRuntime = nil
+		}
 		return logging.Close()
 	},
 

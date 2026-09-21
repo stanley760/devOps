@@ -5,9 +5,9 @@ import "time"
 
 // LoginReq 登录入参。tenant_code 为空取 tenant.default_code。
 type LoginReq struct {
-	TenantCode string `json:"tenant_code" binding:"omitempty,max=30"`
-	Username   string `json:"username" binding:"required,min=2,max=30"`
-	Password   string `json:"password" binding:"required,min=6,max=64"`
+	TenantCode string `json:"tenant_code,omitempty" binding:"omitempty,max=30" maxLength:"30"`
+	Username   string `json:"username" binding:"required,min=2,max=30" minLength:"2" maxLength:"30"`
+	Password   string `json:"password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
 }
 
 // TenantBrief 租户摘要。
@@ -27,7 +27,7 @@ type LoginResp struct {
 
 // RefreshReq 刷新入参。
 type RefreshReq struct {
-	RefreshToken string `json:"refresh_token" binding:"required,uuid"`
+	RefreshToken string `json:"refresh_token" binding:"required,uuid" format:"uuid"`
 }
 
 // TokenResp 刷新响应（结构同 LoginResp）。

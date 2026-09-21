@@ -9,24 +9,33 @@
 package router
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
+	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
+	"devops-infra/errs"
 	httpinfra "devops-infra/http"
+	"devops-infra/http/apidoc"
 	"devops-infra/http/response"
 
 	apiv1 "devops-system/internal/api/v1"
 	"devops-system/internal/auth"
+	"devops-system/internal/config"
 	"devops-system/internal/middleware"
 	"devops-system/internal/service"
+	"devops-system/internal/types"
 )
 
 // Register 返回业务路由注册回调，交给 httpinfra.Run 组装。
-func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
+func Register(docCfg config.APIDocConfig, authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 	roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept, postSvc *service.Post,
 	tenantSvc *service.Tenant,
 ) httpinfra.Register {
+	// authH 必须始终构造：logout/info/routers/profile 等 gin 路由不随 apidoc 门控变化；
+	// 仅 login/refresh 在 apidoc 开启时改由 huma 注册（同一 engine 上重复注册同一路由会 panic）。
 	authH := apiv1.NewAuthHandler(authSvc)
 	userH := apiv1.NewUserHandler(userSvc)
 	roleH := apiv1.NewRoleHandler(roleSvc)
@@ -39,11 +48,25 @@ func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
 		r.GET("/.well-known/jwks.json", jwksHandler(authM))
 
+		if docCfg.Enabled {
+			api := apidoc.New(r, apidoc.Options{
+				Title:        "devops-system API",
+				Version:      "v1",
+				DocsPath:     docCfg.BasePath,
+				BearerAuth:   true,
+				TenantHeader: "X-Tenant-ID",
+				Security:     []map[string][]string{{"bearerAuth": {}, "tenantId": {}}},
+			})
+			registerAuthOperations(api, authSvc)
+		}
+
 		api := r.Group("/api/v1")
 
-		// 公开：登录 / 刷新
-		api.POST("/auth/login", wrap(authH.Login))
-		api.POST("/auth/refresh", wrap(authH.Refresh))
+		// 公开：登录 / 刷新（apidoc 开启时由 registerAuthOperations 以 huma 注册，此处跳过防重复路由）
+		if !docCfg.Enabled {
+			api.POST("/auth/login", wrap(authH.Login))
+			api.POST("/auth/refresh", wrap(authH.Refresh))
+		}
 
 		// 登录态：登出（仅需 JWT）
 		logged := api.Group("", middleware.JWT(authM))
@@ -105,6 +128,74 @@ func Register(authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
 		plat.PUT("/:id/status", middleware.PlatformPerm("platform:tenant:update"), wrap(tenantH.UpdateStatus))
 		plat.DELETE("/:id", middleware.PlatformPerm("platform:tenant:delete"), wrap(tenantH.Delete))
 	}
+}
+
+type clientIPContextKey struct{}
+
+type loginInput struct {
+	Body types.LoginReq
+}
+
+type loginOutput struct {
+	Body response.BaseResponse[types.LoginResp]
+}
+
+type refreshInput struct {
+	Body types.RefreshReq
+}
+
+type refreshOutput struct {
+	Body response.BaseResponse[types.TokenResp]
+}
+
+func registerAuthOperations(api huma.API, authSvc *service.Auth) {
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-login",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/login",
+		Summary:     "登录",
+		Description: "校验租户与用户后签发 access token 与 refresh token。",
+		Tags:        []string{"auth"},
+		Security:    []map[string][]string{},
+		Middlewares: huma.Middlewares{withClientIP},
+	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
+		resp, err := authSvc.Login(ctx, input.Body, clientIP(ctx))
+		if err != nil {
+			return nil, errs.ToHumaError(err)
+		}
+		return &loginOutput{Body: response.BaseResponse[types.LoginResp]{
+			Code: errs.CodeOK, Msg: "ok", Data: *resp,
+		}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-refresh",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/refresh",
+		Summary:     "刷新令牌",
+		Description: "轮换 refresh 会话并签发新的双 token。",
+		Tags:        []string{"auth"},
+		Security:    []map[string][]string{},
+	}, func(ctx context.Context, input *refreshInput) (*refreshOutput, error) {
+		resp, err := authSvc.Refresh(ctx, input.Body)
+		if err != nil {
+			return nil, errs.ToHumaError(err)
+		}
+		return &refreshOutput{Body: response.BaseResponse[types.TokenResp]{
+			Code: errs.CodeOK, Msg: "ok", Data: *resp,
+		}}, nil
+	})
+}
+
+func withClientIP(ctx huma.Context, next func(huma.Context)) {
+	next(huma.WithValue(ctx, clientIPContextKey{}, humagin.Unwrap(ctx).ClientIP()))
+}
+
+func clientIP(ctx context.Context) string {
+	if value, ok := ctx.Value(clientIPContextKey{}).(string); ok {
+		return value
+	}
+	return ""
 }
 
 // wrap 适配 response.Handler → gin.HandlerFunc（统一错误出口）。

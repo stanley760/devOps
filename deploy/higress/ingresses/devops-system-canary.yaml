@@ -13,7 +13,15 @@ spec:
     - host: api.devops.local
       http:
         paths:
-          - path: /
+          # 与 devops-system.yaml 同口径：仅业务 API 与 JWKS，运维端点不经公网网关暴露。
+          - path: /api
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /.well-known/jwks.json
             pathType: Prefix
             backend:
               resource:

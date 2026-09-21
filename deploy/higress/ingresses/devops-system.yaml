@@ -11,7 +11,16 @@ spec:
     - host: api.devops.local
       http:
         paths:
-          - path: /
+          # 只路由业务 API 与 JWKS（Higress jwt-auth 插件拉取验签公钥）。
+          # 运维端点（/metrics /apidoc /healthz /readyz）仅内网访问，禁止经公网网关暴露。
+          - path: /api
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /.well-known/jwks.json
             pathType: Prefix
             backend:
               resource:

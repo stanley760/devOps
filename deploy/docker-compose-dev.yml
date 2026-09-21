@@ -80,6 +80,8 @@ services:
       - --initial-advertise-peer-urls=http://etcd:2380
       - --listen-peer-urls=http://0.0.0.0:2380
       - --initial-cluster=etcd0=http://etcd:2380
+    ports:
+      - "2379:2379"           # 本地 devops-id 进程通过 127.0.0.1:2379 连接
     volumes:
       - dev-etcd-data:/etcd-data
     healthcheck:
@@ -88,30 +90,16 @@ services:
       timeout: 5s
       retries: 10
 
-  devops-id:
-    build:
-      context: ..
-      dockerfile: devops-id/Dockerfile
-    image: devops-id:dev
-    environment:
-      APP_ENV: dev
-    volumes:
-      - ./config/id-dev.yaml:/app/config/devops-id-dev.yaml:ro
-      - dev-id-data:/app/data
-    depends_on:
-      nacos:
-        condition: service_healthy
-      etcd:
-        condition: service_healthy
-    stop_grace_period: 30s
-
+  # —— 业务服务镜像（仅 migrate 一次性容器使用，默认不启动） ——
+  # 本地开发时业务服务由宿主机 go run 启动；migrate 命令通过 `compose run --rm devops-system migrate` 调用此镜像。
   devops-system:
     build:
       context: ..
       dockerfile: devops-system/Dockerfile
     image: devops-system:dev
+    profiles: ["app"]          # 不在默认 up 中启动，仅 migrate 显式调用
     expose:
-      - "9999"                # 仅供 Higress/容器网络访问
+      - "9999"
     environment:
       APP_ENV: dev
     volumes:
@@ -123,12 +111,47 @@ services:
         condition: service_healthy
       nacos:
         condition: service_healthy
-      devops-id:
-        condition: service_started
+
+  # —— 可观测性（dev 本地栈）：Jaeger 追踪 + Prometheus 抓取 + Grafana 可视化 ——
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "4317:4317"           # OTLP gRPC
+      - "4318:4318"           # OTLP HTTP（服务 trace 出口）
+      - "16686:16686"         # Jaeger UI
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:14269/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    # 不依赖业务服务：Prometheus 对目标缺失容错重试，支持部分启动场景
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # dev 默认口令，prod 接 SSO/密管
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - dev-grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - jaeger
 
 volumes:
   dev-mysql-data:
   dev-redis-data:
   dev-nacos-data:
   dev-etcd-data:
-  dev-id-data:
+  dev-grafana-data:

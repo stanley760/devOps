@@ -16,14 +16,16 @@ const DefaultJWTKeyID = "devops-system-rs256-1"
 
 // Config devops-system 服务根配置，对应 config/config.yaml 顶层结构
 type Config struct {
-	Server   config.ServerConfig `mapstructure:"server"`
-	Log      config.LogConfig    `mapstructure:"log"`
-	Mysql    config.MysqlConfig  `mapstructure:"mysql"`
-	Redis    config.RedisConfig  `mapstructure:"redis"`
-	JWT      JWTConfig           `mapstructure:"jwt"`
-	Tenant   TenantConfig        `mapstructure:"tenant"`
-	IDClient IDClientConfig      `mapstructure:"idclient"`
-	Nacos    config.NacosConfig  `mapstructure:"nacos"`
+	Server        config.ServerConfig `mapstructure:"server"`
+	Log           config.LogConfig    `mapstructure:"log"`
+	Mysql         config.MysqlConfig  `mapstructure:"mysql"`
+	Redis         config.RedisConfig  `mapstructure:"redis"`
+	JWT           JWTConfig           `mapstructure:"jwt"`
+	Tenant        TenantConfig        `mapstructure:"tenant"`
+	IDClient      IDClientConfig      `mapstructure:"idclient"`
+	Nacos         config.NacosConfig  `mapstructure:"nacos"`
+	Observability ObservabilityConfig `mapstructure:"observability"`
+	APIDoc        APIDocConfig        `mapstructure:"apidoc"`
 }
 
 // JWTConfig JWT 双 token 配置。
@@ -76,4 +78,17 @@ type IDClientConfig struct {
 	LowWater    float64       `mapstructure:"low_water"`    // 预取水位（剩余比例）
 	DialTimeout time.Duration `mapstructure:"dial_timeout"` // 拨号超时
 	CallTimeout time.Duration `mapstructure:"call_timeout"` // 单次调用超时
+}
+
+// ObservabilityConfig 服务级观测配置；ServiceName 由 nacos.registry.service_name 派生。
+type ObservabilityConfig struct {
+	OTLPEndpoint   string  `mapstructure:"otlp_endpoint"`   // OTLP HTTP 出口；空表示本地 span 不上报
+	SamplerRatio   float64 `mapstructure:"sampler_ratio"`   // 根采样率，<=0 视为 1.0
+	MetricsEnabled bool    `mapstructure:"metrics_enabled"` // 是否启用 Prometheus 指标
+}
+
+// APIDocConfig OpenAPI 文档门控。BasePath 是文档挂载路径，而非 OpenAPI servers URL。
+type APIDocConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`   // 仅 dev/test 开启，prod 必须关闭
+	BasePath string `mapstructure:"base_path"` // 默认 /apidoc
 }

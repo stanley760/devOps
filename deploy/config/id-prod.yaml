@@ -23,3 +23,11 @@ idgen:
 etcd:                 # snowflake worker 协调
   endpoints:
     - "etcd:2379"
+
+# 生产观测口径：采样 0.1 起步；metrics 走独立 HTTP 端口，仅内网抓取。
+# otlp_endpoint 留空 = 本地 span 不上报；接入 Jaeger/Tempo/otel-collector 后填写其 OTLP HTTP 地址。
+observability:
+  otlp_endpoint: ""
+  sampler_ratio: 0.1
+  metrics_enabled: true
+  metrics_listen: ":9091"

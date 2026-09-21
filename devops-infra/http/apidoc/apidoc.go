@@ -9,10 +9,11 @@
 //     包装补文档，按迭代节奏迁移
 //
 // 一次 New 提供三样东西：
-//   -huma.API：业务侧 huma.Register 注册接口（路由+校验+文档三合一）
-//   - OpenAPI JSON：GET {DocsPath}/openapi.json（默认 /apidoc/openapi.json）
-//   - 文档 UI：GET {DocsPath}（huma 内置 Stoplight Elements 风格交互文档，
-//     无需 knife4j/Swagger UI 等外部资产）
+//
+//	-huma.API：业务侧 huma.Register 注册接口（路由+校验+文档三合一）
+//	- OpenAPI JSON：GET {DocsPath}/openapi.json（默认 /apidoc/openapi.json）
+//	- 文档 UI：GET {DocsPath}（huma 内置 Stoplight Elements 风格交互文档，
+//	  无需 knife4j/Swagger UI 等外部资产）
 //
 // 必须挂在认证组之前（公开路由）；是否启用由调用方按环境门控
 // （dev/test 开、prod 关，见各服务 apidoc.enabled 配置）。
@@ -35,6 +36,9 @@ type Options struct {
 	Version string
 	// BasePath 业务 API 的公开前缀，用于 OpenAPI servers 地址推导
 	// （如网关域名），仅影响文档中展示的请求地址；默认留空（相对路径）。
+	// ServerURL OpenAPI servers[0] 地址（如 https://ops.example.com）。
+	ServerURL string
+	// BasePath 已废弃的 ServerURL 兼容别名；新代码请使用 ServerURL。
 	BasePath string
 	// DocsPath 文档挂载前缀；默认 /apidoc。
 	// OpenAPI JSON 在 {DocsPath}/openapi.json，UI 在 {DocsPath}。
@@ -42,6 +46,9 @@ type Options struct {
 	// BearerAuth 是否在 OpenAPI Components 中声明 JWT Bearer 鉴权方案，
 	// 声明后文档页可直接用 token 试运行；默认 false。
 	BearerAuth bool
+	// TenantHeader 租户头名称（如 X-Tenant-ID）。非空时在 OpenAPI
+	// Components 中声明可复用的 apiKey 安全方案，文档页可携带租户上下文调试。
+	TenantHeader string
 	// Security 全局安全要求（OpenAPI security 字段），如
 	// []map[string][]string{{"bearerAuth": {}}}；设置后所有操作默认要求鉴权，
 	// 公开接口（login/refresh 等）在各自 Operation 里覆盖为空列表。
@@ -77,23 +84,37 @@ func New(r gin.IRouter, opts Options) huma.API {
 	// 追加 .json/.yaml 按内容协商）。统一平移到业务约定的 DocsPath 下。
 	cfg.DocsPath = opts.DocsPath
 	cfg.OpenAPIPath = opts.DocsPath + "/openapi"
-	if opts.BasePath != "" {
+	serverURL := opts.ServerURL
+	if serverURL == "" {
+		serverURL = opts.BasePath
+	}
+	if serverURL != "" {
 		cfg.Servers = append(cfg.Servers, &huma.Server{
-			URL:         opts.BasePath,
+			URL:         serverURL,
 			Description: "service endpoint",
 		})
 	}
-	if opts.BearerAuth {
+	if opts.BearerAuth || opts.TenantHeader != "" {
 		if cfg.Components == nil {
 			cfg.Components = &huma.Components{}
 		}
 		if cfg.Components.SecuritySchemes == nil {
 			cfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
 		}
+	}
+	if opts.BearerAuth {
 		cfg.Components.SecuritySchemes["bearerAuth"] = &huma.SecurityScheme{
 			Type:         "http",
 			Scheme:       "bearer",
 			BearerFormat: "JWT",
+		}
+	}
+	if opts.TenantHeader != "" {
+		cfg.Components.SecuritySchemes["tenantId"] = &huma.SecurityScheme{
+			Type:        "apiKey",
+			Name:        opts.TenantHeader,
+			In:          "header",
+			Description: "多租户上下文标识",
 		}
 	}
 	if len(opts.Security) > 0 {

@@ -94,14 +94,14 @@ func TestTraceHandlerAttachesTraceIDs(t *testing.T) {
 func TestMetricsMiddlewareRecordsAndPassesThrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	rt, err := Init(context.Background(), Config{ServiceName: "t", MetricsEnabled: true})
+	rt, err := Init(context.Background(), Config{ServiceName: "t", Env: "dev", MetricsEnabled: true})
 	if err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
 	defer func() { _ = rt.Shutdown(context.Background()) }()
 
 	router := gin.New()
-	router.Use(MetricsMiddleware())
+	router.Use(rt.MetricsMiddleware())
 	router.GET("/users/:id", func(c *gin.Context) { c.Status(http.StatusTeapot) })
 
 	rec := httptest.NewRecorder()
@@ -114,8 +114,15 @@ func TestMetricsMiddlewareRecordsAndPassesThrough(t *testing.T) {
 	mrec := httptest.NewRecorder()
 	rt.MetricsHandler.ServeHTTP(mrec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	body := mrec.Body.String()
-	if !strings.Contains(body, `http_server_requests_total{method="GET",route="/users/:id",status="418"}`) {
+	if !strings.Contains(body, "http_server_requests_total") ||
+		!strings.Contains(body, `route="/users/:id"`) ||
+		!strings.Contains(body, `status="418"`) {
 		t.Fatalf("metric with route template label missing:\n%s", firstLines(body, 5))
+	}
+	// Resource 常量标签：service_name / deployment_environment 随每条指标输出，
+	// Grafana 面板按 service_name 过滤依赖此标签
+	if !strings.Contains(body, `service_name="t"`) || !strings.Contains(body, `deployment_environment="dev"`) {
+		t.Fatalf("resource constant labels missing:\n%s", firstLines(body, 5))
 	}
 
 	// 未匹配路由归为 unmatched（防高基数）

@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -45,6 +47,11 @@ type Runtime struct {
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	MetricsHandler http.Handler
+
+	serviceName  string
+	httpRequests metric.Int64Counter
+	httpDuration metric.Float64Histogram
+	httpInFlight metric.Int64UpDownCounter
 }
 
 // Init 装配全局 OTel（TracerProvider / MeterProvider / W3C 传播器）并做日志 trace 关联。
@@ -65,6 +72,7 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	rt := &Runtime{}
+	rt.serviceName = cfg.ServiceName
 	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
 
 	if cfg.OTLPEndpoint != "" {
@@ -92,7 +100,15 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 			collectors.NewGoCollector(),
 			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		)
-		exp, err := promexporter.New(promexporter.WithRegisterer(registry))
+		exp, err := promexporter.New(
+			promexporter.WithRegisterer(registry),
+			// 将 OTel Resource 的 service.name / deployment.environment 提升为常量标签，
+			// Grafana 面板按 service_name 维度过滤/聚合（对齐方案 §4.3 PromQL 口径）；
+			// 其余资源属性（进程/运行时版本等）不进标签，控制series基数。
+			promexporter.WithResourceAsConstantLabels(func(kv attribute.KeyValue) bool {
+				return kv.Key == semconv.ServiceNameKey || kv.Key == semconv.DeploymentEnvironmentKey
+			}),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("observability: 创建 Prometheus exporter 失败: %w", err)
 		}
@@ -101,6 +117,10 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 			sdkmetric.WithReader(exp),
 		)
 		rt.MetricsHandler = promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		if err := rt.initHTTPMetrics(); err != nil {
+			_ = rt.meterProvider.Shutdown(ctx)
+			return nil, fmt.Errorf("observability: 初始化 HTTP 指标失败: %w", err)
+		}
 	}
 
 	otel.SetTracerProvider(rt.tracerProvider)
@@ -136,6 +156,19 @@ func (rt *Runtime) Shutdown(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// ShutdownWithTimeout 使用有界超时 flush 在途数据，避免外部后端不可用时阻塞进程退出。
+func (rt *Runtime) ShutdownWithTimeout(parent context.Context, timeout time.Duration) error {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	return rt.Shutdown(ctx)
 }
 
 func envOrUnknown(env string) string {
