@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func TestInitUsesRegistryServiceNameAndServiceProfile(t *testing.T) {
+func TestInitSkipsEnvFileUntilMergeEnvConfig(t *testing.T) {
 	t.Setenv(EnvAppEnv, "test")
 
 	dir := t.TempDir()
@@ -21,11 +21,20 @@ func TestInitUsesRegistryServiceNameAndServiceProfile(t *testing.T) {
 	}
 	t.Cleanup(viper.Reset)
 
+	// Init 只加载 bootstrap，本地环境文件不自动合并（远程优先）
+	if got := viper.GetString("log.level"); got != "info" {
+		t.Fatalf("log.level = %q, want %q", got, "info")
+	}
+	if got := ProfileDataID(); got != "devops-id-test.yaml" {
+		t.Fatalf("ProfileDataID() = %q, want %q", got, "devops-id-test.yaml")
+	}
+
+	// 远程未命中时的本地兜底
+	if err := MergeEnvConfig(); err != nil {
+		t.Fatalf("MergeEnvConfig() error = %v", err)
+	}
 	if got := viper.GetString("log.level"); got != "debug" {
 		t.Fatalf("log.level = %q, want %q", got, "debug")
-	}
-	if got := ServiceName(); got != "devops-id" {
-		t.Fatalf("ServiceName() = %q, want %q", got, "devops-id")
 	}
 }
 

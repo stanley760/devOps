@@ -90,6 +90,10 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// loadNacosConfig 拉取远程 Nacos 配置并合并，远程优先：
+// 命中远程 dataID 即以远程为准；仅当远程未命中 profile dataID
+// （<service>-<env>.yaml）时，才合并本地同名环境文件兜底。
+// bootstrap.yaml 始终作为公共基线。
 func loadNacosConfig(cfg *config.Config) error {
 	if !cfg.Nacos.Enabled {
 		return nil
@@ -98,7 +102,9 @@ func loadNacosConfig(cfg *config.Config) error {
 		return err
 	}
 	dataIDs := infracfg.RemoteDataIDs(cfg.Nacos.ConfigCenter.DataIDs)
+	profileDataID := infracfg.ProfileDataID()
 	loaded := false
+	profileLoaded := false
 	for _, dataID := range dataIDs {
 		content, err := nacos.Fetch(dataID)
 		if err != nil {
@@ -114,14 +120,20 @@ func loadNacosConfig(cfg *config.Config) error {
 			return err
 		}
 		loaded = true
+		if dataID == profileDataID {
+			profileLoaded = true
+		}
 	}
 	if cfg.Nacos.ConfigCenter.Required && !loaded {
 		return fmt.Errorf("nacos 配置中心未返回配置")
 	}
-	if loaded {
-		return infracfg.LoadInto(cfg)
+	if !profileLoaded {
+		// 远程未命中 profile 配置：合并本地 <service>-<env>.yaml 兜底
+		if err := infracfg.MergeEnvConfig(); err != nil {
+			return err
+		}
 	}
-	return nil
+	return infracfg.LoadInto(cfg)
 }
 
 func init() {

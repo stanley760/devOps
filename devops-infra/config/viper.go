@@ -4,11 +4,13 @@
 //   - Init(path) 先加载 .env，再加载 bootstrap.yaml，合并服务环境覆盖文件，开启热更新
 //   - LoadInto() 把配置反序列化到结构体
 //
-// 配置组织方式（.env + bootstrap + 环境覆盖）：
+// 配置组织方式（.env + bootstrap + 远程优先 + 本地兜底）：
 //
 //	config/.env                   本地环境变量（APP_ENV、NACOS_REGISTER_IP 等），不提交
-//	config/bootstrap.yaml         基础配置，写全公共项
-//	config/<service>-<env>.yaml   仅覆盖 bootstrap 中不同的字段
+//	config/bootstrap.yaml         引导配置：nacos 连接信息 + 公共基线，始终加载
+//	远程 dataID                    优先加载，命中即以远程为准
+//	config/<service>-<env>.yaml   本地兜底：仅当远程未命中同名 dataID 时由
+//	                              调用方通过 MergeEnvConfig 合并
 //	例如：devops-id-dev.yaml、devops-system-prod.yaml
 //
 // .env 文件优先级低于 OS 环境变量：已设置的环境变量不会被 .env 覆盖，
@@ -55,7 +57,9 @@ var (
 	bootstrapNacos map[string]any
 )
 
-// Init 加载 .env（如有），再读取 bootstrap 基础配置，按 APP_ENV 合并服务环境差异文件。
+// Init 加载 .env（如有），再读取 bootstrap 引导配置。
+// 本地环境覆盖文件不在此时合并——远程 Nacos 配置优先，仅当远程未命中时
+// 由调用方通过 MergeEnvConfig 兜底加载。
 func Init(path string) error {
 	if path == "" {
 		path = filepath.Join("config", "bootstrap.yaml")
@@ -69,13 +73,17 @@ func Init(path string) error {
 		return fmt.Errorf("读取基础配置 %s 失败: %w", path, err)
 	}
 	baseFile = path
+	envFile = ""
 	remoteFiles = nil
-	if err := mergeEnvConfig(path); err != nil {
-		return err
-	}
 	bootstrapNacos = viper.GetStringMap("nacos")
 	viper.WatchConfig()
 	return nil
+}
+
+// MergeEnvConfig 合并本地环境覆盖文件 <service>-<env>.yaml（存在时）。
+// 供远程配置中心未命中时的本地兜底；文件不存在时静默跳过。
+func MergeEnvConfig() error {
+	return mergeEnvConfig(baseFile)
 }
 
 // mergeEnvConfig 按 APP_ENV 加载服务环境配置，文件名格式：<service>-<env>.yaml。
@@ -193,11 +201,22 @@ func RemoteDataIDs(configured []string) []string {
 	if !containsString(dataIDs, mainDataID) {
 		dataIDs = append(dataIDs, mainDataID)
 	}
-	profileDataID := serviceName + "-" + Env() + ".yaml"
-	if !containsString(dataIDs, profileDataID) {
+	profileDataID := ProfileDataID()
+	if profileDataID != "" && !containsString(dataIDs, profileDataID) {
 		dataIDs = append(dataIDs, profileDataID)
 	}
 	return dataIDs
+}
+
+// ProfileDataID 返回 profile dataID（<service>-<env>.yaml），与本地兜底文件
+// 同名。调用方据此判断远程是否命中：未命中时才合并本地环境覆盖文件。
+// 未配置 service_name 时返回空串。
+func ProfileDataID() string {
+	serviceName := ServiceName()
+	if serviceName == "" {
+		return ""
+	}
+	return serviceName + "-" + Env() + ".yaml"
 }
 
 func containsString(values []string, target string) bool {
