@@ -49,6 +49,7 @@ sh deploy/dev.sh migrate
 .\deploy\dev.ps1 -Command migrate  # 数据库迁移
 .\deploy\dev.ps1 -Command restart  # 重启中间件
 .\deploy\dev.ps1 -Command app      # 仅启动本地业务服务（不动容器）
+.\deploy\dev.ps1 -Command sync     # 同步 deploy/higress 配置到命名卷并重启网关
 .\deploy\dev.ps1 -Command down     # 停止并清理容器
 ```
 
@@ -59,8 +60,17 @@ sh deploy/dev.sh migrate  # 数据库迁移
 sh deploy/dev.sh restart  # 重启中间件
 sh deploy/dev.sh app      # 仅启动本地业务服务（不动容器）
 sh deploy/dev.sh stop    # 停止本地业务服务（不动容器）
+sh deploy/dev.sh sync    # 同步 deploy/higress 配置到命名卷并重启网关
 sh deploy/dev.sh down     # 停止并清理容器
 ```
+
+### Higress 配置与命名卷
+
+Higress 的 `/data` 使用命名卷 `higress-data`（避免 Windows bind mount 跨文件系统导致的
+高 CPU）。`deploy/higress/` 仍是配置的唯一真源：compose 的 `higress-init` 一次性服务
+在网关启动前自动把其中的 `mcpbridges/`、`ingresses/`、`wasmplugins/` 灌入卷，
+每次 `up` 都会刷新；修改 yaml 后执行 `sync` 可立即生效（重跑灌入 + 重启网关）。
+init 会覆盖这三个目录，控制台里做的路由/插件改动请先移回 yaml。
 
 ### 访问地址
 

@@ -9,7 +9,7 @@ server:
     - "::1"
 
 nacos:
-  enabled: false
+  enabled: true
   endpoints:
     - "127.0.0.1:8848"
   namespace: ""

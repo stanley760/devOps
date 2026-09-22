@@ -12,6 +12,11 @@ scrape_configs:
       - targets:
           - host.docker.internal:9999
           - host.docker.internal:9091
+  # Higress 网关 Envoy 指标（enablePrometheusMerge 已合并 istio 统计）
+  - job_name: higress-gateway
+    metrics_path: /stats/prometheus
+    static_configs:
+      - targets: ["higress:15020"]
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]

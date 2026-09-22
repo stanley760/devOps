@@ -1,5 +1,5 @@
 # 单节点 Docker 开发环境。生产部署请使用 docker-compose.yml。
-name: devops-dev
+name: devops_dev
 
 services:
   mysql:
@@ -35,6 +35,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    networks:
+      default:
+        aliases:
+          # 完整域名格式，供 Higress DNS 服务来源（mcpbridges/default.yaml 的 devops-redis）解析
+          - redis.devops.local
 
   nacos:
     image: nacos/nacos-server:v2.4.3
@@ -59,8 +64,27 @@ services:
       retries: 30
       start_period: 15s
 
+  # 一次性配置灌入：把 deploy/higress 下 git 管理的资源目录灌进命名卷（/data），
+  # 避免 Windows bind mount 直接挂 /data 导致的高 CPU。每次 up 都会刷新这三个目录，
+  # 控制台对其中文件的运行时改动会被覆盖——配置一律改 deploy/higress 下的 yaml。
+  higress-init:
+    image: busybox:1.36
+    volumes:
+      - ./higress:/src:ro
+      - higress-data:/data
+    command:
+      - sh
+      - -c
+      - tar cf - -C /src mcpbridges ingresses services  wasmplugins | tar xf - -C /data
+
   higress:
     image: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/all-in-one:2.2.3
+    environment:
+      # 内置 prometheus/loki/promtail/grafana 保持关闭（默认即 off，显式声明以固化意图），
+      # 监控使用本 compose 的外部 prometheus/grafana
+      O11Y: "off"
+      # envoy worker 线程数，默认 16 对 dev 机器过多
+      GATEWAY_CONCURRENCY: "2"
     ports:
       - "8001:8001"
       - "8080:8080"
@@ -70,6 +94,8 @@ services:
     depends_on:
       nacos:
         condition: service_healthy
+      higress-init:
+        condition: service_completed_successfully
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -90,28 +116,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  # —— 业务服务镜像（仅 migrate 一次性容器使用，默认不启动） ——
-  # 本地开发时业务服务由宿主机 go run 启动；migrate 命令通过 `compose run --rm devops-system migrate` 调用此镜像。
-  devops-system:
-    build:
-      context: ..
-      dockerfile: devops-system/Dockerfile
-    image: devops-system:dev
-    profiles: ["app"]          # 不在默认 up 中启动，仅 migrate 显式调用
-    expose:
-      - "9999"
-    environment:
-      APP_ENV: dev
-    volumes:
-      - ./config/system-dev.yaml:/app/config/devops-system-dev.yaml:ro
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      nacos:
-        condition: service_healthy
 
   # —— 可观测性（dev 本地栈）：Jaeger 追踪 + Prometheus 抓取 + Grafana 可视化 ——
 

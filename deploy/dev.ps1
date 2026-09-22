@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("up", "app", "stop", "down", "restart", "logs", "ps", "migrate")]
     [string]$Command = "up"
 )

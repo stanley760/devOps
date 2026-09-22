@@ -1,0 +1,33 @@
+# devops-system 灰度实例 bootstrap：以 devops-system-gray 服务名注册到同一 Nacos 分组，
+# 供 Higress canary 路由（权重分流）与 gray.devops.local 专用路由（100% 直达）使用。
+# 本地启动：go run . server -f config/bootstrap-gray.yaml
+
+server:
+  port: 9998                 # 与主实例 9999 错开
+  read_timeout: 10s
+  write_timeout: 10s
+  trusted_proxies:
+    - 127.0.0.1
+    - "::1"
+
+nacos:
+  enabled: true
+  endpoints:
+    - "127.0.0.1:8848"
+  namespace: ""
+  group: "DEVOPS_GROUP"
+  username: "nacos"
+  password: "nacos"
+  timeout: 5s
+  config:
+    data_ids:
+      - "devops-system.yaml"   # 与主实例共用同一份业务配置
+    group: "DEVOPS_GROUP"
+    timeout: 5s
+    required: false
+  registry:
+    service_name: "devops-system-gray"
+    cluster: "DEFAULT"
+    weight: 1
+    meta:
+      service: "devops-system-gray"
