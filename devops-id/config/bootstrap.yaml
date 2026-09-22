@@ -1,7 +1,7 @@
 # devops-id 分布式 ID 发号服务基础配置
 
 grpc:
-  listen: ":9090"
+  listen: ":9991"
   reflection: false       # dev 环境自动强制开启，便于 grpcurl 调试
 
 nacos:

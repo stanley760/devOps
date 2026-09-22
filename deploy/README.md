@@ -18,21 +18,21 @@ sh deploy/dev.sh
 ```
 
 脚本会启动 MySQL、Redis、Nacos、etcd、Higress 网关和可观测栈（Jaeger/Prometheus/Grafana），
-然后提示如何在本地启动业务服务。
+然后自动拉起本地业务服务：
 
-### 启动业务服务
+- **PowerShell**：在两个独立的 cmd 窗口内分别 `go run` 启动 `devops-id` 与 `devops-system`，
+  关闭对应窗口即停止该服务。
+- **sh**：以后台进程启动，日志与 PID 记录在 `deploy/.dev-logs/` 下
+  （`tail -f deploy/.dev-logs/devops-system.log` 查看输出）。
 
-中间件就绪后，在宿主机打开三个终端：
+首次运行或 schema 变更后，先执行数据库迁移：
 
 ```powershell
-# 终端 1：启动 devops-id（gRPC 发号 :9090）
-cd devops-id && go run . server
-
-# 终端 2：执行数据库迁移（首次或 schema 变更后）
 .\deploy\dev.ps1 -Command migrate
+```
 
-# 终端 3：启动 devops-system（HTTP :9999）
-cd devops-system && go run . server
+```bash
+sh deploy/dev.sh migrate
 ```
 
 > **NACOS_REGISTER_IP**：本地进程注册到 Nacos 的 IP 必须是宿主机局域网 IPv4
@@ -48,7 +48,18 @@ cd devops-system && go run . server
 .\deploy\dev.ps1 -Command logs     # 跟踪日志
 .\deploy\dev.ps1 -Command migrate  # 数据库迁移
 .\deploy\dev.ps1 -Command restart  # 重启中间件
-.\deploy\dev.ps1 -Command down     # 停止并清理
+.\deploy\dev.ps1 -Command app      # 仅启动本地业务服务（不动容器）
+.\deploy\dev.ps1 -Command down     # 停止并清理容器
+```
+
+```bash
+sh deploy/dev.sh ps       # 查看容器状态
+sh deploy/dev.sh logs     # 跟踪日志
+sh deploy/dev.sh migrate  # 数据库迁移
+sh deploy/dev.sh restart  # 重启中间件
+sh deploy/dev.sh app      # 仅启动本地业务服务（不动容器）
+sh deploy/dev.sh stop    # 停止本地业务服务（不动容器）
+sh deploy/dev.sh down     # 停止并清理容器
 ```
 
 ### 访问地址
