@@ -82,7 +82,7 @@ idclient:                          # devops-id 发号服务接入
 
 # 本地进程开发：Jaeger/Prometheus 由 dev compose 暴露在宿主机端口（4318/9090）。
 observability:
-  otlp_endpoint: "http://127.0.0.1:4318"
+  otlp_endpoint: "http://127.0.0.1:4318/v1/traces"
   sampler_ratio: 1.0
   metrics_enabled: true       # /metrics 与 /healthz 同级，仅本机访问，不经 Higress
 
