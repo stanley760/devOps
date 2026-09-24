@@ -13,38 +13,38 @@ type UserPageQuery struct {
 
 // UserCreateReq POST /users 入参（角色分配 g 行联动）。
 type UserCreateReq struct {
-	Username string  `json:"username" binding:"required,min=2,max=30"`
-	Password string  `json:"password" binding:"required,min=6,max=64"`
-	Nickname string  `json:"nickname" binding:"required,min=1,max=30"`
+	Username string  `json:"username" binding:"required,min=2,max=30" minLength:"2" maxLength:"30"`
+	Password string  `json:"password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
+	Nickname string  `json:"nickname" binding:"required,min=1,max=30" minLength:"1" maxLength:"30"`
 	DeptID   ID      `json:"deptId" binding:"required"`
-	PostIDs  []ID    `json:"postIds"`
-	RoleIDs  []ID    `json:"roleIds"`
-	Email    string  `json:"email" binding:"omitempty,email,max=50"`
-	Mobile   *string `json:"mobile" binding:"omitempty,max=20"`
-	Sex      int8    `json:"sex" binding:"omitempty,min=0,max=2"`
-	Avatar   string  `json:"avatar" binding:"omitempty,max=512"`
-	Remark   string  `json:"remark" binding:"omitempty,max=500"`
-	Status   int8    `json:"status" binding:"omitempty,min=0,max=1"`
+	PostIDs  []ID    `json:"postIds,omitempty"`
+	RoleIDs  []ID    `json:"roleIds,omitempty"`
+	Email    string  `json:"email,omitempty" binding:"omitempty,email,max=50" format:"email" maxLength:"50"`
+	Mobile   *string `json:"mobile,omitempty" binding:"omitempty,max=20" maxLength:"20"`
+	Sex      int8    `json:"sex,omitempty" binding:"omitempty,min=0,max=2" minimum:"0" maximum:"2"`
+	Avatar   string  `json:"avatar,omitempty" binding:"omitempty,max=512" maxLength:"512"`
+	Remark   string  `json:"remark,omitempty" binding:"omitempty,max=500" maxLength:"500"`
+	Status   int8    `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1"`
 }
 
 // UserUpdateReq PUT /users/:id 入参（username 可改，密码走重置接口）。
 type UserUpdateReq struct {
-	Username string  `json:"username" binding:"required,min=2,max=30"`
-	Nickname string  `json:"nickname" binding:"required,min=1,max=30"`
+	Username string  `json:"username" binding:"required,min=2,max=30" minLength:"2" maxLength:"30"`
+	Nickname string  `json:"nickname" binding:"required,min=1,max=30" minLength:"1" maxLength:"30"`
 	DeptID   ID      `json:"deptId" binding:"required"`
-	PostIDs  []ID    `json:"postIds"`
-	RoleIDs  []ID    `json:"roleIds"`
-	Email    string  `json:"email" binding:"omitempty,email,max=50"`
-	Mobile   *string `json:"mobile" binding:"omitempty,max=20"`
-	Sex      int8    `json:"sex" binding:"omitempty,min=0,max=2"`
-	Avatar   string  `json:"avatar" binding:"omitempty,max=512"`
-	Remark   string  `json:"remark" binding:"omitempty,max=500"`
-	Status   int8    `json:"status" binding:"omitempty,min=0,max=1"`
+	PostIDs  []ID    `json:"postIds,omitempty"`
+	RoleIDs  []ID    `json:"roleIds,omitempty"`
+	Email    string  `json:"email,omitempty" binding:"omitempty,email,max=50" format:"email" maxLength:"50"`
+	Mobile   *string `json:"mobile,omitempty" binding:"omitempty,max=20" maxLength:"20"`
+	Sex      int8    `json:"sex,omitempty" binding:"omitempty,min=0,max=2" minimum:"0" maximum:"2"`
+	Avatar   string  `json:"avatar,omitempty" binding:"omitempty,max=512" maxLength:"512"`
+	Remark   string  `json:"remark,omitempty" binding:"omitempty,max=500" maxLength:"500"`
+	Status   int8    `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1"`
 }
 
 // ResetPasswordReq PUT /users/:id/password 入参（重置后踢下线）。
 type ResetPasswordReq struct {
-	Password string `json:"password" binding:"required,min=6,max=64"`
+	Password string `json:"password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
 }
 
 // UserDetailResp GET /users/:id 响应：基本信息 + 角色/岗位 ID。

@@ -13,7 +13,6 @@
 //	-huma.API：业务侧 huma.Register 注册接口（路由+校验+文档三合一）
 //	- OpenAPI JSON：GET {DocsPath}/openapi.json（默认 /apidoc/openapi.json）
 //	- 文档 UI：GET {DocsPath}（huma 内置 Stoplight Elements 风格交互文档，
-//	  无需 knife4j/Swagger UI 等外部资产）
 //
 // 必须挂在认证组之前（公开路由）；是否启用由调用方按环境门控
 // （dev/test 开、prod 关，见各服务 apidoc.enabled 配置）。
@@ -53,6 +52,10 @@ type Options struct {
 	// []map[string][]string{{"bearerAuth": {}}}；设置后所有操作默认要求鉴权，
 	// 公开接口（login/refresh 等）在各自 Operation 里覆盖为空列表。
 	Security []map[string][]string
+	// Enabled 是否挂载文档端点（/apidoc UI、openapi.json、/schemas）。
+	// false 时仍返回可程序化导出的 huma.API（路由恒可注册），
+	// 仅不注册任何文档 HTTP 端点——D5：门控只影响文档，不再影响路由注册。
+	Enabled bool
 }
 
 // Defaults 填充缺省值并返回规范化后的副本。
@@ -82,8 +85,17 @@ func New(r gin.IRouter, opts Options) huma.API {
 	cfg := huma.DefaultConfig(opts.Title, opts.Version)
 	// huma 默认 DocsPath=/docs、OpenAPIPath=/openapi（不带扩展名，huma 自动
 	// 追加 .json/.yaml 按内容协商）。统一平移到业务约定的 DocsPath 下。
-	cfg.DocsPath = opts.DocsPath
-	cfg.OpenAPIPath = opts.DocsPath + "/openapi"
+	// Enabled=false 时三个路径全部置空：huma 仅跳过端点注册（api.go 按此
+	// 字段独立门控），OpenAPI 仍可经 api.OpenAPI() 程序化导出；SchemasPath
+	// 必须一并置空，否则 /schemas/{schema} 路由仍会被注册。
+	if !opts.Enabled {
+		cfg.DocsPath = ""
+		cfg.OpenAPIPath = ""
+		cfg.SchemasPath = ""
+	} else {
+		cfg.DocsPath = opts.DocsPath
+		cfg.OpenAPIPath = opts.DocsPath + "/openapi"
+	}
 	serverURL := opts.ServerURL
 	if serverURL == "" {
 		serverURL = opts.BasePath
@@ -126,15 +138,18 @@ func New(r gin.IRouter, opts Options) huma.API {
 	// OpenAPI JSON 导出端点：供前端代码生成、网关路由发现、CI 契约测试消费。
 	// huma 自身已挂 openapi.json；此处显式注册一个语义化别名，保持与旧版
 	// /apidoc/doc.json 相近的对外约定（迁移期前端只改一处后缀）。
-	huma.Register(api, huma.Operation{
-		OperationID: "export-openapi",
-		Method:      http.MethodGet,
-		Path:        opts.DocsPath + "/doc.json",
-		Summary:     "导出 OpenAPI 3.1 文档",
-		Tags:        []string{"apidoc"},
-	}, func(ctx context.Context, _ *docInput) (*openapiDocOutput, error) {
-		return &openapiDocOutput{Body: api.OpenAPI()}, nil
-	})
+	// 与文档端点同门控（Enabled=false 不注册）。
+	if opts.Enabled {
+		huma.Register(api, huma.Operation{
+			OperationID: "export-openapi",
+			Method:      http.MethodGet,
+			Path:        opts.DocsPath + "/doc.json",
+			Summary:     "导出 OpenAPI 3.1 文档",
+			Tags:        []string{"apidoc"},
+		}, func(ctx context.Context, _ *docInput) (*openapiDocOutput, error) {
+			return &openapiDocOutput{Body: api.OpenAPI()}, nil
+		})
+	}
 
 	return api
 }

@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"log"
+	"devops-infra/http/humaerr"
 	"devops-infra/utils"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
@@ -25,6 +26,10 @@ func main() {
 	// 而 config.Init（cobra.OnInitialize）要等到 cmd.Execute 才执行。
 	// godotenv.Load 不覆盖已设置的 OS 环境变量，CI/容器注入安全。
 	_ = godotenv.Load("config/.env")
+
+	// huma 错误信封装配（D1）：必须在任何 huma 请求处理前完成，
+	// 覆盖 huma.NewError 使 4xx/5xx 输出 BaseResponse 信封而非 problem+json。
+	humaerr.Install()
 
 	ver := utils.ResolveVersion()
 

@@ -44,6 +44,15 @@ func Init(gdb *gorm.DB) error {
 // SetAuthorizer 显式注入实例（测试或替代装配路径使用）。
 func SetAuthorizer(a *securityauthz.CasbinAuthorizer) { holder.Store(a) }
 
+// Authorizer 导出共享 authorizer（huma 鉴权中间件注入用，见 D7）。
+// 未装配时返回 nil，中间件层 fail-closed 拒绝（与 gin 版 Enforce 行为一致）。
+func Authorizer() securityauthz.Authorizer {
+	if a := loaded(); a != nil {
+		return a
+	}
+	return nil
+}
+
 // Close 释放实例（保持装配链对称；共享 SyncedEnforcer 无显式 Close）。
 func Close() { holder.Store(nil) }
 

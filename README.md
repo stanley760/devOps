@@ -251,9 +251,10 @@ go test ./devops-infra/... ./devops-id/... ./devops-system/...
 ## Roadmap
 
 - [ ] 操作/登录日志、账号配额、行级数据权限
-- [ ] 租户套餐、域名 → 租户映射、A→B 迁移工具
+- [ ] 迁移数据是否可以sql化，不要写死代码
 - [ ] Prometheus 发号监控
-- [ ] Docker 与生产部署
+- [ ] 数据权限功能
+- [ ] 处理/metric 接口无法在jaeger中追踪的问题
 
 ## Docker 开发环境故障排查
 

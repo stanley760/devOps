@@ -15,7 +15,7 @@ mysql:
   host: 127.0.0.1
   port: 3306
   username: devops
-  password: "devopspwd"    # 与 docker-compose-dev.yml 的 MYSQL_PASSWORD 一致
+  password: changeme    # 与 docker-compose-dev.yml 的 MYSQL_PASSWORD 一致
   database: devops       # 业务库（t_tenant + t_system_* + casbin_rule）
   charset: utf8mb4
   max_idle_conns: 10

@@ -48,16 +48,18 @@ func Register(docCfg config.APIDocConfig, authM *auth.Manager, authSvc *service.
 		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
 		r.GET("/.well-known/jwks.json", jwksHandler(authM))
 
+		// huma API 恒装配（D5）：Enabled 只门控文档端点，路由注册不再受影响。
+		humaAPI := apidoc.New(r, apidoc.Options{
+			Title:        "devops-system API",
+			Version:      "v1",
+			DocsPath:     docCfg.BasePath,
+			BearerAuth:   true,
+			TenantHeader: "X-Tenant-ID",
+			Security:     []map[string][]string{{"bearerAuth": {}, "tenantId": {}}},
+			Enabled:      docCfg.Enabled,
+		})
 		if docCfg.Enabled {
-			api := apidoc.New(r, apidoc.Options{
-				Title:        "devops-system API",
-				Version:      "v1",
-				DocsPath:     docCfg.BasePath,
-				BearerAuth:   true,
-				TenantHeader: "X-Tenant-ID",
-				Security:     []map[string][]string{{"bearerAuth": {}, "tenantId": {}}},
-			})
-			registerAuthOperations(api, authSvc)
+			registerAuthOperations(humaAPI, authSvc)
 		}
 
 		api := r.Group("/api/v1")

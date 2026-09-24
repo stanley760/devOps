@@ -43,6 +43,17 @@ func (i *ID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// UnmarshalText 支持 path/query 参数解析（huma 参数管线兜底 encoding.TextUnmarshaler）。
+// 文档形态自动推导为 string（真实 JSON 形态）。
+func (i *ID) UnmarshalText(b []byte) error {
+	v, err := strconv.ParseInt(string(b), 10, 64)
+	if err != nil {
+		return fmt.Errorf("ID %q 非法", string(b))
+	}
+	*i = ID(v)
+	return nil
+}
+
 // ParseID 解析路径/查询参数中的 ID（字符串形态）。
 func ParseID(s string) (ID, error) {
 	v, err := strconv.ParseInt(s, 10, 64)

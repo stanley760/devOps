@@ -47,7 +47,7 @@ type pingInput struct{}
 
 func TestNew_DefaultPaths(t *testing.T) {
 	r := newEngine()
-	api := apidoc.New(r, apidoc.Options{Title: "test API", Version: "v1"})
+	api := apidoc.New(r, apidoc.Options{Title: "test API", Version: "v1", Enabled: true})
 	registerPing(t, api)
 
 	// 文档 UI 可达
@@ -82,7 +82,7 @@ func TestNew_DefaultPaths(t *testing.T) {
 
 func TestNew_DocJSONAlias(t *testing.T) {
 	r := newEngine()
-	_ = apidoc.New(r, apidoc.Options{})
+	_ = apidoc.New(r, apidoc.Options{Enabled: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/doc.json", nil))
@@ -97,7 +97,7 @@ func TestNew_DocJSONAlias(t *testing.T) {
 
 func TestNew_CustomDocsPath(t *testing.T) {
 	r := newEngine()
-	api := apidoc.New(r, apidoc.Options{DocsPath: "/api-docs"})
+	api := apidoc.New(r, apidoc.Options{DocsPath: "/api-docs", Enabled: true})
 	registerPing(t, api)
 
 	for _, path := range []string{"/api-docs", "/api-docs/openapi.json", "/api-docs/doc.json"} {
@@ -111,7 +111,7 @@ func TestNew_CustomDocsPath(t *testing.T) {
 
 func TestNew_BasePathServer(t *testing.T) {
 	r := newEngine()
-	_ = apidoc.New(r, apidoc.Options{ServerURL: "https://ops.example.com"})
+	_ = apidoc.New(r, apidoc.Options{ServerURL: "https://ops.example.com", Enabled: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
@@ -125,7 +125,7 @@ func TestNew_BasePathServer(t *testing.T) {
 
 func TestNew_BasePathLegacyServerAlias(t *testing.T) {
 	r := newEngine()
-	_ = apidoc.New(r, apidoc.Options{BasePath: "https://legacy.example.com"})
+	_ = apidoc.New(r, apidoc.Options{BasePath: "https://legacy.example.com", Enabled: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
@@ -142,6 +142,7 @@ func TestNew_BearerAuth(t *testing.T) {
 	_ = apidoc.New(r, apidoc.Options{
 		BearerAuth: true,
 		Security:   []map[string][]string{{"bearerAuth": {}}},
+		Enabled:    true,
 	})
 
 	w := httptest.NewRecorder()
@@ -160,12 +161,41 @@ func TestNew_BearerAuth(t *testing.T) {
 
 func TestMount_Deprecated(t *testing.T) {
 	r := newEngine()
-	_ = apidoc.New(r, apidoc.Options{Title: "mounted"})
+	_ = apidoc.New(r, apidoc.Options{Title: "mounted", Enabled: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("openapi.json: got %d, want 200", w.Code)
+	}
+}
+
+// TestNew_Disabled 文档门控（D5）：Enabled=false 时文档端点与 /schemas 全部 404，
+// 但 huma 路由注册照常、OpenAPI 仍可程序化导出（路由注册不再受 Enabled 影响）。
+func TestNew_Disabled(t *testing.T) {
+	r := newEngine()
+	api := apidoc.New(r, apidoc.Options{}) // Enabled 零值 false
+	registerPing(t, api)
+
+	for _, path := range []string{"/apidoc", "/apidoc/openapi.json", "/apidoc/doc.json", "/schemas/Ping"} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("%s: got %d, want 404", path, w.Code)
+		}
+	}
+
+	// 业务路由仍可经 huma 注册并正常响应
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("/ping: got %d, want 200（Enabled=false 不应影响路由注册）", w.Code)
+	}
+
+	// 程序化导出仍完整
+	paths := api.OpenAPI().Paths
+	if _, ok := paths["/ping"]; !ok {
+		t.Fatalf("程序化导出缺少 /ping，paths=%v", paths)
 	}
 }
 
@@ -180,6 +210,7 @@ func TestNewTenantHeader(t *testing.T) {
 	r := newEngine()
 	_ = apidoc.New(r, apidoc.Options{
 		TenantHeader: "X-Tenant-ID",
+		Enabled:      true,
 	})
 
 	w := httptest.NewRecorder()
