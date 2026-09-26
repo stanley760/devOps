@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"testing"
 
+	"net/http/httptest"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
+	"devops-infra/http/humaerr"
 	"devops-infra/http/humaparam"
 )
 
-// optInput 带 Optional query 参数的输入。
+// optInput 带 Optional query 参数的输入（复现分页筛选的 *int8 语义）。
 type optInput struct {
 	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1"`
 }
@@ -21,6 +24,14 @@ type optOutput struct {
 	Body struct {
 		Status *int8 `json:"status"`
 	}
+}
+
+func newOptAPI(t *testing.T) humatest.TestAPI {
+	cfg := huma.DefaultConfig("p", "v1")
+	cfg.CreateHooks = nil // 与生产 apidoc.New 对齐：禁用 $schema 注入
+	_, api := humatest.New(t, cfg)
+	registerOpt(api)
+	return api
 }
 
 func registerOpt(api huma.API) {
@@ -33,60 +44,63 @@ func registerOpt(api huma.API) {
 	})
 }
 
-func TestOptionalAbsent(t *testing.T) {
-	_, api := humatest.New(t, huma.DefaultConfig("p", "v1"))
-	registerOpt(api)
-
-	resp := api.Get("/opt")
-	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body=%s", resp.Code, resp.Body.String())
-	}
+func optStatus(t *testing.T, resp *httptest.ResponseRecorder) *int8 {
+	t.Helper()
 	var out struct {
-		Data struct {
-			Status *int8 `json:"status"`
-		} `json:"data"`
+		Status *int8 `json:"status"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &out); err != nil {
 		t.Fatalf("响应 JSON: %v", err)
 	}
-	if out.Data.Status != nil {
-		t.Fatalf("缺省 status 应为 nil, got %v", *out.Data.Status)
+	return out.Status
+}
+
+func TestOptionalAbsent(t *testing.T) {
+	api := newOptAPI(t)
+
+	resp := api.Get("/opt")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("缺省请求 status = %d, want 200, body=%s", resp.Code, resp.Body.String())
+	}
+	if s := optStatus(t, resp); s != nil {
+		t.Fatalf("缺省 status 应为 nil, got %v", *s)
 	}
 }
 
 func TestOptionalExplicitZero(t *testing.T) {
-	_, api := humatest.New(t, huma.DefaultConfig("p", "v1"))
-	registerOpt(api)
+	api := newOptAPI(t)
 
 	// 显式传 0（有效业务值）→ IsSet=true、Ptr() 指向 0
 	resp := api.Get("/opt?status=0")
 	if resp.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body=%s", resp.Code, resp.Body.String())
+		t.Fatalf("显式 0 status = %d, want 200, body=%s", resp.Code, resp.Body.String())
 	}
-	var out struct {
-		Data struct {
-			Status *int8 `json:"status"`
-		} `json:"data"`
+	s := optStatus(t, resp)
+	if s == nil || *s != 0 {
+		t.Fatalf("显式 0 应 IsSet 且值 0, got %v", s)
 	}
-	if err := json.Unmarshal(resp.Body.Bytes(), &out); err != nil {
-		t.Fatalf("响应 JSON: %v", err)
+}
+
+func TestOptionalExplicitOne(t *testing.T) {
+	api := newOptAPI(t)
+
+	resp := api.Get("/opt?status=1")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("显式 1 status = %d, want 200, body=%s", resp.Code, resp.Body.String())
 	}
-	if out.Data.Status == nil || *out.Data.Status != 0 {
-		t.Fatalf("显式 0 应 IsSet 且值 0, got %v", out.Data.Status)
+	s := optStatus(t, resp)
+	if s == nil || *s != 1 {
+		t.Fatalf("显式 1 应 IsSet 且值 1, got %v", s)
 	}
 }
 
 func TestOptionalConstraintRejected(t *testing.T) {
-	humaerrInstall()
-	_, api := humatest.New(t, huma.DefaultConfig("p", "v1"))
-	registerOpt(api)
+	humaerr.Install()
+	api := newOptAPI(t)
 
-	// 显式传 2 违反 maximum:1 → 422→400
+	// 显式传 2 违反 maximum:1 → 422→400 信封
 	resp := api.Get("/opt?status=2")
 	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body=%s", resp.Code, resp.Body.String())
+		t.Fatalf("越界 status = %d, want 400, body=%s", resp.Code, resp.Body.String())
 	}
 }
-
-// humaerrInstall 复用 humaerr 的 Install（避免测试间循环依赖放 humaerr_test）。
-func humaerrInstall() {}

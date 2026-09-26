@@ -1,6 +1,6 @@
 // Package apidoc 基于 huma/v2 提供统一的 OpenAPI 接口文档装配。
 //
-// 设计目标（对齐 docs/observability-and-api-docs.md Part 1）：
+// 设计目标：
 //   - 文档即代码：OpenAPI 3.1 schema 由 Go 结构体标签直接推导，
 //     无 swag 注解、无 `swag init` 生成步骤、无 docs 目录同步维护
 //   - 复用现有 Gin 路由：humagin 适配器直接跑在传入的 gin.IRouter 上，
@@ -83,6 +83,10 @@ func New(r gin.IRouter, opts Options) huma.API {
 	opts = opts.Defaults()
 
 	cfg := huma.DefaultConfig(opts.Title, opts.Version)
+	// 禁用 DefaultConfig 默认挂载的 SchemaLinkTransformer（CreateHooks 内联装配，
+	// api.go:513 执行）：它向结构体响应注入 $schema 字段与 Link 头，破坏与
+	// gin 版字节一致的信封契约。文档由 openapi.json 独立承载，无需 schema 链接。
+	cfg.CreateHooks = nil
 	// huma 默认 DocsPath=/docs、OpenAPIPath=/openapi（不带扩展名，huma 自动
 	// 追加 .json/.yaml 按内容协商）。统一平移到业务约定的 DocsPath 下。
 	// Enabled=false 时三个路径全部置空：huma 仅跳过端点注册（api.go 按此

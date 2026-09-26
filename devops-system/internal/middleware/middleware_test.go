@@ -7,13 +7,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/gin-gonic/gin"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/glebarez/sqlite"
 	goredis "github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -27,11 +27,9 @@ import (
 	"devops-system/internal/config"
 )
 
-// testEnv 构建共享安全实现支撑的中间件测试环境。
+// testEnv 构建共享安全实现支撑的中间件测试环境（huma 版）。
 func testEnv(t *testing.T) (*auth.Manager, func()) {
 	t.Helper()
-
-	gin.SetMode(gin.TestMode)
 
 	// Redis 会话存储
 	mr, err := miniredis.Run()
@@ -101,67 +99,65 @@ func login(t *testing.T, m *auth.Manager, uid int64, tid int64) (*auth.AccessCla
 	return claims, access
 }
 
-func perform(t *testing.T, r *gin.Engine, token string) *httptest.ResponseRecorder {
+// newMWAPI 组装挂载指定中间件的 humatest API（与生产 apidoc.New 对齐：禁用 $schema 注入）。
+func newMWAPI(t *testing.T, m ...func(huma.Context, func(huma.Context))) humatest.TestAPI {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-	return rec
+	cfg := huma.DefaultConfig("mw-test", "v1")
+	cfg.CreateHooks = nil
+	_, api := humatest.New(t, cfg)
+	huma.Register(api, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/",
+		Middlewares: huma.Middlewares(m),
+	}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+	return api
 }
 
-func TestJWTMiddlewareRegressions(t *testing.T) {
+// perform 带可选 Bearer 头发请求。
+func perform(t *testing.T, api humatest.TestAPI, token string) int {
+	t.Helper()
+	if token == "" {
+		return api.Get("/").Code
+	}
+	return api.Get("/", "Authorization: Bearer "+token).Code
+}
+
+func TestHumaJWTMiddlewareRegressions(t *testing.T) {
 	m, cleanup := testEnv(t)
 	defer cleanup()
 
-	handlerCalled := false
-	r := gin.New()
-	r.GET("/", JWT(m), func(c *gin.Context) {
-		handlerCalled = true
-		claims := CurrentClaims(c)
-		if claims == nil {
-			t.Fatal("claims not injected")
-		}
-		c.Status(http.StatusNoContent)
-	})
+	api := newMWAPI(t, HumaJWT(m))
 
-	// 缺失 Authorization 头 → 401 + 原文案
-	rec := perform(t, r, "")
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "未登录或会话已过期") {
-		t.Fatalf("missing header: %d %s", rec.Code, rec.Body.String())
+	// 缺失 Authorization 头 → 401 + 原文案信封
+	resp := api.Get("/")
+	if resp.Code != http.StatusUnauthorized || !strings.Contains(resp.Body.String(), "未登录或会话已过期") {
+		t.Fatalf("missing header: %d %s", resp.Code, resp.Body.String())
 	}
 
 	// 非法 token → 401 + 原文案
-	rec = perform(t, r, "garbage-token")
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "未登录或会话已过期") {
-		t.Fatalf("bad token: %d %s", rec.Code, rec.Body.String())
-	}
-	if handlerCalled {
-		t.Fatal("handler ran on auth failure")
+	resp = api.Get("/", "Authorization: Bearer garbage-token")
+	if resp.Code != http.StatusUnauthorized || !strings.Contains(resp.Body.String(), "未登录或会话已过期") {
+		t.Fatalf("bad token: %d %s", resp.Code, resp.Body.String())
 	}
 
-	// 有效 token → 204 + claims 注入
+	// 有效 token → 204（中间件放行，handler 执行）
 	_, access := login(t, m, 42, 7)
-	rec = perform(t, r, access)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("valid token: %d %s", rec.Code, rec.Body.String())
-	}
-	if !handlerCalled {
-		t.Fatal("handler did not run on valid token")
+	if code := perform(t, api, access); code != http.StatusNoContent {
+		t.Fatalf("valid token: %d", code)
 	}
 
 	// 会话被撤销（logout/踢下线）→ 401 + 失效文案
 	claims, access2 := login(t, m, 42, 7)
 	m.Logout(context.Background(), claims)
-	rec = perform(t, r, access2)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "登录状态已失效，请重新登录") {
-		t.Fatalf("revoked session: %d %s", rec.Code, rec.Body.String())
+	resp = api.Get("/", "Authorization: Bearer "+access2)
+	if resp.Code != http.StatusUnauthorized || !strings.Contains(resp.Body.String(), "登录状态已失效，请重新登录") {
+		t.Fatalf("revoked session: %d %s", resp.Code, resp.Body.String())
 	}
 }
 
-func TestPermMiddlewareRegressions(t *testing.T) {
+func TestHumaPermMiddlewareRegressions(t *testing.T) {
 	m, cleanup := testEnv(t)
 	defer cleanup()
 
@@ -173,35 +169,24 @@ func TestPermMiddlewareRegressions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handlerCalled := false
-	r := gin.New()
-	r.GET("/", JWT(m), Perm("system:user:query"), func(c *gin.Context) {
-		handlerCalled = true
-		c.Status(http.StatusNoContent)
-	})
+	api := newMWAPI(t, HumaJWT(m), HumaPerm("system:user:query"))
 
-	// 无 claims 不可能到达（JWT 先注入），直接验证：无权限 → 403 + 原文案
+	// 无权限 → 403 + 原文案
 	_, access42 := login(t, m, 42, 7)
-	rec := perform(t, r, access42)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "无操作权限") {
-		t.Fatalf("denied: %d %s", rec.Code, rec.Body.String())
-	}
-	if handlerCalled {
-		t.Fatal("handler ran before permission middleware allowed")
+	resp := api.Get("/", "Authorization: Bearer "+access42)
+	if resp.Code != http.StatusForbidden || !strings.Contains(resp.Body.String(), "无操作权限") {
+		t.Fatalf("denied: %d %s", resp.Code, resp.Body.String())
 	}
 
-	// 持权限 → handler 执行（Perm 在 handler 之前生效）
+	// 持权限 → 204
 	_, access43 := login(t, m, 43, 7)
-	rec = perform(t, r, access43)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("allowed: %d %s", rec.Code, rec.Body.String())
-	}
-	if !handlerCalled {
-		t.Fatal("handler did not run after permission allowed")
+	resp = api.Get("/", "Authorization: Bearer "+access43)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("allowed: %d %s", resp.Code, resp.Body.String())
 	}
 }
 
-func TestPlatformPermMiddlewareRegressions(t *testing.T) {
+func TestHumaPlatformPermMiddlewareRegressions(t *testing.T) {
 	m, cleanup := testEnv(t)
 	defer cleanup()
 
@@ -213,22 +198,19 @@ func TestPlatformPermMiddlewareRegressions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := gin.New()
-	r.GET("/", JWT(m), PlatformPerm("platform:tenant:query"), func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
+	api := newMWAPI(t, HumaJWT(m), HumaPlatformPerm("platform:tenant:query"))
 
 	// 非平台管理员 → 403 + 原文案（g2 门禁在 Enforce 之前）
 	_, access45 := login(t, m, 45, 7)
-	rec := perform(t, r, access45)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "需要平台管理员权限") {
-		t.Fatalf("non-admin: %d %s", rec.Code, rec.Body.String())
+	resp := api.Get("/", "Authorization: Bearer "+access45)
+	if resp.Code != http.StatusForbidden || !strings.Contains(resp.Body.String(), "需要平台管理员权限") {
+		t.Fatalf("non-admin: %d %s", resp.Code, resp.Body.String())
 	}
 
-	// 平台管理员 → 通过
+	// 平台管理员 → 204
 	_, access44 := login(t, m, 44, 7)
-	rec = perform(t, r, access44)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("platform admin: %d %s", rec.Code, rec.Body.String())
+	resp = api.Get("/", "Authorization: Bearer "+access44)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("platform admin: %d %s", resp.Code, resp.Body.String())
 	}
 }

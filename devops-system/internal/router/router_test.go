@@ -192,6 +192,19 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("disabled apidoc status = %d, want 404", rec.Code)
 	}
+
+	// D5：Enabled 只门控文档端点，业务路由恒注册（auth 已迁 huma，禁用文档时仍可达）
+	login := httptest.NewRecorder()
+	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil))
+	if login.Code == http.StatusNotFound {
+		t.Fatalf("auth route missing when apidoc disabled: %s", login.Body.String())
+	}
+
+	logout := httptest.NewRecorder()
+	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil))
+	if logout.Code != http.StatusUnauthorized {
+		t.Fatalf("logout without token status = %d, want 401, body = %s", logout.Code, logout.Body.String())
+	}
 }
 
 // TestJWKSEndpointVerifiesIssuedToken 模拟 Higress jwt-auth 完整验签路径：

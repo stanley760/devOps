@@ -1,6 +1,6 @@
 // huma 版认证/鉴权中间件（D2/D7）。
 //
-// 与 gin.go 同构：决策在 infra，呈现靠 HumaOptions 回调注入——
+// 决策在 infra，呈现靠 HumaOptions 回调注入——
 // 默认回调只写裸状态码（401/403/503 无 body），业务侧接 WriteHumaEnvelope 保持信封一致。
 package middleware
 

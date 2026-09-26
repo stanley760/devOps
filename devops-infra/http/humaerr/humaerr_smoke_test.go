@@ -28,9 +28,19 @@ type smokeOutput struct {
 	}
 }
 
+// newTestAPI 与生产 apidoc.New 对齐：清空 CreateHooks 禁用 $schema 注入，
+// 保证信封字节级一致（SchemaLinkTransformer 会向响应加 $schema 字段与 Link 头）。
+func newTestAPI(t *testing.T, title string) humatest.TestAPI {
+	t.Helper()
+	cfg := huma.DefaultConfig(title, "v1")
+	cfg.CreateHooks = nil
+	_, api := humatest.New(t, cfg)
+	return api
+}
+
 func TestInstallValidation422To400Envelope(t *testing.T) {
 	humaerr.Install()
-	_, api := humatest.New(t, huma.DefaultConfig("smoke", "v1"))
+	api := newTestAPI(t, "smoke")
 
 	huma.Register(api, huma.Operation{
 		OperationID: "smoke", Method: http.MethodPost, Path: "/smoke",
@@ -60,7 +70,7 @@ func TestInstallValidation422To400Envelope(t *testing.T) {
 
 func TestInstallBizErrorEnvelope(t *testing.T) {
 	humaerr.Install()
-	_, api := humatest.New(t, huma.DefaultConfig("smoke2", "v1"))
+	api := newTestAPI(t, "smoke2")
 
 	huma.Register(api, huma.Operation{
 		OperationID: "biz", Method: http.MethodPost, Path: "/biz",
@@ -84,7 +94,7 @@ func TestInstallBizErrorEnvelope(t *testing.T) {
 
 func TestInstallContentTypeJSON(t *testing.T) {
 	humaerr.Install()
-	_, api := humatest.New(t, huma.DefaultConfig("smoke3", "v1"))
+	api := newTestAPI(t, "smoke3")
 
 	huma.Register(api, huma.Operation{
 		OperationID: "ct", Method: http.MethodPost, Path: "/ct",
@@ -96,5 +106,9 @@ func TestInstallContentTypeJSON(t *testing.T) {
 	ct := resp.Header().Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/json") {
 		t.Fatalf("Content-Type = %q, want application/json（无 ContentTypeFilter 不应协商为 problem+json）", ct)
+	}
+	// 契约保护：响应不得被 SchemaLinkTransformer 注入 $schema 字段
+	if strings.Contains(resp.Body.String(), "$schema") {
+		t.Fatalf("响应被注入 $schema，破坏信封字节契约: %s", resp.Body.String())
 	}
 }
