@@ -18,12 +18,23 @@ func RegisterNacosResolver() {
 	})
 }
 
+// serviceNameFromTarget 从 grpc target 提取 Nacos 服务名，兼容两种写法
+//（grpc resolver.Target.Endpoint 只取 URL.Path/Opaque，grpc v1.84 resolver.go:279）：
+//
+func serviceNameFromTarget(target resolver.Target) string {
+	name := strings.TrimSpace(target.Endpoint())
+	if name == "" {
+		name = strings.TrimSpace(target.URL.Host)
+	}
+	return name
+}
+
 type nacosBuilder struct{}
 
 func (*nacosBuilder) Scheme() string { return "nacos" }
 
 func (*nacosBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
-	serviceName := strings.TrimSpace(target.Endpoint())
+	serviceName := serviceNameFromTarget(target)
 	if serviceName == "" {
 		return nil, fmt.Errorf("nacos service name cannot be empty")
 	}

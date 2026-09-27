@@ -1,0 +1,25 @@
+grpc:
+  listen: ":19991"
+
+nacos:
+  enabled: false        # 测试实例不注册
+
+log:
+  level: info
+  console: true
+  format: text
+
+idgen:
+  leaf_name: probe-leaf
+  worker_cache: data
+
+etcd:
+  endpoints:
+    - "127.0.0.1:2379"
+  dial_timeout: 5s
+  lease_ttl: 10s
+
+observability:
+  otlp_endpoint: ""
+  sampler_ratio: 1.0
+  metrics_enabled: false

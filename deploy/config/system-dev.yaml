@@ -66,7 +66,7 @@ jwt:
   refresh_expire: 168h     # refresh token（会话）有效期
 
 idclient:
-  endpoint: "nacos://devops-id"
+  endpoint: "nacos:///devops-id"     # 三斜杠标准形式（grpc target 解析：服务名须在 path 位）
 
 # 可观测性：trace 走 OTLP HTTP 发往 compose 内 Jaeger；指标由 Prometheus 抓取 /metrics。
 observability:

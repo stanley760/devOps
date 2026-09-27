@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -76,7 +77,14 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 	traceOpts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
 
 	if cfg.OTLPEndpoint != "" {
-		exp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(cfg.OTLPEndpoint))
+		otlpOpts := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(cfg.OTLPEndpoint)}
+		// WithEndpointURL 对无 path 的 URL 会规范化为 "/"，且不追加默认信号路径 /v1/traces
+		// （otlptracehttp options.go:106-109）——发到 / 会被 Jaeger 404 拒收，trace 静默丢弃。
+		// 仅当业务配置未显式带 path 时补全；Insecure 由 scheme 自动推导（http→明文）。
+		if u, perr := url.Parse(cfg.OTLPEndpoint); perr == nil && u.Path == "" {
+			otlpOpts = append(otlpOpts, otlptracehttp.WithURLPath("/v1/traces"))
+		}
+		exp, err := otlptracehttp.New(ctx, otlpOpts...)
 		if err != nil {
 			// exporter 不可用不阻断启动：记日志、跳过出口（本地 span 照常）
 			slog.Warn("observability: 创建 OTLP exporter 失败，trace 出口关闭", "err", err, "endpoint", cfg.OTLPEndpoint)
@@ -103,7 +111,7 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 		exp, err := promexporter.New(
 			promexporter.WithRegisterer(registry),
 			// 将 OTel Resource 的 service.name / deployment.environment 提升为常量标签，
-			// Grafana 面板按 service_name 维度过滤/聚合（对齐方案 §4.3 PromQL 口径）；
+			// Grafana 面板按 service_name 维度过滤/聚合；
 			// 其余资源属性（进程/运行时版本等）不进标签，控制series基数。
 			promexporter.WithResourceAsConstantLabels(func(kv attribute.KeyValue) bool {
 				return kv.Key == semconv.ServiceNameKey || kv.Key == semconv.DeploymentEnvironmentKey

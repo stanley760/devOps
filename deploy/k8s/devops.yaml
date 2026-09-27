@@ -72,7 +72,7 @@ stringData:
     jwt:
       signing_key: "YOUR_JWT_SIGNING_KEY_MIN_32_CHARS"
     idclient:
-      endpoint: "devops-id.devops.svc.cluster.local:9090"
+      endpoint: "devops-id.devops.svc.cluster.local:9090"  # K8s 直连 Service DNS（无 scheme，passthrough resolver）
     # otlp_endpoint 留空 = 本地 span 不上报；接入集群内 Jaeger/Tempo/otel-collector 后填其 OTLP HTTP 地址
     observability:
       otlp_endpoint: ""
