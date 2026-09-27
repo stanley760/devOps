@@ -27,6 +27,7 @@ import (
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
+	"devops-system/internal/db"
 	"devops-system/internal/model"
 	"devops-system/internal/router"
 	"devops-system/internal/service"
@@ -168,8 +169,9 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		// 装配链（方案 11.1）：db → TenantPlugin(fail-closed) → [模式B Resolver] → authz
-		//   → store(Redis 会话) → 共享安全(RS256 JWT + session) → idclient（发号）→ auth/service → httpx
+		// 装配链（方案 11.1）：db → TenantPlugin(fail-closed) → [模式B Resolver] → 启动迁移
+		//   （AutoMigrate + 版本化 SQL 种子，internal/migration）→ authz → store(Redis 会话)
+		//   → 共享安全(RS256 JWT + session) → idclient（发号）→ auth/service → httpx
 		if err := client.Init(cfg.Mysql); err != nil {
 			return err
 		}
@@ -179,13 +181,30 @@ var serverCmd = &cobra.Command{
 		if err := tenantdb.RegisterPlugin(client.Get()); err != nil {
 			return fmt.Errorf("注册租户过滤插件失败: %w", err)
 		}
-		if cfg.Tenant.Mode == "schema" { // 模式B：按租户解析独立库连接池
+		schemaMode := cfg.Tenant.Mode == "schema"
+		if schemaMode { // 模式B：按租户解析独立库连接池
 			if err := tenantdb.InitResolver(cfg.Mysql, cfg.Tenant); err != nil {
 				return err
 			}
 		}
+
+		// 启动期迁移（混合方案，详见 internal/migration 包文档）：
+		// AutoMigrate 建表 → 复合唯一索引 → 版本化 SQL 种子（执行过即跳过）
+		// → casbin。全部就绪后才注册 Nacos 接流量；失败 fail-closed 拒绝启动。
+		if err := autoMigrate(client.Get(), schemaMode); err != nil {
+			return fmt.Errorf("启动建表失败: %w", err)
+		}
+		if err := db.EnsureCompositeUniques(client.Get()); err != nil {
+			return fmt.Errorf("创建唯一索引失败: %w", err)
+		}
+		if err := runDataMigrations(client.Get(), schemaMode); err != nil {
+			return fmt.Errorf("启动数据迁移失败: %w", err)
+		}
 		if err := authz.Init(client.Get()); err != nil {
 			return err
+		}
+		if err := authz.SeedPolicies(1, 1); err != nil { // 幂等（AddPolicyIfAbsent）
+			return fmt.Errorf("casbin 策略种子失败: %w", err)
 		}
 		if err := store.Init(cfg.Redis); err != nil {
 			return err
