@@ -82,7 +82,12 @@ init 会覆盖这三个目录，控制台里做的路由/插件改动请先移�
 | Nacos 控制台 | `http://localhost:8848/nacos` |
 | Jaeger UI | `http://localhost:16686` |
 | Prometheus | `http://localhost:9090` |
+| Alertmanager | `http://localhost:9093`（dev 告警仅 UI 可见，生产接 webhook） |
 | Grafana | `http://localhost:3000`（admin/admin） |
+
+告警：规则在 [prometheus/alerts.yml](./prometheus/alerts.yml)（目标失联 / HTTP 5xx /
+P99 / gRPC 错误率 / SQL·Redis 连接池等待等），命中后经 Alertmanager 路由；dev 的接收器
+为空（仅 UI 可见），生产替换 `alertmanager/alertmanager.yml` 中的 dev-sink 为钉钉/邮件 webhook。
 
 开发环境数据保存在带有 `dev-` 前缀的 Docker volume 中，与生产编排的数据卷隔离。
 Higress 专属路由、限流、CORS 和 Kubernetes 说明见

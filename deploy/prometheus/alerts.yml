@@ -1,0 +1,101 @@
+# Prometheus 告警规则（dev compose 内挂载为 /etc/prometheus/alerts.yml）。
+# 规则在 Prometheus 侧评估，命中后经 Alertmanager 路由（dev 无外部集成，
+# 仅在 Alertmanager UI http://localhost:9093 可见；生产把 dev-sink 换成
+# 钉钉/企业微信/邮件 webhook 即可）。
+#
+# 阈值为 dev 起步值，生产按 SLO 调整。指标名与 dashboard 同源：
+#   http_server_requests_total     业务 HTTP RED（otelgin 自定义埋点）
+#   rpc_client_call_duration_seconds   gRPC client（otelgrpc stats handler，devops-system → devops-id）
+#   go_sql_*                       MySQL 连接池（client_golang DBStatsCollector）
+#   db_client_connections_*        Redis 连接池（redisotel）
+groups:
+  - name: devops-availability
+    rules:
+      - alert: DevOpsScrapeTargetDown
+        expr: up{job="devops-services"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "抓取目标失联 {{ $labels.instance }}"
+          description: "Prometheus 连续 1 分钟无法抓取 {{ $labels.instance }} 的 /metrics，服务可能下线或网络不通。"
+
+  - name: devops-service-slo
+    rules:
+      - alert: DevOpsHTTP5xxRateHigh
+        expr: |
+          (
+            sum(rate(http_server_requests_total{service_name="devops-system", status=~"5.."}[5m])) or vector(0)
+          ) / sum(rate(http_server_requests_total{service_name="devops-system"}[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx 错误率超 1%"
+          description: "devops-system 5xx 占比持续 5 分钟超过 1%（当前 {{ $value | humanizePercentage }}）。"
+
+      - alert: DevOpsHTTPP99High
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_server_request_duration_seconds_bucket{service_name="devops-system"}[5m])) by (le, route)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP P99 延迟超 1s（{{ $labels.route }}）"
+          description: "路由 {{ $labels.route }} 的 P99 延迟 {{ $value | humanize }} 持续 5 分钟超过 1s。"
+
+      - alert: DevOpsGRPCClientErrorRateHigh
+        expr: |
+          (
+            sum(rate(rpc_client_call_duration_seconds_count{rpc_response_status_code!="OK"}[5m])) or vector(0)
+          ) / (
+            sum(rate(rpc_client_call_duration_seconds_count[5m])) or vector(0)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "gRPC 客户端错误率超 5%"
+          description: "devops-system 调用 devops-id 的非 OK 状态占比持续 5 分钟超过 5%，发号缓冲正在被同步重试拖慢。"
+
+  - name: devops-dependencies-use
+    rules:
+      - alert: DevOpsSQLPoolWaiting
+        expr: sum by (db_name) (rate(go_sql_wait_count_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SQL 连接池等待（{{ $labels.db_name }}）"
+          description: "连接池出现等待（{{ $value }}/s），MaxOpenConns 不足或慢查询拖住连接。"
+
+      - alert: DevOpsRedisPoolWaiting
+        expr: sum by (pool_name) (rate(db_client_connections_waits[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 连接池等待（{{ $labels.pool_name }}）"
+          description: "Redis 连接池出现等待 {{ $value }}/s，PoolSize 不足或慢命令阻塞。"
+
+      - alert: DevOpsRedisPoolTimeouts
+        expr: sum by (pool_name) (rate(db_client_connections_timeouts[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis 连接池获取超时（{{ $labels.pool_name }}）"
+          description: "Redis 取连接超时 {{ $value }}/s，请求正被拒绝：Redis 不可用或池耗尽。"
+
+  - name: devops-runtime
+    rules:
+      - alert: DevOpsGoroutinesHigh
+        expr: go_goroutines{job="devops-services"} > 2000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "goroutine 数量异常（{{ $labels.instance }}）"
+          description: "{{ $labels.instance }} 的 goroutine 数 {{ $value }} 持续 10 分钟高于 2000，疑似泄漏或阻塞。"

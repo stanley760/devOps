@@ -32,7 +32,7 @@ ps:
 # dev-up 只启动中间件 + 网关 + 可观测栈；业务服务由本地 go run 启动
 dev-up:
 	$(DEV_COMPOSE) up -d mysql redis nacos etcd higress
-	$(DEV_COMPOSE) up -d jaeger prometheus grafana
+	$(DEV_COMPOSE) up -d jaeger prometheus alertmanager grafana
 
 dev-down:
 	$(DEV_COMPOSE) down

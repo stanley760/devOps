@@ -61,7 +61,7 @@ case "$COMMAND" in
     # 启动中间件 + 网关 + 可观测栈，随后自动拉起本地业务服务
     # higress-init 会在 higress 前自动灌入 deploy/higress 的配置
     compose up -d mysql redis nacos etcd higress
-    compose up -d jaeger prometheus grafana
+    compose up -d jaeger prometheus alertmanager grafana
     echo ""
     echo "中间件与可观测栈已启动。"
     start_services

@@ -47,6 +47,9 @@ type Config struct {
 type Runtime struct {
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
+	// registry 是 /metrics 的自建注册表；指标未启用时为 nil。
+	// 依赖 USE 指标（如 SQL 连接池）通过它注册，与 OTel 指标同端点输出。
+	registry       *prometheus.Registry
 	MetricsHandler http.Handler
 
 	serviceName  string
@@ -108,6 +111,7 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 			collectors.NewGoCollector(),
 			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		)
+		rt.registry = registry
 		exp, err := promexporter.New(
 			promexporter.WithRegisterer(registry),
 			// 将 OTel Resource 的 service.name / deployment.environment 提升为常量标签，

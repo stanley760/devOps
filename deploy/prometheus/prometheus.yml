@@ -2,8 +2,17 @@
 # 业务服务在宿主机本地运行，Prometheus 容器经 host.docker.internal 访问其 /metrics：
 #   devops-system：HTTP 端口 9999 上的 /metrics（与 /healthz 同级，不经 Higress）
 #   devops-id：gRPC 端口无法承载 HTTP，指标走独立 metrics 端口 9091
+# 告警：规则在 alerts.yml（同目录），命中后送本 compose 的 alertmanager:9093。
 global:
   scrape_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   - job_name: devops-services

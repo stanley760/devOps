@@ -16,7 +16,7 @@
       }
     ]
   },
-  "description": "devops RED 三件套（速率/错误/延迟）+ 在途请求 + gRPC 观察。指标来自 OTel Prometheus exporter，service_name 标签来自 OTel Resource。",
+  "description": "devops 微服务可观测性仪表盘：服务 RED（HTTP/gRPC 服务端+客户端）+ 边缘网关 + 依赖 USE（MySQL/Redis 连接池）+ Go 运行时。用 $service/$env 变量过滤，新增服务无需复制面板。业务指标（http_server_*）来自 OTel Prometheus exporter，service_name 标签来自 OTel Resource。",
   "editable": true,
   "graphTooltip": 1,
   "links": [
@@ -36,8 +36,8 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "QPS（按路由）",
-      "description": "sum(rate(http_server_requests_total[1m])) by (route)",
+      "title": "HTTP QPS（按路由）",
+      "description": "sum(rate(http_server_requests_total[1m])) by (route)，随 $service/$env 过滤",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -61,7 +61,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(http_server_requests_total{service_name=\"devops-system\"}[1m])) by (route)",
+          "expr": "sum(rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[1m])) by (route)",
           "legendFormat": "{{route}}"
         }
       ],
@@ -82,7 +82,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "HTTP 5xx 错误率",
-      "description": "5xx 占总请求比例",
+      "description": "5xx 占总请求比例。无 5xx 时显示 0 而非 No data（分子 or vector(0) 补零）；整体无数据 = 无流量。>1% 黄、>5% 红",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -96,6 +96,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
           "min": 0,
           "max": 1,
           "thresholds": {
@@ -121,7 +125,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(http_server_requests_total{service_name=\"devops-system\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_total{service_name=\"devops-system\"}[5m]))",
+          "expr": "(sum(rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\", status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
           "legendFormat": "5xx 比例"
         }
       ],
@@ -138,8 +142,8 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "P99 延迟（按路由）",
-      "description": "histogram_quantile(0.99, ... http_server_request_duration_seconds_bucket)",
+      "title": "HTTP 状态码分布",
+      "description": "按具体状态码看请求速率：200/401/403/404/500 等，4xx 飙升（如 401 打爆）不会体现在 5xx 面板里",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -152,7 +156,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "reqps",
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 2
@@ -163,18 +167,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=\"devops-system\"}[5m])) by (le, route))",
-          "legendFormat": "{{route}}"
+          "expr": "sum by (status) (rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "{{status}}"
         }
       ],
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "displayMode": "list",
+          "placement": "bottom"
         },
         "tooltip": {
           "mode": "multi"
@@ -184,8 +184,8 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "P95 延迟（按路由）",
-      "description": "histogram_quantile(0.95, ... http_server_request_duration_seconds_bucket)",
+      "title": "HTTP P99 延迟（按路由）",
+      "description": "histogram_quantile(0.99, http_server_request_duration_seconds_bucket)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -209,7 +209,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=\"devops-system\"}[5m])) by (le, route))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
           "legendFormat": "{{route}}"
         }
       ],
@@ -230,8 +230,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "在途请求数（In-flight）",
-      "description": "http_server_in_flight",
+      "title": "HTTP P95 延迟（按路由）",
+      "description": "histogram_quantile(0.95, http_server_request_duration_seconds_bucket)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -244,9 +244,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "s",
           "custom": {
-            "fillOpacity": 30,
+            "fillOpacity": 10,
             "lineWidth": 2
           }
         },
@@ -255,7 +255,53 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "http_server_in_flight{service_name=\"devops-system\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "在途请求数（In-flight）",
+      "description": "http_server_in_flight",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "http_server_in_flight{service_name=~\"$service\", deployment_environment=~\"$env\"}",
           "legendFormat": "{{service_name}}"
         }
       ],
@@ -270,9 +316,9 @@
       }
     },
     {
-      "id": 6,
+      "id": 7,
       "type": "timeseries",
-      "title": "gRPC 调用速率（devops-id，按方法×状态）",
+      "title": "gRPC 调用速率（服务端，方法×状态）",
       "description": "otelgrpc stats handler 自动产出；rpc_response_status_code != OK 即错误",
       "datasource": {
         "type": "prometheus",
@@ -281,8 +327,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 16
+        "x": 0,
+        "y": 24
       },
       "fieldConfig": {
         "defaults": {
@@ -297,7 +343,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(rpc_server_call_duration_seconds_count{service_name=\"devops-id\"}[5m])) by (rpc_method, rpc_response_status_code)",
+          "expr": "sum(rate(rpc_server_call_duration_seconds_count{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (rpc_method, rpc_response_status_code)",
           "legendFormat": "{{rpc_method}} [{{rpc_response_status_code}}]"
         }
       ],
@@ -315,10 +361,10 @@
       }
     },
     {
-      "id": 7,
+      "id": 8,
       "type": "timeseries",
-      "title": "gRPC P99 延迟（devops-id，按方法）",
-      "description": "histogram_quantile(0.99, ... rpc_server_call_duration_seconds_bucket)",
+      "title": "gRPC P99 延迟（服务端）",
+      "description": "histogram_quantile(0.99, rpc_server_call_duration_seconds_bucket)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -326,7 +372,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 24
       },
       "fieldConfig": {
@@ -342,7 +388,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum(rate(rpc_server_call_duration_seconds_bucket{service_name=\"devops-id\"}[5m])) by (le, rpc_method))",
+          "expr": "histogram_quantile(0.99, sum(rate(rpc_server_call_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, rpc_method))",
           "legendFormat": "{{rpc_method}}"
         }
       ],
@@ -361,10 +407,55 @@
       }
     },
     {
-      "id": 8,
+      "id": 9,
       "type": "timeseries",
-      "title": "Go 运行时：goroutines",
-      "description": "go_goroutines（Go/进程指标与 OTel 指标同处一个 /metrics 端点，按抓取目标区分）",
+      "title": "gRPC 客户端调用速率（方法×状态）",
+      "description": "调用方视角（devops-system → devops-id）：client stats handler 在调用方进程导出 rpc_client_*，服务端“正常”但调用方超时重试的场景只有这层可见",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(rpc_client_call_duration_seconds_count{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (rpc_method, rpc_response_status_code)",
+          "legendFormat": "{{rpc_method}} [{{rpc_response_status_code}}]"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "gRPC 客户端 P99 延迟",
+      "description": "histogram_quantile(0.99, rpc_client_call_duration_seconds_bucket)：发号调用（BatchNext/预取补充）的端到端耗时",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -373,7 +464,396 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum(rate(rpc_client_call_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, rpc_method))",
+          "legendFormat": "{{rpc_method}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "网关边缘：QPS×状态类",
+      "description": "Envoy HTTP connection manager 计数 envoy_http_downstream_rq，按 response_code_class（1xx–5xx）聚合；http_conn_manager_prefix=~outbound.* 只取 8080/8443 对外监听器（排除 admin/agent/stats 内部端点）。网关自产的 4xx/5xx（无路由、upstream 挂）后端永远看不到，只有这层可见",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (response_code_class) (rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m]))",
+          "legendFormat": "{{response_code_class}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "网关边缘：4xx/5xx 比例",
+      "description": "边缘错误占比（envoy_http_downstream_rq 4xx+5xx / 全部），含网关自产错误；无错误时 or vector(0) 补零显示 0",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\", response_code_class=~\"4xx|5xx\"}[5m])) or vector(0)) / (sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m])) or vector(0))",
+          "legendFormat": "边缘错误比例"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "网关边缘：P99 延迟（按目标）",
+      "description": "envoy_cluster_upstream_rq_time_bucket（毫秒直方图，/1000 转秒）P99，cluster_name 为 Envoy upstream 全名（outbound|端口||服务名.分组.命名空间.nacos），可区分灰度实例。业务流量经网关后才会出现对应 cluster 序列",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, cluster_name) (rate(envoy_cluster_upstream_rq_time_bucket{job=\"higress-gateway\", cluster_name=~\"outbound.*\"}[5m]))) / 1000",
+          "legendFormat": "{{cluster_name}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "MySQL 连接池：在用/空闲/上限",
+      "description": "go_sql_* 由 devops-infra InstrumentGORM 注册（client_golang DBStatsCollector），db_name 为标签；池饱和（在用逼近上限）是排队与超时错误的前兆。直采指标无 service_name 标签，按抓取目标（instance）落在 devops-system",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_sql_max_open_connections{job=\"devops-services\"}",
+          "legendFormat": "上限 {{db_name}}"
+        },
+        {
+          "refId": "B",
+          "expr": "go_sql_in_use_connections{job=\"devops-services\"}",
+          "legendFormat": "在用 {{db_name}}"
+        },
+        {
+          "refId": "C",
+          "expr": "go_sql_idle_connections{job=\"devops-services\"}",
+          "legendFormat": "空闲 {{db_name}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "MySQL 连接池：等待",
+      "description": "go_sql_wait_count_total（等待次数/秒）与 go_sql_wait_duration_seconds_total（等待秒/秒）。持续 > 0 说明 MaxOpenConns 不足或慢查询拖住连接",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (db_name) (rate(go_sql_wait_count_total{job=\"devops-services\"}[5m]))",
+          "legendFormat": "等待次数/s {{db_name}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (db_name) (rate(go_sql_wait_duration_seconds_total{job=\"devops-services\"}[5m]))",
+          "legendFormat": "等待时长/s {{db_name}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Redis 连接池：使用/空闲/上限",
+      "description": "redisotel InstrumentMetrics 产出的 OTel db.client.connections.* 系列（Prometheus 名 db_client_connections_*），pool_name 为 Redis 地址",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "db_client_connections_max{service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "上限"
+        },
+        {
+          "refId": "B",
+          "expr": "db_client_connections_usage{state=\"used\", service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "在用 {{pool_name}}"
+        },
+        {
+          "refId": "C",
+          "expr": "db_client_connections_usage{state=\"idle\", service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "空闲 {{pool_name}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Redis 池：等待/超时",
+      "description": "db_client_connections_waits / timeouts。等待 > 0 是池不足的早期信号；超时 > 0 说明请求已被拒绝（Redis 不可用或池耗尽）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 64
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pool_name) (rate(db_client_connections_waits{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "等待/s {{pool_name}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (pool_name) (rate(db_client_connections_timeouts{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "超时/s {{pool_name}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Go 运行时：goroutines",
+      "description": "持续上升不回落 = 泄漏/阻塞。Go/进程指标为直采（无 service_name），按抓取目标 instance 区分",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 64
       },
       "fieldConfig": {
         "defaults": {
@@ -401,16 +881,268 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Go 内存：堆在用/常驻",
+      "description": "go_memstats_heap_inuse_bytes（堆在用）与 process_resident_memory_bytes（进程常驻 RSS）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 72
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_memstats_heap_inuse_bytes{job=\"devops-services\"}",
+          "legendFormat": "堆在用 {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "process_resident_memory_bytes{job=\"devops-services\"}",
+          "legendFormat": "常驻 {{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "GC 时间占比",
+      "description": "rate(go_gc_duration_seconds_sum[5m])：每秒花费在 GC 上的秒数（≈GC 占用 CPU 比例），>0.1 值得关注",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 72
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(go_gc_duration_seconds_sum{job=\"devops-services\"}[5m])",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "进程：CPU 核数 / 打开 FD",
+      "description": "rate(process_cpu_seconds_total)≈占用核数；process_open_fds 逼近 ulimit 会报 too many open files",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 80
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(process_cpu_seconds_total{job=\"devops-services\"}[5m])",
+          "legendFormat": "CPU核 {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "process_open_fds{job=\"devops-services\"}",
+          "legendFormat": "FD {{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "运行时长（重启检测）",
+      "description": "time() - process_start_time_seconds：曲线掉头归零 = 进程刚重启，配合 goroutines 面板判断非计划重启",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 80
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - process_start_time_seconds{job=\"devops-services\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
     "devops",
-    "red"
+    "red",
+    "use"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "service",
+        "label": "服务",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({service_name=~\".+\"}, service_name)",
+        "query": {
+          "query": "label_values({service_name=~\".+\"}, service_name)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "regex": "",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "refresh": 2,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "env",
+        "label": "环境",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({deployment_environment=~\".+\"}, deployment_environment)",
+        "query": {
+          "query": "label_values({deployment_environment=~\".+\"}, deployment_environment)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "regex": "",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "refresh": 2,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
@@ -418,8 +1150,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "DevOps RED（速率/错误/延迟）",
+  "title": "DevOps 可观测性（RED + USE + 边缘网关）",
   "uid": "devops-red",
-  "version": 1,
+  "version": 3,
   "weekStart": ""
 }

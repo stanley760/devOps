@@ -2,6 +2,8 @@ package observability
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +58,44 @@ func TestInstrumentGORMCreatesSpanAndRedactsVariables(t *testing.T) {
 	}
 	if query, ok := attrs["db.query.text"]; ok && strings.Contains(query, "42") {
 		t.Fatalf("query variable leaked into span: %q", query)
+	}
+}
+
+func TestInstrumentGORMRegistersDBPoolMetrics(t *testing.T) {
+	rt, err := Init(context.Background(), Config{ServiceName: "t-sqlpool", Env: "dev", MetricsEnabled: true})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	defer func() { _ = rt.Shutdown(context.Background()) }()
+
+	db, err := gorm.Open(sqlite.Open("file:instrumentation_sqlpool?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := rt.InstrumentGORM(db, "devops_db"); err != nil {
+		t.Fatalf("InstrumentGORM() error = %v", err)
+	}
+
+	// 触发一次真实查询，确保连接池已初始化
+	var value int
+	if err := db.Raw("SELECT ? AS value", 1).Scan(&value).Error; err != nil {
+		t.Fatalf("query sqlite: %v", err)
+	}
+
+	// 连接池指标应经 Prometheus exporter 输出，且携带 db_name 标签
+	rec := httptest.NewRecorder()
+	rt.MetricsHandler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		"go_sql_open_connections",
+		"go_sql_in_use_connections",
+		"go_sql_idle_connections",
+		"go_sql_wait_count_total",
+		"db_name=\"devops_db\"",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in /metrics:\\n%s", want, firstLines(body, 5))
+		}
 	}
 }
 

@@ -137,9 +137,20 @@ services:
     image: prom/prometheus:v2.55.1
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
       - "9090:9090"
     # 不依赖业务服务：Prometheus 对目标缺失容错重试，支持部分启动场景
+
+  # 告警出口：Prometheus 规则命中后推送至此。dev 无外部集成，
+  # 告警仅在 UI（http://localhost:9093）可见；生产接钉钉/邮件 webhook。
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    # 不依赖业务服务：AM 不可达时 Prometheus 仅记录投递错误，不影响抓取
 
   grafana:
     image: grafana/grafana:11.3.0

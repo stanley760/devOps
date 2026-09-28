@@ -25,8 +25,7 @@ function Start-LocalService {
     }
     Start-Process -FilePath "cmd.exe" -WorkingDirectory $WorkDir -ArgumentList "/k", "title $Name && go run . server"
     Write-Host "  $Name 已在新窗口启动（关闭窗口即停止）"
-}
-
+} 
 function Start-LocalServices {
     Write-Host ''
     Write-Host '正在启动本地业务服务...'
@@ -46,10 +45,10 @@ try {
         "up" {
             # 启动中间件 + 网关 + 可观测栈，随后自动拉起本地业务服务
             Invoke-Compose @("up", "-d", "mysql", "redis", "nacos", "etcd", "higress")
-            Invoke-Compose @("up", "-d", "jaeger", "prometheus", "grafana")
+            Invoke-Compose @("up", "-d", "jaeger", "prometheus", "alertmanager", "grafana")
             Write-Host ''
             Write-Host '中间件与可观测栈已启动。'
-            Start-LocalServices
+            Start-LocalServices 
         }
         "app" {
             # 仅启动/补起本地业务服务，不动容器
