@@ -253,7 +253,7 @@ go test ./devops-infra/... ./devops-id/... ./devops-system/...
 - [ ] 操作/登录日志、账号配额、行级数据权限
 - [x] 迁移数据是否可以sql化，不要写死代码
 - [x] Prometheus 发号监控
-- [ ] 数据权限功能
+- [x] 数据权限功能
 - [x] 处理/metric 接口无法在jaeger中追踪的问题
 
 ## Docker 开发环境故障排查
