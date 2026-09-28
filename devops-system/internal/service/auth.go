@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
@@ -22,6 +26,42 @@ import (
 	infratenant "devops-infra/tenant"
 )
 
+// loginCounter 业务指标：登录尝试计数（auth_login_total）。
+// 标签均为有界集：result=success|failure，code=失败业务码（成功恒 200）。
+// 惰性创建：首次登录时全局 MeterProvider 已由 observability.Init 装配完毕；
+// 未初始化（单测/探针）自动落到 noop 仪表。
+var loginCounter = sync.OnceValue(func() metric.Int64Counter {
+	c, err := otel.Meter("devops-system/service").Int64Counter(
+		"auth_login",
+		metric.WithDescription("登录尝试计数；result=success|failure，code 为失败业务码（成功=200）"),
+	)
+	if err != nil {
+		otel.Handle(err)
+	}
+	return c
+})
+
+// loginResultAttr 登录结果标签值。
+func loginResultAttr(err error) attribute.KeyValue {
+	if err != nil {
+		return attribute.String("result", "failure")
+	}
+	return attribute.String("result", "success")
+}
+
+// loginCodeAttr 失败原因码：BizError 携带的有界业务码，非 BizError 按 500 归类。
+// 失败的具体细节（密码错误/租户停用/过期等）走访问日志与 slog，不进指标标签控制基数。
+func loginCodeAttr(err error) attribute.KeyValue {
+	if err == nil {
+		return attribute.Int("code", errs.CodeOK)
+	}
+	var be *errs.BizError
+	if errors.As(err, &be) && be.Code >= 400 && be.Code <= 599 {
+		return attribute.Int("code", be.Code)
+	}
+	return attribute.Int("code", errs.CodeInternal)
+}
+
 // Auth 认证服务。
 type Auth struct {
 	cfg   config.Config
@@ -34,7 +74,15 @@ func NewAuth(cfg config.Config, authM *auth.Manager) *Auth {
 }
 
 // Login 登录：租户校验（存在/停用/过期）→ 用户校验（密码/停用）→ 签发双 token。
+// 业务指标：无论成败记一次 auth_login_total{result, code}，指标故障不影响登录。
 func (s *Auth) Login(ctx context.Context, req types.LoginReq, clientIP string) (*types.LoginResp, error) {
+	resp, err := s.login(ctx, req, clientIP)
+	loginCounter().Add(ctx, 1, metric.WithAttributes(loginResultAttr(err), loginCodeAttr(err)))
+	return resp, err
+}
+
+// login 登录主流程。
+func (s *Auth) login(ctx context.Context, req types.LoginReq, clientIP string) (*types.LoginResp, error) {
 	code := req.TenantCode
 	if code == "" {
 		code = s.cfg.Tenant.DefaultCode

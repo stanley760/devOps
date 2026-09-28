@@ -1073,6 +1073,189 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "发号缓冲：剩余/容量（按 biz_tag）",
+      "description": "idgen_buffer_remaining/capacity（idclient SDK 在消费方进程导出）：剩余持续下降并逼近 0 = 补充赶不上消耗（devops-id 不可达或慢）；恒 0 = 已耗尽，下一次发号将同步 RPC，并发时开始 fail-fast。多副本/灰度实例各持独立缓冲，按 service_name 区分",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 88
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "idgen_buffer_remaining{service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "剩余 {{biz_tag}} [{{service_name}}]"
+        },
+        {
+          "refId": "B",
+          "expr": "idgen_buffer_capacity{service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "容量 {{biz_tag}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "发号：速率 & 补充失败",
+      "description": "idgen_issued_total（本地发号速率，业务视角）与 idgen_refill_failures_total。trigger=async 为后台预取失败（早期信号）；trigger=sync 表示缓冲已空、业务请求正被阻塞重试——同步失败持续出现时应结合缓冲面板排查 devops-id/etcd",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 88
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (biz_tag) (rate(idgen_issued_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "发号/s {{biz_tag}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (biz_tag, trigger) (rate(idgen_refill_failures_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "补充失败/s {{biz_tag}}[{{trigger}}]"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "登录：结果 & 失败码",
+      "description": "auth_login_total 业务指标（devops-system/service）：result=success|failure；code 为失败业务码（401=凭据/租户问题，403=停用/过期，500=内部故障）。失败细节看访问日志与 slog，不进指标标签控制基数。失败率异常升高是暴力破解或后端故障信号",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 96
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(auth_login_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "{{result}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (code) (rate(auth_login_total{result=\"failure\", service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
+          "legendFormat": "失败 code={{code}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "发号补充延迟 P99（按 biz_tag×trigger）",
+      "description": "idgen_refill_duration_seconds：BatchNext 补充耗时。async 走高会先于缓冲耗尽出现（预取变慢），sync 走高直接影响用户写请求",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, biz_tag, trigger) (rate(idgen_refill_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])))",
+          "legendFormat": "{{biz_tag}}[{{trigger}}]"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
   "refresh": "30s",
@@ -1152,6 +1335,6 @@
   "timezone": "browser",
   "title": "DevOps 可观测性（RED + USE + 边缘网关）",
   "uid": "devops-red",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

@@ -99,3 +99,39 @@ groups:
         annotations:
           summary: "goroutine 数量异常（{{ $labels.instance }}）"
           description: "{{ $labels.instance }} 的 goroutine 数 {{ $value }} 持续 10 分钟高于 2000，疑似泄漏或阻塞。"
+
+  # 发号缓冲（idclient SDK 指标，消费方进程导出）与登录业务指标
+  - name: devops-idgen-business
+    rules:
+      - alert: DevOpsIDBufferExhausted
+        expr: idgen_buffer_remaining == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "发号缓冲耗尽（biz_tag={{ $labels.biz_tag }}）"
+          description: "{{ $labels.service_name }} 的 biz_tag={{ $labels.biz_tag }} 本地缓冲持续 2 分钟为 0：下一次发号将同步 RPC，若补充仍失败，用户创建等写路径开始 fail-fast 返回 500。检查 devops-id 可用性与 {{ $labels.service_name }} → devops-id 网络。"
+
+      - alert: DevOpsIDRefillFailing
+        expr: sum by (biz_tag, trigger) (rate(idgen_refill_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "发号缓冲补充失败（{{ $labels.biz_tag }}，{{ $labels.trigger }}）"
+          description: "biz_tag={{ $labels.biz_tag }} 补充失败率 {{ $value }}/s 持续 5 分钟。trigger=sync 说明已阻塞业务请求；async 为后台预取失败，是缓冲耗尽的早期信号。检查 devops-id / etcd 状态。"
+
+      - alert: DevOpsLoginFailureRateHigh
+        expr: |
+          (
+            sum(rate(auth_login_total{result="failure"}[10m])) or vector(0)
+          ) / (
+            sum(rate(auth_login_total[10m])) or vector(0)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "登录失败率超 50%"
+          description: "登录失败占比 {{ $value | humanizePercentage }} 持续 10 分钟超过 50%：
+            可能是暴力破解（401 为主）或认证链路故障（500 为主），按 auth_login_total 的 result/code 标签区分并查访问日志。"
