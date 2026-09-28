@@ -15,10 +15,26 @@ import (
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
+	"devops-system/internal/datascope"
+	"devops-system/internal/middleware"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
+
+// ensureUserVisible 单点数据权限收口（Get/Update/ResetPassword/Delete 按 ID 直查后判定）：
+// 越权一律按 404 呈现（与「用户不存在」同一响应，防存在性探测）。
+// ctx 未注入数据权限时 fail-closed 报错（受控路由已挂 HumaDataScope，漏配即暴露）。
+func ensureUserVisible(ctx context.Context, u *model.User) error {
+	scope, ok := datascope.From(ctx)
+	if !ok {
+		return errs.New(errs.CodeInternal, "缺少数据权限上下文（受控接口未挂解析中间件）")
+	}
+	if !scope.Visible(u.DeptID, u.ID) {
+		return errs.New(errs.CodeNotFound, "用户不存在")
+	}
+	return nil
+}
 
 // User 用户管理服务。
 type User struct {
@@ -41,10 +57,13 @@ func (s *User) List(ctx context.Context, q types.UserPageQuery) ([]types.UserDTO
 	return out, total, nil
 }
 
-// Get 用户详情（基本信息 + 角色/岗位 ID）。
+// Get 用户详情（基本信息 + 角色/岗位 ID；数据权限单点收口）。
 func (s *User) Get(ctx context.Context, id types.ID) (*types.UserDetailResp, error) {
 	u, err := dao.GetUserByID(ctx, id.Int64())
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureUserVisible(ctx, u); err != nil {
 		return nil, err
 	}
 	roleIDs, err := dao.GetUserRoleIDs(ctx, u.ID)
@@ -132,10 +151,13 @@ func (s *User) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 	return nil
 }
 
-// Update 更新用户（可改 username/角色/状态等；停用即踢下线）。
+// Update 更新用户（可改 username/角色/状态等；停用即踢下线；数据权限单点收口）。
 func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.ID, req types.UserUpdateReq) error {
 	u, err := dao.GetUserByID(ctx, id.Int64())
 	if err != nil {
+		return err
+	}
+	if err := ensureUserVisible(ctx, u); err != nil {
 		return err
 	}
 	if u.Username != req.Username {
@@ -195,6 +217,8 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 	if err := authz.RebuildUserGrouping(u.ID, claims.TenantID, roleCodes); err != nil {
 		return errs.Wrap(err, errs.CodeInternal, "用户已更新，但角色授权刷新失败，请重试更新")
 	}
+	// 角色分配已变：清数据权限缓存（含部门调动改变可见范围）
+	middleware.InvalidateDataScope()
 	// 状态 0→1：停用即踢下线（存量会话立即失效）
 	if u.Status == 0 && req.Status == 1 {
 		s.authM.RevokeAllSessions(ctx, claims.TenantID, u.ID)
@@ -202,10 +226,13 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 	return nil
 }
 
-// ResetPassword 重置密码：更新 + 撤销全部会话（强制重新登录）。
+// ResetPassword 重置密码：更新 + 撤销全部会话（强制重新登录；数据权限单点收口）。
 func (s *User) ResetPassword(ctx context.Context, claims *auth.AccessClaims, id types.ID, req types.ResetPasswordReq) error {
 	u, err := dao.GetUserByID(ctx, id.Int64())
 	if err != nil {
+		return err
+	}
+	if err := ensureUserVisible(ctx, u); err != nil {
 		return err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
@@ -232,6 +259,9 @@ func (s *User) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 	}
 	u, err := dao.GetUserByID(ctx, id.Int64())
 	if err != nil {
+		return err
+	}
+	if err := ensureUserVisible(ctx, u); err != nil {
 		return err
 	}
 

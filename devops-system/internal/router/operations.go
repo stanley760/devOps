@@ -22,11 +22,18 @@ type humaKit struct {
 	tenantM humaMiddleware
 	permM   func(string) humaMiddleware
 	platM   func(string) humaMiddleware
+	scopeM  humaMiddleware
 }
 
 // biz 业务路由中间件链：JWT → Tenant → Perm(域内)。
 func (k humaKit) biz(perm string) huma.Middlewares {
 	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm)}
+}
+
+// scopedBiz 受控资源路由链：JWT → Tenant → Perm → DataScope（行级数据权限解析）。
+// 只挂在需要行级过滤的资源（users）；非受控资源不加，保持解析开销与语义边界显式。
+func (k humaKit) scopedBiz(perm string) huma.Middlewares {
+	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.scopeM}
 }
 
 // plat 平台路由中间件链：JWT → PlatformPerm（不挂 Tenant，操作全局表）。
@@ -193,7 +200,7 @@ func registerDepts(api huma.API, h *apiv1.DeptHandler, kit humaKit) {
 	}), h.Delete)
 }
 
-// registerUsers users 模块 6 接口（P4）。
+// registerUsers users 模块 6 接口（P4；行级数据权限受控资源，走 scopedBiz 链）。
 func registerUsers(api huma.API, h *apiv1.UserHandler, kit humaKit) {
 	common := huma.Operation{
 		Tags:      []string{"users"},
@@ -202,29 +209,29 @@ func registerUsers(api huma.API, h *apiv1.UserHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-list", Method: http.MethodGet, Path: "/api/v1/users",
-		Summary: "用户列表", Middlewares: kit.biz("system:user:list"),
+		Summary: "用户列表", Middlewares: kit.scopedBiz("system:user:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-get", Method: http.MethodGet, Path: "/api/v1/users/{id}",
-		Summary: "用户详情", Middlewares: kit.biz("system:user:query"),
+		Summary: "用户详情", Middlewares: kit.scopedBiz("system:user:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-create", Method: http.MethodPost, Path: "/api/v1/users",
 		Summary: "创建用户", Description: "角色分配联动 Casbin g 行。",
-		Middlewares: kit.biz("system:user:create"),
+		Middlewares: kit.scopedBiz("system:user:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-update", Method: http.MethodPut, Path: "/api/v1/users/{id}",
-		Summary: "更新用户", Middlewares: kit.biz("system:user:update"),
+		Summary: "更新用户", Middlewares: kit.scopedBiz("system:user:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-reset-password", Method: http.MethodPut, Path: "/api/v1/users/{id}/password",
 		Summary: "重置用户密码", Description: "重置后踢下线该用户全部会话。",
-		Middlewares: kit.biz("system:user:update-password"),
+		Middlewares: kit.scopedBiz("system:user:update-password"),
 	}), h.ResetPassword)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-delete", Method: http.MethodDelete, Path: "/api/v1/users/{id}",
-		Summary: "删除用户", Middlewares: kit.biz("system:user:delete"),
+		Summary: "删除用户", Middlewares: kit.scopedBiz("system:user:delete"),
 	}), h.Delete)
 }
 

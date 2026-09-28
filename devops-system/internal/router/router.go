@@ -54,6 +54,7 @@ func Register(docCfg config.APIDocConfig, authM *auth.Manager, authSvc *service.
 			tenantM: middleware.HumaTenant(),
 			permM:   middleware.HumaPerm,
 			platM:   middleware.HumaPlatformPerm,
+			scopeM:  middleware.HumaDataScope(),
 		}
 
 		// 全量业务注册（40 接口，auth 7 + users 6 + roles 6 + menus 5 + depts 5 + posts 5 + tenants 6）。

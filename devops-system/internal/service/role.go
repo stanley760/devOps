@@ -14,10 +14,24 @@ import (
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
+	"devops-system/internal/datascope"
+	"devops-system/internal/middleware"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
+
+// validateDataScope 数据权限口径校验：自定义部门必须携带可解析的非空部门集合
+// （JSON 数组字符串，与 post_ids 存储格式一致）。
+func validateDataScope(dataScope int8, deptIDs string) error {
+	if dataScope != datascope.ScopeCustom {
+		return nil
+	}
+	if len(datascope.ParseDeptIDs(deptIDs)) == 0 {
+		return errs.New(errs.CodeParam, "自定义部门口径必须提供部门 ID 集合（data_scope_dept_ids，JSON 数组）")
+	}
+	return nil
+}
 
 // Role 角色管理服务。
 type Role struct{}
@@ -67,6 +81,9 @@ func (s *Role) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 	if exists {
 		return errs.New(errs.CodeParam, "角色编码已存在")
 	}
+	if err := validateDataScope(req.DataScope, req.DataScopeDeptIDs); err != nil {
+		return err
+	}
 
 	r := &model.Role{
 		BaseTenantModel: model.BaseTenantModel{
@@ -76,7 +93,7 @@ func (s *Role) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 		Code:             req.Code,
 		Sort:             req.Sort,
 		DataScope:        req.DataScope,
-		DataScopeDeptIDs: req.DataScopeDeptIDs,
+		DataScopeDeptIDs: datascope.NormalizeDeptIDs(req.DataScopeDeptIDs),
 		Status:           req.Status,
 		Type:             2, // 自定义
 		Remark:           req.Remark,
@@ -84,10 +101,8 @@ func (s *Role) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 	if r.DataScope == 0 {
 		r.DataScope = 1
 	}
-	if err := tenantdb.DB(ctx).Create(r).Error; err != nil {
-		return errs.Wrap(err, errs.CodeInternal, "创建角色失败")
-	}
-	return nil
+	
+	return dao.CreateRole(ctx, r)
 }
 
 // Update 更新角色（code 不可改，避免 casbin p/g 行失联）。
@@ -100,11 +115,21 @@ func (s *Role) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 	if dataScope == 0 {
 		dataScope = r.DataScope
 	}
+	// 口径未变且未传部门集合时保留存量（data_scope_dept_ids 随字段整体覆盖，空入参会清空）。
+	// 落库前 NormalizeDeptIDs 统一为数字数组形态，杜绝同一语义多种写法入库。
+	deptIDs := req.DataScopeDeptIDs
+	if deptIDs == "" && dataScope == r.DataScope {
+		deptIDs = r.DataScopeDeptIDs
+	}
+	deptIDs = datascope.NormalizeDeptIDs(deptIDs)
+	if err := validateDataScope(dataScope, deptIDs); err != nil {
+		return err
+	}
 	updates := map[string]any{
 		"name":                req.Name,
 		"sort":                req.Sort,
 		"data_scope":          dataScope,
-		"data_scope_dept_ids": req.DataScopeDeptIDs,
+		"data_scope_dept_ids": deptIDs,
 		"status":              req.Status,
 		"remark":              req.Remark,
 		"updater":             claims.Username,
@@ -113,6 +138,8 @@ func (s *Role) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 		Where("id = ?", r.ID).Updates(updates).Error; err != nil {
 		return errs.Wrap(err, errs.CodeInternal, "更新角色失败")
 	}
+	// 数据权限口径已变：清缓存（该角色下所有用户下次请求重新解析）
+	middleware.InvalidateDataScope()
 	return nil
 }
 
@@ -177,6 +204,8 @@ func (s *Role) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 	if err := authz.RemoveRoleGrouping(r.Code, claims.TenantID); err != nil {
 		return errs.Wrap(err, errs.CodeInternal, "角色已删除，但用户绑定清理失败")
 	}
+	// 角色删除影响其下用户的数据权限：清缓存重新解析
+	middleware.InvalidateDataScope()
 	return nil
 }
 

@@ -11,14 +11,18 @@ import (
 
 	"devops-infra/errs"
 
+	"devops-system/internal/datascope"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
 
-// ListUsers 分页查询用户（筛选 username 模糊/mobile/状态/部门）。
+// ListUsers 分页查询用户（筛选 username 模糊/mobile/状态/部门；行级数据权限收敛）。
+// datascope.Apply 注入 ctx 中的可见范围（users 路由挂 HumaDataScope 解析中间件）；
+// 未注入时 fail-closed 查询报错，防漏配退化为全量可见。
 func ListUsers(ctx context.Context, q types.UserPageQuery) ([]model.User, int64, error) {
-	db := tenantdb.DB(ctx).Model(&model.User{})
+	db := datascope.Apply(ctx, tenantdb.DB(ctx).Model(&model.User{}),
+		datascope.Columns{Dept: "dept_id", Owner: "id"})
 	if q.Username != "" {
 		db = db.Where("username LIKE ?", "%"+q.Username+"%")
 	}
@@ -152,24 +156,36 @@ func RoleCodesByIDs(ctx context.Context, roleIDs []int64) ([]string, error) {
 	return codes, nil
 }
 
-// PostIDsOf 用户 post_ids JSON 字符串转 []ID。
+// PostIDsOf 用户 post_ids JSON 字符串转 []ID。存储唯一形态是数字数组（PostIDsJSON
+// 写侧收口）；字符串元素（["4"]）视为脏数据，整体解析失败返回空集，不做兼容读。
 func PostIDsOf(postIDs string) []types.ID {
 	if postIDs == "" {
 		return []types.ID{}
 	}
-	var ids []types.ID
+	var ids []int64
 	if err := json.Unmarshal([]byte(postIDs), &ids); err != nil {
 		return []types.ID{}
 	}
-	return ids
+	out := make([]types.ID, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, types.ID(id))
+	}
+	return out
 }
 
-// PostIDsJSON []ID → JSON 字符串（空集返回 ""，由调用方决定写 NULL）。
+// PostIDsJSON []ID → JSON 字符串（元素转 int64 后 marshal，落库形态为数字数组 [4,5]；
+// 空集返回 ""，由调用方决定写 NULL）。
+// 不直接 marshal []types.ID——其 MarshalJSON 输出字符串元素（["4","5"]，API 线上契约），
+// 会泄漏进存储层，与种子数据及 JSON_CONTAINS(post_ids, 4) 的数字匹配口径不一致。
 func PostIDsJSON(ids []types.ID) string {
 	if len(ids) == 0 {
 		return ""
 	}
-	b, err := json.Marshal(ids)
+	i64s := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		i64s = append(i64s, id.Int64())
+	}
+	b, err := json.Marshal(i64s)
 	if err != nil {
 		return ""
 	}
