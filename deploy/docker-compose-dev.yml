@@ -22,6 +22,11 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
 
   redis:
     image: redis:7-alpine
@@ -40,6 +45,11 @@ services:
         aliases:
           # 完整域名格式，供 Higress DNS 服务来源（mcpbridges/default.yaml 的 devops-redis）解析
           - redis.devops.local
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
   nacos:
     image: nacos/nacos-server:v2.4.3
@@ -63,6 +73,11 @@ services:
       timeout: 3s
       retries: 30
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m   # JVM 已限 256m，容器层兜底堆外开销
 
   # 一次性配置灌入：把 deploy/higress 下 git 管理的资源目录灌进命名卷（/data），
   # 避免 Windows bind mount 直接挂 /data 导致的高 CPU。每次 up 都会刷新这三个目录，
@@ -96,6 +111,11 @@ services:
         condition: service_healthy
       higress-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g   # envoy(2 worker) + pilot，压测吞吐的主要路径
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -116,6 +136,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
   # —— 可观测性（dev 本地栈）：Jaeger 追踪 + Prometheus 抓取 + Grafana 可视化 ——
 
@@ -132,14 +157,29 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-
+    command: ["--memory.max-traces=20000"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g   # 与 max-traces 双保险：数据层限条数，容器层限内存
   prometheus:
     image: prom/prometheus:v2.55.1
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    # command 整体替换镜像默认 CMD，配置文件与存储路径必须一并带上
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=3d   # dev 无持久卷，限容器内增长即可
     ports:
       - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
     # 不依赖业务服务：Prometheus 对目标缺失容错重试，支持部分启动场景
 
   # 告警出口：Prometheus 规则命中后推送至此。dev 无外部集成，
@@ -150,6 +190,11 @@ services:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
       - "9093:9093"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128m
     # 不依赖业务服务：AM 不可达时 Prometheus 仅记录投递错误，不影响抓取
 
   grafana:
@@ -164,6 +209,11 @@ services:
     depends_on:
       - prometheus
       - jaeger
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
 
 volumes:
   mysql-data:
