@@ -77,7 +77,6 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 		r.Use(obs[0].Middleware())
 		r.Use(obs[0].MetricsMiddleware())
 	}
-	r.Use(gin.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.AccessLog())
 	r.HandleMethodNotAllowed = true

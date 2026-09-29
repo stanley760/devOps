@@ -18,7 +18,7 @@ func AccessLog() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 
-		slog.Debug("HTTP 请求",
+		slog.Info("HTTP 请求",
 			"method", c.Request.Method,
 			"path", path,
 			"status", c.Writer.Status(),
