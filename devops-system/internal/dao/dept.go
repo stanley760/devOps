@@ -196,3 +196,10 @@ func SoftDeletePostTx(tx *gorm.DB, postID int64, code string) error {
 	}
 	return nil
 }
+
+// SoftDeletePost 软删岗位（单事务，见 SoftDeletePostTx）。
+func SoftDeletePost(ctx context.Context, postID int64, code string) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		return SoftDeletePostTx(tx, postID, code)
+	})
+}

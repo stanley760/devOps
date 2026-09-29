@@ -7,17 +7,13 @@ package service
 import (
 	"context"
 
-	"gorm.io/gorm"
-
 	"devops-infra/errs"
 
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
 	"devops-system/internal/datascope"
-	"devops-system/internal/middleware"
 	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
 
@@ -34,10 +30,12 @@ func validateDataScope(dataScope int8, deptIDs string) error {
 }
 
 // Role 角色管理服务。
-type Role struct{}
+type Role struct {
+	invalidateScope func() // 数据权限缓存失效（角色口径/绑定变更时调用）
+}
 
-// NewRole 创建服务。
-func NewRole() *Role { return &Role{} }
+// NewRole 创建服务（invalidateScope 清数据权限缓存）。
+func NewRole(invalidateScope func()) *Role { return &Role{invalidateScope: invalidateScope} }
 
 // List 分页查询。
 func (s *Role) List(ctx context.Context, q types.RolePageQuery) ([]types.RoleDTO, int64, error) {
@@ -134,12 +132,11 @@ func (s *Role) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 		"remark":              req.Remark,
 		"updater":             claims.Username,
 	}
-	if err := tenantdb.DB(ctx).Model(&model.Role{}).
-		Where("id = ?", r.ID).Updates(updates).Error; err != nil {
-		return errs.Wrap(err, errs.CodeInternal, "更新角色失败")
+	if err := dao.UpdateRole(ctx, r.ID, updates); err != nil {
+		return err
 	}
 	// 数据权限口径已变：清缓存（该角色下所有用户下次请求重新解析）
-	middleware.InvalidateDataScope()
+	s.invalidateScope()
 	return nil
 }
 
@@ -155,9 +152,7 @@ func (s *Role) AssignMenus(ctx context.Context, claims *auth.AccessClaims, id ty
 		return err
 	}
 
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		return dao.SyncRoleMenusTx(tx, r.ID, menuIDs)
-	}); err != nil {
+	if err := dao.ReplaceRoleMenus(ctx, r.ID, menuIDs); err != nil {
 		return err
 	}
 
@@ -186,16 +181,8 @@ func (s *Role) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 		return errs.New(errs.CodeParam, "内置角色不可删除")
 	}
 
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := dao.SoftDeleteRoleTx(tx, r.ID, r.Code); err != nil {
-			return err
-		}
-		if err := dao.ClearRoleBindingsTx(tx, r.ID); err != nil {
-			return errs.Wrap(err, errs.CodeInternal, "清理用户角色失败")
-		}
-		return tx.Where("role_id = ?", r.ID).Delete(&model.RoleMenu{}).Error
-	}); err != nil {
-		return errs.Wrap(err, errs.CodeInternal, "删除角色失败")
+	if err := dao.DeleteRole(ctx, r); err != nil {
+		return err
 	}
 
 	if err := authz.RemoveRolePolicies(r.Code, claims.TenantID); err != nil {
@@ -205,7 +192,7 @@ func (s *Role) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 		return errs.Wrap(err, errs.CodeInternal, "角色已删除，但用户绑定清理失败")
 	}
 	// 角色删除影响其下用户的数据权限：清缓存重新解析
-	middleware.InvalidateDataScope()
+	s.invalidateScope()
 	return nil
 }
 

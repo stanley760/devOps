@@ -11,35 +11,8 @@ import (
 	"devops-infra/http/humaerr"
 
 	apiv1 "devops-system/internal/api/v1"
+	"devops-system/internal/middleware"
 )
-
-// humaMiddleware huma 中间件类型别名（huma 无独立命名类型）。
-type humaMiddleware = func(huma.Context, func(huma.Context))
-
-// humaKit 中间件套件：router 装配一次，各模块注册复用。
-type humaKit struct {
-	jwtM    humaMiddleware
-	tenantM humaMiddleware
-	permM   func(string) humaMiddleware
-	platM   func(string) humaMiddleware
-	scopeM  humaMiddleware
-}
-
-// biz 业务路由中间件链：JWT → Tenant → Perm(域内)。
-func (k humaKit) biz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm)}
-}
-
-// scopedBiz 受控资源路由链：JWT → Tenant → Perm → DataScope（行级数据权限解析）。
-// 只挂在需要行级过滤的资源（users）；非受控资源不加，保持解析开销与语义边界显式。
-func (k humaKit) scopedBiz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.scopeM}
-}
-
-// plat 平台路由中间件链：JWT → PlatformPerm（不挂 Tenant，操作全局表）。
-func (k humaKit) plat(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.platM(perm)}
-}
 
 // with 合并公共 Operation 字段（Tags/Responses），保持各注册点简洁。
 func with(common huma.Operation, op huma.Operation) huma.Operation {
@@ -58,7 +31,7 @@ func withClientIP(hctx huma.Context, next func(huma.Context)) {
 }
 
 // registerPosts posts 模块 5 接口（P2，迁移 SOP 样板）。
-func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
+func registerPosts(api huma.API, h *apiv1.PostHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"posts"},
 		Responses: humaerr.CommonErrResponses(),
@@ -69,7 +42,7 @@ func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
 		Method:      http.MethodGet,
 		Path:        "/api/v1/posts",
 		Summary:     "岗位列表",
-		Middlewares: kit.biz("system:post:list"),
+		Middlewares: kit.Biz("system:post:list"),
 	}), h.List)
 
 	huma.Register(api, with(common, huma.Operation{
@@ -77,7 +50,7 @@ func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
 		Method:      http.MethodGet,
 		Path:        "/api/v1/posts/{id}",
 		Summary:     "岗位详情",
-		Middlewares: kit.biz("system:post:query"),
+		Middlewares: kit.Biz("system:post:query"),
 	}), h.Get)
 
 	huma.Register(api, with(common, huma.Operation{
@@ -86,7 +59,7 @@ func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
 		Path:        "/api/v1/posts",
 		Summary:     "创建岗位",
 		Description: "code 创建后不可改。",
-		Middlewares: kit.biz("system:post:create"),
+		Middlewares: kit.Biz("system:post:create"),
 	}), h.Create)
 
 	huma.Register(api, with(common, huma.Operation{
@@ -94,7 +67,7 @@ func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
 		Method:      http.MethodPut,
 		Path:        "/api/v1/posts/{id}",
 		Summary:     "更新岗位",
-		Middlewares: kit.biz("system:post:update"),
+		Middlewares: kit.Biz("system:post:update"),
 	}), h.Update)
 
 	huma.Register(api, with(common, huma.Operation{
@@ -102,12 +75,12 @@ func registerPosts(api huma.API, h *apiv1.PostHandler, kit humaKit) {
 		Method:      http.MethodDelete,
 		Path:        "/api/v1/posts/{id}",
 		Summary:     "删除岗位",
-		Middlewares: kit.biz("system:post:delete"),
+		Middlewares: kit.Biz("system:post:delete"),
 	}), h.Delete)
 }
 
 // registerRoles roles 模块 6 接口（P3）。
-func registerRoles(api huma.API, h *apiv1.RoleHandler, kit humaKit) {
+func registerRoles(api huma.API, h *apiv1.RoleHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"roles"},
 		Responses: humaerr.CommonErrResponses(),
@@ -115,34 +88,34 @@ func registerRoles(api huma.API, h *apiv1.RoleHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-list", Method: http.MethodGet, Path: "/api/v1/roles",
-		Summary: "角色列表", Middlewares: kit.biz("system:role:list"),
+		Summary: "角色列表", Middlewares: kit.Biz("system:role:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-get", Method: http.MethodGet, Path: "/api/v1/roles/{id}",
-		Summary: "角色详情", Middlewares: kit.biz("system:role:query"),
+		Summary: "角色详情", Middlewares: kit.Biz("system:role:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-create", Method: http.MethodPost, Path: "/api/v1/roles",
 		Summary: "创建角色", Description: "code 创建后不可改。",
-		Middlewares: kit.biz("system:role:create"),
+		Middlewares: kit.Biz("system:role:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-update", Method: http.MethodPut, Path: "/api/v1/roles/{id}",
-		Summary: "更新角色", Middlewares: kit.biz("system:role:update"),
+		Summary: "更新角色", Middlewares: kit.Biz("system:role:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-assign-menus", Method: http.MethodPut, Path: "/api/v1/roles/{id}/menus",
 		Summary: "分配角色菜单", Description: "重建 role_menu 与角色 p 行快照。",
-		Middlewares: kit.biz("system:role:update"),
+		Middlewares: kit.Biz("system:role:update"),
 	}), h.AssignMenus)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "role-delete", Method: http.MethodDelete, Path: "/api/v1/roles/{id}",
-		Summary: "删除角色", Middlewares: kit.biz("system:role:delete"),
+		Summary: "删除角色", Middlewares: kit.Biz("system:role:delete"),
 	}), h.Delete)
 }
 
 // registerMenus menus 模块 5 接口（P3）。
-func registerMenus(api huma.API, h *apiv1.MenuHandler, kit humaKit) {
+func registerMenus(api huma.API, h *apiv1.MenuHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"menus"},
 		Responses: humaerr.CommonErrResponses(),
@@ -150,29 +123,29 @@ func registerMenus(api huma.API, h *apiv1.MenuHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "menu-list", Method: http.MethodGet, Path: "/api/v1/menus",
-		Summary: "菜单树", Middlewares: kit.biz("system:menu:list"),
+		Summary: "菜单树", Middlewares: kit.Biz("system:menu:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "menu-get", Method: http.MethodGet, Path: "/api/v1/menus/{id}",
-		Summary: "菜单详情", Middlewares: kit.biz("system:menu:query"),
+		Summary: "菜单详情", Middlewares: kit.Biz("system:menu:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "menu-create", Method: http.MethodPost, Path: "/api/v1/menus",
-		Summary: "创建菜单", Middlewares: kit.biz("system:menu:create"),
+		Summary: "创建菜单", Middlewares: kit.Biz("system:menu:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "menu-update", Method: http.MethodPut, Path: "/api/v1/menus/{id}",
 		Summary: "更新菜单", Description: "permission 变更联动重建引用角色 p 行。",
-		Middlewares: kit.biz("system:menu:update"),
+		Middlewares: kit.Biz("system:menu:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "menu-delete", Method: http.MethodDelete, Path: "/api/v1/menus/{id}",
-		Summary: "删除菜单", Middlewares: kit.biz("system:menu:delete"),
+		Summary: "删除菜单", Middlewares: kit.Biz("system:menu:delete"),
 	}), h.Delete)
 }
 
 // registerDepts depts 模块 5 接口（P3）。
-func registerDepts(api huma.API, h *apiv1.DeptHandler, kit humaKit) {
+func registerDepts(api huma.API, h *apiv1.DeptHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"depts"},
 		Responses: humaerr.CommonErrResponses(),
@@ -180,28 +153,28 @@ func registerDepts(api huma.API, h *apiv1.DeptHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "dept-list", Method: http.MethodGet, Path: "/api/v1/depts",
-		Summary: "部门树", Middlewares: kit.biz("system:dept:list"),
+		Summary: "部门树", Middlewares: kit.Biz("system:dept:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "dept-get", Method: http.MethodGet, Path: "/api/v1/depts/{id}",
-		Summary: "部门详情", Middlewares: kit.biz("system:dept:query"),
+		Summary: "部门详情", Middlewares: kit.Biz("system:dept:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "dept-create", Method: http.MethodPost, Path: "/api/v1/depts",
-		Summary: "创建部门", Middlewares: kit.biz("system:dept:create"),
+		Summary: "创建部门", Middlewares: kit.Biz("system:dept:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "dept-update", Method: http.MethodPut, Path: "/api/v1/depts/{id}",
-		Summary: "更新部门", Middlewares: kit.biz("system:dept:update"),
+		Summary: "更新部门", Middlewares: kit.Biz("system:dept:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "dept-delete", Method: http.MethodDelete, Path: "/api/v1/depts/{id}",
-		Summary: "删除部门", Middlewares: kit.biz("system:dept:delete"),
+		Summary: "删除部门", Middlewares: kit.Biz("system:dept:delete"),
 	}), h.Delete)
 }
 
 // registerUsers users 模块 6 接口（P4；行级数据权限受控资源，走 scopedBiz 链）。
-func registerUsers(api huma.API, h *apiv1.UserHandler, kit humaKit) {
+func registerUsers(api huma.API, h *apiv1.UserHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"users"},
 		Responses: humaerr.CommonErrResponses(),
@@ -209,34 +182,34 @@ func registerUsers(api huma.API, h *apiv1.UserHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-list", Method: http.MethodGet, Path: "/api/v1/users",
-		Summary: "用户列表", Middlewares: kit.scopedBiz("system:user:list"),
+		Summary: "用户列表", Middlewares: kit.ScopedBiz("system:user:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-get", Method: http.MethodGet, Path: "/api/v1/users/{id}",
-		Summary: "用户详情", Middlewares: kit.scopedBiz("system:user:query"),
+		Summary: "用户详情", Middlewares: kit.ScopedBiz("system:user:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-create", Method: http.MethodPost, Path: "/api/v1/users",
 		Summary: "创建用户", Description: "角色分配联动 Casbin g 行。",
-		Middlewares: kit.scopedBiz("system:user:create"),
+		Middlewares: kit.ScopedBiz("system:user:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-update", Method: http.MethodPut, Path: "/api/v1/users/{id}",
-		Summary: "更新用户", Middlewares: kit.scopedBiz("system:user:update"),
+		Summary: "更新用户", Middlewares: kit.ScopedBiz("system:user:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-reset-password", Method: http.MethodPut, Path: "/api/v1/users/{id}/password",
 		Summary: "重置用户密码", Description: "重置后踢下线该用户全部会话。",
-		Middlewares: kit.scopedBiz("system:user:update-password"),
+		Middlewares: kit.ScopedBiz("system:user:update-password"),
 	}), h.ResetPassword)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "user-delete", Method: http.MethodDelete, Path: "/api/v1/users/{id}",
-		Summary: "删除用户", Middlewares: kit.scopedBiz("system:user:delete"),
+		Summary: "删除用户", Middlewares: kit.ScopedBiz("system:user:delete"),
 	}), h.Delete)
 }
 
 // registerTenants tenants 模块 6 接口（P5，平台路由 kit.plat）。
-func registerTenants(api huma.API, h *apiv1.TenantHandler, kit humaKit) {
+func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"tenants"},
 		Responses: humaerr.CommonErrResponses(),
@@ -244,41 +217,41 @@ func registerTenants(api huma.API, h *apiv1.TenantHandler, kit humaKit) {
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-list", Method: http.MethodGet, Path: "/api/v1/tenants",
-		Summary: "租户列表", Middlewares: kit.plat("platform:tenant:list"),
+		Summary: "租户列表", Middlewares: kit.PlatChain("platform:tenant:list"),
 	}), h.List)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-get", Method: http.MethodGet, Path: "/api/v1/tenants/{id}",
-		Summary: "租户详情", Middlewares: kit.plat("platform:tenant:query"),
+		Summary: "租户详情", Middlewares: kit.PlatChain("platform:tenant:query"),
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-create", Method: http.MethodPost, Path: "/api/v1/tenants",
 		Summary: "创建租户", Description: "含租户初始超管；模式B 自动建库+迁移+菜单同步。",
-		Middlewares: kit.plat("platform:tenant:create"),
+		Middlewares: kit.PlatChain("platform:tenant:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-update", Method: http.MethodPut, Path: "/api/v1/tenants/{id}",
-		Summary: "更新租户", Middlewares: kit.plat("platform:tenant:update"),
+		Summary: "更新租户", Middlewares: kit.PlatChain("platform:tenant:update"),
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-update-status", Method: http.MethodPut, Path: "/api/v1/tenants/{id}/status",
 		Summary: "租户启停", Description: "停用即全员下线。",
-		Middlewares: kit.plat("platform:tenant:update"),
+		Middlewares: kit.PlatChain("platform:tenant:update"),
 	}), h.UpdateStatus)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-delete", Method: http.MethodDelete, Path: "/api/v1/tenants/{id}",
 		Summary: "删除租户", Description: "默认租户不可删；需先停用。",
-		Middlewares: kit.plat("platform:tenant:delete"),
+		Middlewares: kit.PlatChain("platform:tenant:delete"),
 	}), h.Delete)
 }
 
 // registerAuth auth 模块 7 接口（P1）。
-func registerAuth(api huma.API, h *apiv1.AuthHandler, jwtM, tenantM humaMiddleware) {
+func registerAuth(api huma.API, h *apiv1.AuthHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"auth"},
 		Responses: humaerr.CommonErrResponses(),
 	}
-	logged := huma.Middlewares{jwtM}
-	biz := huma.Middlewares{jwtM, tenantM}
+	logged := kit.Logged()
+	biz := kit.TenantBiz()
 
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "auth-login",

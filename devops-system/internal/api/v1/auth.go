@@ -8,7 +8,7 @@ import (
 	"devops-infra/errs"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -102,13 +102,13 @@ func (h *AuthHandler) Refresh(ctx context.Context, in *RefreshInput) (*RefreshOu
 
 // Logout POST /api/v1/auth/logout（需 JWT）。
 func (h *AuthHandler) Logout(ctx context.Context, _ *struct{}) (*LogoutOutput, error) {
-	h.svc.Logout(ctx, middleware.ClaimsFrom(ctx))
+	h.svc.Logout(ctx, auth.ClaimsFrom(ctx))
 	return &LogoutOutput{Body: response.EmptyBody()}, nil
 }
 
 // Info GET /api/v1/auth/info（需 JWT + Tenant）。
 func (h *AuthHandler) Info(ctx context.Context, _ *struct{}) (*InfoOutput, error) {
-	resp, err := h.svc.Info(ctx, middleware.ClaimsFrom(ctx))
+	resp, err := h.svc.Info(ctx, auth.ClaimsFrom(ctx))
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -117,7 +117,7 @@ func (h *AuthHandler) Info(ctx context.Context, _ *struct{}) (*InfoOutput, error
 
 // Routers GET /api/v1/auth/routers（需 JWT + Tenant）。
 func (h *AuthHandler) Routers(ctx context.Context, _ *struct{}) (*RoutersOutput, error) {
-	routers, err := h.svc.Routers(ctx, middleware.ClaimsFrom(ctx))
+	routers, err := h.svc.Routers(ctx, auth.ClaimsFrom(ctx))
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -126,7 +126,7 @@ func (h *AuthHandler) Routers(ctx context.Context, _ *struct{}) (*RoutersOutput,
 
 // UpdateProfile PUT /api/v1/auth/profile（需 JWT + Tenant）。
 func (h *AuthHandler) UpdateProfile(ctx context.Context, in *UpdateProfileInput) (*UpdateProfileOutput, error) {
-	if err := h.svc.UpdateProfile(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.UpdateProfile(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UpdateProfileOutput{Body: response.EmptyBody()}, nil
@@ -134,7 +134,7 @@ func (h *AuthHandler) UpdateProfile(ctx context.Context, in *UpdateProfileInput)
 
 // UpdatePassword PUT /api/v1/auth/profile/password（需 JWT + Tenant，改密踢下线）。
 func (h *AuthHandler) UpdatePassword(ctx context.Context, in *UpdatePasswordInput) (*UpdatePasswordOutput, error) {
-	if err := h.svc.UpdatePassword(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.UpdatePassword(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UpdatePasswordOutput{Body: response.EmptyBody()}, nil

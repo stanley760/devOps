@@ -26,8 +26,14 @@ import (
 
 	"devops-system/internal/auth"
 	"devops-system/internal/config"
+	"devops-system/internal/middleware"
 	"devops-system/internal/service"
 )
+
+// newTestKit 构造测试中间件套件（无 DB/缓存环境；测试路径只到 JWT 层）。
+func newTestKit(m *auth.Manager) *middleware.Kit {
+	return middleware.NewKit(m, middleware.Deps{})
+}
 
 // jwksEnv 构建真实共享安全装配（RS256 + miniredis 会话）与业务路由。
 func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
@@ -69,8 +75,8 @@ func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
 	m := auth.New(cfg, tokens, securitysession.NewRedisClientStore(client, cfg.RefreshExpire))
 
 	svcCfg := config.Config{}
-	reg := Register(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, m,
-		service.NewAuth(svcCfg, m), service.NewUser(m), service.NewRole(),
+	reg := Register(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, newTestKit(m), m,
+		service.NewAuth(svcCfg, m), service.NewUser(m, func(){}), service.NewRole(func(){}),
 		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, m))
 	r := gin.New()
 	reg(r)
@@ -183,8 +189,8 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 	svcCfg := config.Config{}
 
 	r := gin.New()
-	Register(config.APIDocConfig{}, authMgr,
-		service.NewAuth(svcCfg, authMgr), service.NewUser(authMgr), service.NewRole(),
+	Register(config.APIDocConfig{}, newTestKit(authMgr), authMgr,
+		service.NewAuth(svcCfg, authMgr), service.NewUser(authMgr, func(){}), service.NewRole(func(){}),
 		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, authMgr))(r)
 
 	rec := httptest.NewRecorder()

@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -102,7 +102,7 @@ func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetO
 
 // Create POST /api/v1/tenants（含租户初始超管；模式B 自动建库+迁移+菜单同步）。
 func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*TenantCreateOutput, error) {
-	resp, err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body)
+	resp, err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -111,7 +111,7 @@ func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*Ten
 
 // Update PUT /api/v1/tenants/{id}（名称/联系人/过期时间）。
 func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
@@ -119,7 +119,7 @@ func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*Ten
 
 // UpdateStatus PUT /api/v1/tenants/{id}/status（停用即全员下线）。
 func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.UpdateStatus(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.UpdateStatus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
@@ -127,7 +127,7 @@ func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput)
 
 // Delete DELETE /api/v1/tenants/{id}（默认租户不可删；需先停用）。
 func (h *TenantHandler) Delete(ctx context.Context, in *TenantIDInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, middleware.ClaimsFrom(ctx), in.ID); err != nil {
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil

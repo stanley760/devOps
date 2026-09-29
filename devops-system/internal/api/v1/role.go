@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -93,7 +93,7 @@ func (h *RoleHandler) Get(ctx context.Context, in *RoleIDInput) (*RoleGetOutput,
 
 // Create POST /api/v1/roles。
 func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
@@ -101,7 +101,7 @@ func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmp
 
 // Update PUT /api/v1/roles/{id}。
 func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
@@ -109,7 +109,7 @@ func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmp
 
 // AssignMenus PUT /api/v1/roles/{id}/menus（role_menu 重建 + p 行快照重建）。
 func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.AssignMenus(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.AssignMenus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
@@ -117,7 +117,7 @@ func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput)
 
 // Delete DELETE /api/v1/roles/{id}。
 func (h *RoleHandler) Delete(ctx context.Context, in *RoleIDInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, middleware.ClaimsFrom(ctx), in.ID); err != nil {
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil

@@ -56,6 +56,12 @@ func FromShared(c *securityjwt.Claims) *AccessClaims {
 	}
 }
 
+// ClaimsFrom 从 context 取 JWT 载荷（HumaJWT 之后可用）。
+// 业务 handler 只面对 AccessClaims，不依赖基础设施 claims 类型。
+func ClaimsFrom(ctx context.Context) *AccessClaims {
+	return FromShared(securitymiddleware.HumaCurrentClaims(ctx))
+}
+
 // Manager JWT + 会话管理器（共享实现门面）。
 type Manager struct {
 	cfg        config.JWTConfig

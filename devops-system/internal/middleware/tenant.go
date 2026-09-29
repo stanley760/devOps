@@ -1,4 +1,4 @@
-// 租户可用性判定：供 huma 版 HumaTenant 中间件的 check 回调使用（huma.go）。
+// 租户可用性判定：供 Kit 的租户中间件（securityTenant，huma.go）使用。
 //
 // 状态校验带 Redis 缓存（tenant:{id}，5min）：
 // 即时失效由「停用租户时 RevokeAllSessions」保证（停用 → 全员 401），
@@ -12,40 +12,42 @@ import (
 
 	"gorm.io/gorm"
 
+	"devops-infra/cache"
+
 	"devops-system/internal/model"
-	"devops-system/internal/store"
 )
 
 // tenantCacheTTL 租户状态缓存时长。
 const tenantCacheTTL = 5 * time.Minute
 
-// 租户校验与上下文注入已迁 huma（HumaTenant / humaTenantUsable，见 huma.go）；
-// gin 版 Tenant() 已删除（P6 零双轨）。以下保留租户可用性判定供 huma 版回调使用。
-
-// tenantUsable 租户存在、未停用、未过期；结果缓存 5min。
-func tenantUsable(ctx context.Context, gdb *gorm.DB, tenantID int64) bool {
-	cacheKey := fmt.Sprintf("tenant:%d", tenantID)
-	c := store.Cache()
-	if c != nil {
-		if value, err := c.Get(ctx, cacheKey); err == nil && value == "ok" {
-			return true
+// newTenantChecker 租户可用性判定闭包工厂：DB 与缓存经依赖注入（不再依赖全局单例）。
+// 返回 true 表示租户存在、未停用、未过期；结果缓存 5min。
+func newTenantChecker(gdb *gorm.DB, c cache.Cache) func(ctx context.Context, tenantID int64) bool {
+	return func(ctx context.Context, tenantID int64) bool {
+		cacheKey := fmt.Sprintf("tenant:%d", tenantID)
+		if c != nil {
+			if value, err := c.Get(ctx, cacheKey); err == nil && value == "ok" {
+				return true
+			}
 		}
-	}
+		if gdb == nil {
+			return false // fail-closed：未注入 DB（测试/装配缺失）时拒绝
+		}
 
-	var t model.Tenant
-	err := gdb.WithContext(ctx).Where("id = ?", tenantID).First(&t).Error
-	if err != nil {
-		return false
-	}
-	if t.Status != 0 { // 停用
-		return false
-	}
-	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) { // 过期
-		return false
-	}
+		var t model.Tenant
+		if err := gdb.WithContext(ctx).Where("id = ?", tenantID).First(&t).Error; err != nil {
+			return false
+		}
+		if t.Status != 0 { // 停用
+			return false
+		}
+		if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) { // 过期
+			return false
+		}
 
-	if c != nil {
-		_ = c.Set(ctx, cacheKey, "ok", tenantCacheTTL)
+		if c != nil {
+			_ = c.Set(ctx, cacheKey, "ok", tenantCacheTTL)
+		}
+		return true
 	}
-	return true
 }

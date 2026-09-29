@@ -54,6 +54,15 @@ func pageOf(pageNum, pageSize int) (int, int) {
 	return pageNum, pageSize
 }
 
+// UpdateRole 更新角色字段（map 形式，仅非零字段）。
+func UpdateRole(ctx context.Context, roleID int64, updates map[string]any) error {
+	if err := tenantdb.DB(ctx).Model(&model.Role{}).
+		Where("id = ?", roleID).Updates(updates).Error; err != nil {
+		return errs.Wrap(err, errs.CodeInternal, "更新角色失败")
+	}
+	return nil
+}
+
 // GetRoleByID 按 ID 取角色（租户内）。
 func GetRoleByID(ctx context.Context, roleID int64) (*model.Role, error) {
 	var r model.Role
@@ -143,4 +152,27 @@ func RoleIDsByMenuIDs(ctx context.Context, menuIDs []int64) ([]int64, error) {
 // ClearRoleBindingsTx 事务内清理角色的用户关联（删除角色时）。
 func ClearRoleBindingsTx(tx *gorm.DB, roleID int64) error {
 	return tx.Where("role_id = ?", roleID).Delete(&model.UserRole{}).Error
+}
+
+// ReplaceRoleMenus 重建角色的菜单关联（单事务）。
+func ReplaceRoleMenus(ctx context.Context, roleID int64, menuIDs []int64) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		return SyncRoleMenusTx(tx, roleID, menuIDs)
+	})
+}
+
+// DeleteRole 删除角色（单事务）：软删（改写 code）→ 清用户关联 → 清菜单关联。
+func DeleteRole(ctx context.Context, r *model.Role) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		if err := SoftDeleteRoleTx(tx, r.ID, r.Code); err != nil {
+			return err
+		}
+		if err := ClearRoleBindingsTx(tx, r.ID); err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "清理用户角色失败")
+		}
+		if err := tx.Where("role_id = ?", r.ID).Delete(&model.RoleMenu{}).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "删除角色失败")
+		}
+		return nil
+	})
 }

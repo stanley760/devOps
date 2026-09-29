@@ -21,9 +21,10 @@ import (
 )
 
 // Register 返回业务路由注册回调，交给 httpinfra.Run 组装。
-func Register(docCfg config.APIDocConfig, authM *auth.Manager, authSvc *service.Auth, userSvc *service.User,
-	roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept, postSvc *service.Post,
-	tenantSvc *service.Tenant,
+// kit 为业务中间件套件（cmd/root.go 装配：Deps 注入 DB/缓存/鉴权器后经 NewKit 构造）。
+func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manager, authSvc *service.Auth,
+	userSvc *service.User, roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept,
+	postSvc *service.Post, tenantSvc *service.Tenant,
 ) httpinfra.Register {
 	authH := apiv1.NewAuthHandler(authSvc)
 	userH := apiv1.NewUserHandler(userSvc)
@@ -48,17 +49,8 @@ func Register(docCfg config.APIDocConfig, authM *auth.Manager, authSvc *service.
 			Enabled:      docCfg.Enabled,
 		})
 
-		// 中间件套件（D7：infra 决策 + 本服务信封呈现，装配一次各模块复用）。
-		kit := humaKit{
-			jwtM:    middleware.HumaJWT(authM),
-			tenantM: middleware.HumaTenant(),
-			permM:   middleware.HumaPerm,
-			platM:   middleware.HumaPlatformPerm,
-			scopeM:  middleware.HumaDataScope(),
-		}
-
 		// 全量业务注册（40 接口，auth 7 + users 6 + roles 6 + menus 5 + depts 5 + posts 5 + tenants 6）。
-		registerAuth(humaAPI, authH, kit.jwtM, kit.tenantM)
+		registerAuth(humaAPI, authH, kit)
 		registerUsers(humaAPI, userH, kit)
 		registerRoles(humaAPI, roleH, kit)
 		registerMenus(humaAPI, menuH, kit)

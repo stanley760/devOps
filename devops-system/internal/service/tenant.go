@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"context"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 	"devops-infra/errs"
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
@@ -91,7 +90,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 	// 模式B：为新租户建库 + AutoMigrate（数据随后经 resolver 写入租户库）
 	if s.cfg.Tenant.Mode == "schema" {
 		if err := tenantdb.ProvisionSchema(ctx, t.Code); err != nil {
-			_ = tenantdb.DB(ctx).Unscoped().Delete(&model.Tenant{}, t.ID).Error
+			_ = dao.HardDeleteTenant(ctx, t.ID)
 			return nil, err
 		}
 	}
@@ -113,18 +112,9 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		},
 		Name: "超级管理员", Code: "super_admin", Type: 1, DataScope: 1, Status: 0,
 	}
-	err = tenantdb.DB(tctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(role).Error; err != nil {
-			return errs.Wrap(err, errs.CodeInternal, "创建租户超管角色失败")
-		}
-		if err := tx.Create(admin).Error; err != nil {
-			return errs.Wrap(err, errs.CodeInternal, "创建租户超管用户失败")
-		}
-		return tx.Create(&model.UserRole{UserID: admin.ID, RoleID: role.ID}).Error
-	})
-	if err != nil {
+	if err := dao.SeedTenantAdmin(tctx, role, admin); err != nil {
 		// 补偿：回滚租户行，避免「有租户无超管」的中间态（模式B 库保留，migrate 幂等可复用）
-		_ = tenantdb.DB(ctx).Unscoped().Delete(&model.Tenant{}, t.ID).Error
+		_ = dao.HardDeleteTenant(ctx, t.ID)
 		return nil, err
 	}
 
@@ -199,9 +189,7 @@ func (s *Tenant) Delete(ctx context.Context, claims *auth.AccessClaims, id types
 		return errs.New(errs.CodeParam, "租户未停用，请先停用再删除")
 	}
 
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		return dao.SoftDeleteTenantTx(tx, t.ID, t.Code)
-	}); err != nil {
+	if err := dao.SoftDeleteTenant(ctx, t.ID, t.Code); err != nil {
 		return err
 	}
 

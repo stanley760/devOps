@@ -123,6 +123,63 @@ func SoftDeleteUserTx(tx *gorm.DB, userID int64, u *model.User, operator string)
 	return nil
 }
 
+// SyncUserRolesTx 事务内重建用户-角色关联（清空再批插）。
+func SyncUserRolesTx(tx *gorm.DB, userID int64, roleIDs []int64) error {
+	if err := tx.Where("user_id = ?", userID).Delete(&model.UserRole{}).Error; err != nil {
+		return errs.Wrap(err, errs.CodeInternal, "清理用户角色失败")
+	}
+	if len(roleIDs) == 0 {
+		return nil
+	}
+	rows := make([]model.UserRole, 0, len(roleIDs))
+	for _, rid := range roleIDs {
+		rows = append(rows, model.UserRole{UserID: userID, RoleID: rid})
+	}
+	return tx.Create(&rows).Error
+}
+
+// CreateUserWithRoles 建用户 + 初始角色关联（单事务）。
+func CreateUserWithRoles(ctx context.Context, u *model.User, roleIDs []int64) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		if err := tx.Create(u).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "创建用户失败")
+		}
+		if len(roleIDs) > 0 {
+			rows := make([]model.UserRole, 0, len(roleIDs))
+			for _, rid := range roleIDs {
+				rows = append(rows, model.UserRole{UserID: u.ID, RoleID: rid})
+			}
+			if err := tx.Create(&rows).Error; err != nil {
+				return errs.Wrap(err, errs.CodeInternal, "保存用户角色失败")
+			}
+		}
+		return nil
+	})
+}
+
+// UpdateUserWithRoles 更新用户字段 + 重建角色关联（单事务）。
+func UpdateUserWithRoles(ctx context.Context, userID int64, updates map[string]any, roleIDs []int64) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "更新用户失败")
+		}
+		return SyncUserRolesTx(tx, userID, roleIDs)
+	})
+}
+
+// DeleteUser 软删用户 + 清角色关联（单事务）。
+func DeleteUser(ctx context.Context, u *model.User, operator string) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		if err := SoftDeleteUserTx(tx, u.ID, u, operator); err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", u.ID).Delete(&model.UserRole{}).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "删除用户失败")
+		}
+		return nil
+	})
+}
+
 // GetUserRoleIDs 用户在租户内的角色 ID 列表。
 func GetUserRoleIDs(ctx context.Context, userID int64) ([]int64, error) {
 	var ids []int64

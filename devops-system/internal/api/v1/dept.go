@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -81,7 +81,7 @@ func (h *DeptHandler) Get(ctx context.Context, in *DeptIDInput) (*DeptGetOutput,
 
 // Create POST /api/v1/depts。
 func (h *DeptHandler) Create(ctx context.Context, in *DeptCreateInput) (*DeptEmptyOutput, error) {
-	if err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &DeptEmptyOutput{Body: response.EmptyBody()}, nil
@@ -89,7 +89,7 @@ func (h *DeptHandler) Create(ctx context.Context, in *DeptCreateInput) (*DeptEmp
 
 // Update PUT /api/v1/depts/{id}（父节点不得是自身或后代，防环）。
 func (h *DeptHandler) Update(ctx context.Context, in *DeptUpdateInput) (*DeptEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &DeptEmptyOutput{Body: response.EmptyBody()}, nil

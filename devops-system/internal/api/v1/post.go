@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -91,7 +91,7 @@ func (h *PostHandler) Get(ctx context.Context, in *PostIDInput) (*PostGetOutput,
 
 // Create POST /api/v1/posts（code 创建后不可改）。
 func (h *PostHandler) Create(ctx context.Context, in *PostCreateInput) (*PostEmptyOutput, error) {
-	if err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil
@@ -99,7 +99,7 @@ func (h *PostHandler) Create(ctx context.Context, in *PostCreateInput) (*PostEmp
 
 // Update PUT /api/v1/posts/{id}。
 func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil
@@ -107,7 +107,7 @@ func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmp
 
 // Delete DELETE /api/v1/posts/{id}。
 func (h *PostHandler) Delete(ctx context.Context, in *PostIDInput) (*PostEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, middleware.ClaimsFrom(ctx), in.ID); err != nil {
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil

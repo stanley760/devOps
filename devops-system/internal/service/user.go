@@ -8,7 +8,6 @@ import (
 	"context"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"devops-infra/errs"
 
@@ -16,9 +15,7 @@ import (
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
 	"devops-system/internal/datascope"
-	"devops-system/internal/middleware"
 	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
 
@@ -38,11 +35,14 @@ func ensureUserVisible(ctx context.Context, u *model.User) error {
 
 // User 用户管理服务。
 type User struct {
-	authM *auth.Manager
+	authM           *auth.Manager
+	invalidateScope func() // 数据权限缓存失效（角色分配变更时调用）
 }
 
-// NewUser 创建服务（authM 用于踢下线）。
-func NewUser(authM *auth.Manager) *User { return &User{authM: authM} }
+// NewUser 创建服务（authM 用于踢下线；invalidateScope 清数据权限缓存）。
+func NewUser(authM *auth.Manager, invalidateScope func()) *User {
+	return &User{authM: authM, invalidateScope: invalidateScope}
+}
 
 // List 分页查询（tenant_id 由插件注入，天然限本租户）。
 func (s *User) List(ctx context.Context, q types.UserPageQuery) ([]types.UserDTO, int64, error) {
@@ -125,21 +125,7 @@ func (s *User) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 		Remark:   req.Remark,
 		Status:   req.Status,
 	}
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(u).Error; err != nil {
-			return errs.Wrap(err, errs.CodeInternal, "创建用户失败")
-		}
-		if len(req.RoleIDs) > 0 {
-			rows := make([]model.UserRole, 0, len(req.RoleIDs))
-			for _, rid := range req.RoleIDs {
-				rows = append(rows, model.UserRole{UserID: u.ID, RoleID: rid.Int64()})
-			}
-			if err := tx.Create(&rows).Error; err != nil {
-				return errs.Wrap(err, errs.CodeInternal, "保存用户角色失败")
-			}
-		}
-		return nil
-	}); err != nil {
+	if err := dao.CreateUserWithRoles(ctx, u, idsToInt64(req.RoleIDs)); err != nil {
 		return err
 	}
 
@@ -205,12 +191,7 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 		updates["mobile"] = nil // 清空走 NULL，保 uk_tenant_mobile 多空值不冲突
 	}
 
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.User{}).Where("id = ?", u.ID).Updates(updates).Error; err != nil {
-			return errs.Wrap(err, errs.CodeInternal, "更新用户失败")
-		}
-		return SyncUserRolesTx(tx, u.ID, idsToInt64(req.RoleIDs))
-	}); err != nil {
+	if err := dao.UpdateUserWithRoles(ctx, u.ID, updates, idsToInt64(req.RoleIDs)); err != nil {
 		return err
 	}
 
@@ -218,7 +199,7 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 		return errs.Wrap(err, errs.CodeInternal, "用户已更新，但角色授权刷新失败，请重试更新")
 	}
 	// 角色分配已变：清数据权限缓存（含部门调动改变可见范围）
-	middleware.InvalidateDataScope()
+	s.invalidateScope()
 	// 状态 0→1：停用即踢下线（存量会话立即失效）
 	if u.Status == 0 && req.Status == 1 {
 		s.authM.RevokeAllSessions(ctx, claims.TenantID, u.ID)
@@ -265,13 +246,8 @@ func (s *User) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 		return err
 	}
 
-	if err := tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := dao.SoftDeleteUserTx(tx, u.ID, u, claims.Username); err != nil {
-			return err
-		}
-		return tx.Where("user_id = ?", u.ID).Delete(&model.UserRole{}).Error
-	}); err != nil {
-		return errs.Wrap(err, errs.CodeInternal, "删除用户失败")
+	if err := dao.DeleteUser(ctx, u, claims.Username); err != nil {
+		return err
 	}
 
 	if err := authz.RemoveUserGrouping(u.ID, claims.TenantID); err != nil {
@@ -279,21 +255,6 @@ func (s *User) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 	}
 	s.authM.RevokeAllSessions(ctx, claims.TenantID, u.ID)
 	return nil
-}
-
-// SyncUserRolesTx 事务内重建用户-角色关联。
-func SyncUserRolesTx(tx *gorm.DB, userID int64, roleIDs []int64) error {
-	if err := tx.Where("user_id = ?", userID).Delete(&model.UserRole{}).Error; err != nil {
-		return errs.Wrap(err, errs.CodeInternal, "清理用户角色失败")
-	}
-	if len(roleIDs) == 0 {
-		return nil
-	}
-	rows := make([]model.UserRole, 0, len(roleIDs))
-	for _, rid := range roleIDs {
-		rows = append(rows, model.UserRole{UserID: userID, RoleID: rid})
-	}
-	return tx.Create(&rows).Error
 }
 
 // toUserDTO model.User → DTO（隐藏密码）。

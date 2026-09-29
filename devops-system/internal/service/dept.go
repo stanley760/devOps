@@ -7,14 +7,11 @@ package service
 import (
 	"context"
 
-	"gorm.io/gorm"
-
 	"devops-infra/errs"
 
 	"devops-system/internal/auth"
 	"devops-system/internal/dao"
 	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
 )
 
@@ -262,9 +259,7 @@ func (s *Post) Delete(ctx context.Context, claims *auth.AccessClaims, id types.I
 	if has {
 		return errs.New(errs.CodeParam, "岗位已被用户引用，请先解除关联")
 	}
-	return tenantdb.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		return dao.SoftDeletePostTx(tx, p.ID, p.Code)
-	})
+	return dao.SoftDeletePost(ctx, p.ID, p.Code)
 }
 
 // toPostDTO model.Post → DTO。

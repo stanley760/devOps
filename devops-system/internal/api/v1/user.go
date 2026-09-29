@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -99,7 +99,7 @@ func (h *UserHandler) Get(ctx context.Context, in *UserIDInput) (*UserGetOutput,
 
 // Create POST /api/v1/users。
 func (h *UserHandler) Create(ctx context.Context, in *UserCreateInput) (*UserEmptyOutput, error) {
-	if err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
@@ -107,7 +107,7 @@ func (h *UserHandler) Create(ctx context.Context, in *UserCreateInput) (*UserEmp
 
 // Update PUT /api/v1/users/{id}。
 func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
@@ -115,7 +115,7 @@ func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmp
 
 // ResetPassword PUT /api/v1/users/{id}/password（重置后踢下线）。
 func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordInput) (*UserEmptyOutput, error) {
-	if err := h.svc.ResetPassword(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.ResetPassword(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
@@ -123,7 +123,7 @@ func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordIn
 
 // Delete DELETE /api/v1/users/{id}。
 func (h *UserHandler) Delete(ctx context.Context, in *UserIDInput) (*UserEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, middleware.ClaimsFrom(ctx), in.ID); err != nil {
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil

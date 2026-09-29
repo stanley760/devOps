@@ -8,7 +8,7 @@ import (
 	"devops-infra/http/humaparam"
 	"devops-infra/http/response"
 
-	"devops-system/internal/middleware"
+	"devops-system/internal/auth"
 	"devops-system/internal/service"
 	"devops-system/internal/types"
 )
@@ -81,7 +81,7 @@ func (h *MenuHandler) Get(ctx context.Context, in *MenuIDInput) (*MenuGetOutput,
 
 // Create POST /api/v1/menus。
 func (h *MenuHandler) Create(ctx context.Context, in *MenuCreateInput) (*MenuEmptyOutput, error) {
-	if err := h.svc.Create(ctx, middleware.ClaimsFrom(ctx), in.Body); err != nil {
+	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &MenuEmptyOutput{Body: response.EmptyBody()}, nil
@@ -89,7 +89,7 @@ func (h *MenuHandler) Create(ctx context.Context, in *MenuCreateInput) (*MenuEmp
 
 // Update PUT /api/v1/menus/{id}（permission 变更联动重建引用角色 p 行）。
 func (h *MenuHandler) Update(ctx context.Context, in *MenuUpdateInput) (*MenuEmptyOutput, error) {
-	if err := h.svc.Update(ctx, middleware.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &MenuEmptyOutput{Body: response.EmptyBody()}, nil

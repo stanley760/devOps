@@ -28,6 +28,7 @@ import (
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
+	"devops-system/internal/middleware"
 	"devops-system/internal/model"
 	"devops-system/internal/router"
 	"devops-system/internal/service"
@@ -241,9 +242,15 @@ var serverCmd = &cobra.Command{
 		})
 		model.SetIDGenerator(idc)
 
+		// 业务中间件套件（D7：Deps 注入 DB/缓存，鉴权器默认取 authz 门面）。
+		kit := middleware.NewKit(authM, middleware.Deps{
+			DB:    client.Get(),
+			Cache: store.Cache(),
+		})
+
 		authSvc := service.NewAuth(cfg, authM)
-		userSvc := service.NewUser(authM)
-		roleSvc := service.NewRole()
+		userSvc := service.NewUser(authM, kit.InvalidateDataScope)
+		roleSvc := service.NewRole(kit.InvalidateDataScope)
 		menuSvc := service.NewMenu()
 		deptSvc := service.NewDept()
 		postSvc := service.NewPost()
@@ -262,7 +269,7 @@ var serverCmd = &cobra.Command{
 			{Name: "redis", Check: store.Ping},
 			{Name: "devops-id", Check: idc.Ping},
 		}
-		err = httpinfra.RunWithOptions(cfg.Server, router.Register(cfg.APIDoc, authM, authSvc,
+		err = httpinfra.RunWithOptions(cfg.Server, router.Register(cfg.APIDoc, kit, authM, authSvc,
 			userSvc, roleSvc, menuSvc, deptSvc, postSvc, tenantSvc), obsRuntime, readiness...)
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db

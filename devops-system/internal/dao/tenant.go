@@ -44,6 +44,19 @@ func ListTenants(ctx context.Context, q types.TenantPageQuery) ([]model.Tenant, 
 	return tenants, total, nil
 }
 
+// GetTenantByCode 按编码取租户（登录用：未命中按 401「租户不存在」语义）。
+func GetTenantByCode(ctx context.Context, code string) (*model.Tenant, error) {
+	var t model.Tenant
+	err := tenantdb.DB(ctx).Where("code = ?", code).First(&t).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errs.New(errs.CodeUnauthorized, "租户不存在")
+		}
+		return nil, errs.Wrap(err, errs.CodeInternal, "查询租户失败")
+	}
+	return &t, nil
+}
+
 // GetTenantByID 按 ID 取租户。
 func GetTenantByID(ctx context.Context, tenantID int64) (*model.Tenant, error) {
 	var t model.Tenant
@@ -101,4 +114,30 @@ func SoftDeleteTenantTx(tx *gorm.DB, tenantID int64, code string) error {
 		return errs.Wrap(res.Error, errs.CodeInternal, "删除租户失败")
 	}
 	return nil
+}
+
+// SoftDeleteTenant 软删租户（单事务，见 SoftDeleteTenantTx）。
+func SoftDeleteTenant(ctx context.Context, tenantID int64, code string) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		return SoftDeleteTenantTx(tx, tenantID, code)
+	})
+}
+
+// HardDeleteTenant 物理删除租户行：创建流程补偿回滚用（模式B 租户库保留，migrate 幂等可复用）。
+func HardDeleteTenant(ctx context.Context, tenantID int64) error {
+	return tenantdb.DB(ctx).Unscoped().Delete(&model.Tenant{}, tenantID).Error
+}
+
+// SeedTenantAdmin 建租户初始超管（super_admin 角色 + 用户 + 关联，单事务）。
+// ctx 须为新租户 ctx（tenantdb.With 注入；模式B 据此路由到租户库）。
+func SeedTenantAdmin(ctx context.Context, role *model.Role, admin *model.User) error {
+	return WithTx(ctx, func(tx *gorm.DB) error {
+		if err := tx.Create(role).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "创建租户超管角色失败")
+		}
+		if err := tx.Create(admin).Error; err != nil {
+			return errs.Wrap(err, errs.CodeInternal, "创建租户超管用户失败")
+		}
+		return tx.Create(&model.UserRole{UserID: admin.ID, RoleID: role.ID}).Error
+	})
 }

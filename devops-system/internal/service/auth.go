@@ -12,18 +12,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"devops-infra/errs"
+	infratenant "devops-infra/tenant"
 
 	"devops-system/internal/auth"
 	"devops-system/internal/config"
 	"devops-system/internal/dao"
-	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
-
-	infratenant "devops-infra/tenant"
 )
 
 // loginCounter 业务指标：登录尝试计数（auth_login_total）。
@@ -89,12 +85,9 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, clientIP string) (
 	}
 
 	// 公开路由：无租户 ctx，直接查全局表
-	var t model.Tenant
-	if err := tenantdb.DB(ctx).Where("code = ?", code).First(&t).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errs.New(errs.CodeUnauthorized, "租户不存在")
-		}
-		return nil, errs.Wrap(err, errs.CodeInternal, "查询租户失败")
+	t, err := dao.GetTenantByCode(ctx, code)
+	if err != nil {
+		return nil, err
 	}
 	if t.Status != 0 {
 		return nil, errs.New(errs.CodeForbidden, "租户已停用")
@@ -139,8 +132,8 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 	}
 
 	// 公开路由：先校验租户可用，再注入租户 ctx（含 code，模式B 切库依据）
-	var t model.Tenant
-	if err := tenantdb.DB(ctx).Where("id = ?", tid).First(&t).Error; err != nil || t.Status != 0 {
+	t, err := dao.GetTenantByID(ctx, tid)
+	if err != nil || t.Status != 0 {
 		return nil, errs.New(errs.CodeForbidden, "租户不可用")
 	}
 	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) {
@@ -286,14 +279,8 @@ func (s *Auth) UpdateProfile(ctx context.Context, claims *auth.AccessClaims, req
 		updates["avatar"] = req.Avatar
 	}
 
-	res := tenantdb.DB(ctx).Model(&model.User{}).
-		Where("id = ?", claims.UserID).
-		Updates(updates)
-	if res.Error != nil {
-		return errs.Wrap(res.Error, errs.CodeInternal, "更新个人信息失败")
-	}
-	if res.RowsAffected == 0 {
-		return errs.New(errs.CodeNotFound, "用户不存在")
+	if err := dao.UpdateUser(ctx, claims.UserID, updates); err != nil {
+		return err
 	}
 	return nil
 }
@@ -312,11 +299,11 @@ func (s *Auth) UpdatePassword(ctx context.Context, claims *auth.AccessClaims, re
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternal, "密码加密失败")
 	}
-	res := tenantdb.DB(ctx).Model(&model.User{}).
-		Where("id = ?", claims.UserID).
-		Updates(map[string]any{"password": string(hash), "updater": claims.Username})
-	if res.Error != nil {
-		return errs.Wrap(res.Error, errs.CodeInternal, "更新密码失败")
+	if err := dao.UpdateUser(ctx, claims.UserID, map[string]any{
+		"password": string(hash),
+		"updater":  claims.Username,
+	}); err != nil {
+		return err
 	}
 
 	s.authM.RevokeAllSessions(ctx, claims.TenantID, claims.UserID)
