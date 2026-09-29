@@ -1,0 +1,30 @@
+# APISIX 网关实例配置（dev 与 docker 生产共用；compose 中挂载为 /usr/local/apisix/conf/config.yaml）。
+#
+# 采用「数据面 + YAML 配置源」形态：路由/上游来自同目录 apisix.yaml（git 管理的声明式文件），
+# 文件变更约 1 秒热加载，不需要 admin API、不需要 etcd——配置真源就是本目录的 git 文件。
+# 全量可配置项参考官方 conf/config.yaml：
+# https://github.com/apache/apisix/blob/master/conf/config.yaml
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+
+discovery:
+  nacos:
+    # compose 网络内的 Nacos 服务名；服务发现走 v1 HTTP 轮询（原 higress 为 nacos2 gRPC 推送）
+    host:
+      - "http://nacos:8848"
+    prefix: "/nacos/v1/"
+    fetch_interval: 10   # 秒。实例上下线的感知窗口，dev 调快；生产可回默认 30
+    weight: 100          # Nacos 实例未显式带权重时的默认权重
+
+nginx_configuration:
+  worker_processes: 2    # dev 机器 2 个 worker 足够（对齐原 higress GATEWAY_CONCURRENCY: "2"）
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    export_addr:
+      ip: "0.0.0.0"      # 默认 127.0.0.1；容器内必须改 0.0.0.0，prometheus 容器才能经 apisix:9091 抓取
+      port: 9091
+    prefer_name: true    # 指标 label 用路由/服务名（devops-system）而非内部 ID

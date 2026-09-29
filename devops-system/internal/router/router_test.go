@@ -213,7 +213,7 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 	}
 }
 
-// TestJWKSEndpointVerifiesIssuedToken 模拟 Higress jwt-auth 完整验签路径：
+// TestJWKSEndpointVerifiesIssuedToken 模拟外部调用方经 JWKS 的完整验签路径：
 // 拉取 /.well-known/jwks.json → 按 kid 选公钥 → RS256 PKCS#1 v1.5 验签。
 func TestJWKSEndpointVerifiesIssuedToken(t *testing.T) {
 	m, signingPub, r := jwksEnv(t)
@@ -253,7 +253,7 @@ func TestJWKSEndpointVerifiesIssuedToken(t *testing.T) {
 		t.Fatal("jwks public key does not match signing key")
 	}
 
-	// 用 JWKS 公钥对签发的 access token 做 RS256 验签（等价 Higress jwt-auth 行为）
+	// 用 JWKS 公钥对签发的 access token 做 RS256 验签（等价 JWKS 验签行为）
 	access, _, _, err := m.Issue(context.Background(), 42, "alice", 7, "tenant-7")
 	if err != nil {
 		t.Fatal(err)
@@ -268,6 +268,6 @@ func TestJWKSEndpointVerifiesIssuedToken(t *testing.T) {
 	}
 	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
 	if err := rsa.VerifyPKCS1v15(jwksPub, crypto.SHA256, digest[:], sig); err != nil {
-		t.Fatalf("higress-style signature verification failed: %v", err)
+		t.Fatalf("jwks-based signature verification failed: %v", err)
 	}
 }

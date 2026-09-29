@@ -82,7 +82,7 @@ func New(cfg config.JWTConfig, tokens *securityjwt.Manager, sessions securityses
 	}
 }
 
-// JWKS 输出验签公钥的 JWKS 文档（{"keys":[...]}），供 Higress/服务拉取。
+// JWKS 输出验签公钥的 JWKS 文档（{"keys":[...]}），供调用方/服务拉取。
 func (m *Manager) JWKS() (map[string]any, error) {
 	return m.tokens.JWKS()
 }

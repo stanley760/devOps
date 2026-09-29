@@ -1,6 +1,6 @@
 # Prometheus 抓取配置（dev compose 内挂载为 /etc/prometheus/prometheus.yml）。
 # 业务服务在宿主机本地运行，Prometheus 容器经 host.docker.internal 访问其 /metrics：
-#   devops-system：HTTP 端口 9999 上的 /metrics（与 /healthz 同级，不经 Higress）
+#   devops-system：HTTP 端口 9999 上的 /metrics（与 /healthz 同级，不经网关）
 #   devops-id：gRPC 端口无法承载 HTTP，指标走独立 metrics 端口 9091
 # 告警：规则在 alerts.yml（同目录），命中后送本 compose 的 alertmanager:9093。
 global:
@@ -21,11 +21,11 @@ scrape_configs:
       - targets:
           - host.docker.internal:9999
           - host.docker.internal:9091
-  # Higress 网关 Envoy 指标（enablePrometheusMerge 已合并 istio 统计）
-  - job_name: higress-gateway
-    metrics_path: /stats/prometheus
+  # APISIX 网关指标（prometheus 插件，export_addr 0.0.0.0:9091，见 deploy/apisix/config.yaml）
+  - job_name: apisix-gateway
+    metrics_path: /apisix/prometheus/metrics
     static_configs:
-      - targets: ["higress:15020"]
+      - targets: ["apisix:9091"]
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]

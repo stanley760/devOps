@@ -30,7 +30,7 @@ nacos:
 
 jwt:
   # RS256 私钥（PKCS#8 PEM）：存量 HS256 token 升级时整体失效，refresh 会话不受影响。
-  # 公钥经 /.well-known/jwks.json 暴露给 Higress（jwt-auth 插件 jwksFromUrl）与服务验签。
+  # 公钥经 /.well-known/jwks.json 暴露给需要验签的调用方与服务。
   signing_key: |
     -----BEGIN PRIVATE KEY-----
     MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDHFfzn5JLlNA4a

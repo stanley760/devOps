@@ -1,5 +1,5 @@
 # devops-system 灰度实例 bootstrap：以 devops-system-gray 服务名注册到同一 Nacos 分组，
-# 供 Higress canary 路由（权重分流）与 gray.devops.local 专用路由（100% 直达）使用。
+# 供 APISIX traffic-split（权重分流）与 gray.devops.local 专用路由（100% 直达）使用。
 # 本地启动：go run . server -f config/bootstrap-gray.yaml
 
 server:

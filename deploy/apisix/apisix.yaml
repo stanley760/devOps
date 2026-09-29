@@ -1,0 +1,81 @@
+# APISIX 声明式路由/上游（standalone 模式；compose 中挂载为 /usr/local/apisix/conf/apisix.yaml）。
+# APISIX 每秒检查本文件变化并热加载；文件末尾的 #END 标记必需，缺失会导致解析失败。
+#
+# 与原 higress 配置（deploy/higress/，已删除）的语义对照：
+#   mcpbridges/default.yaml   → 本文件 upstreams（Nacos 服务发现，分组 DEVOPS_GROUP）
+#   ingresses/*.yaml          → 本文件 routes（api.devops.local / gray.devops.local）
+#   wasmplugins/cors          → 路由级 cors 插件（参数原样迁移）
+#   wasmplugins/geo-ip        → 移除（Go 服务不消费任何 Geo header，见 deploy/apisix/README.md）
+upstreams:
+  # 主实例：Nacos 分组 DEVOPS_GROUP 下的服务 devops-system（业务侧注册的 namespace/group）
+  - id: devops-system
+    type: roundrobin
+    discovery_type: nacos
+    service_name: devops-system
+    discovery_args:
+      namespace_id: public
+      group_name: DEVOPS_GROUP
+  # 灰度实例：独立服务名 devops-system-gray（bootstrap-gray.yaml 注册，同分组靠服务名区分）
+  - id: devops-system-gray
+    type: roundrobin
+    discovery_type: nacos
+    service_name: devops-system-gray
+    discovery_args:
+      namespace_id: public
+      group_name: DEVOPS_GROUP
+
+routes:
+  # 主路由：api.devops.local → devops-system（原 ingresses/devops-system.yaml + canary 权重灰度）
+  - id: devops-system
+    name: devops-system
+    uris:
+      - /api
+      - /api/*
+      - /.well-known/jwks.json
+      - /.well-known/jwks.json/*
+    hosts:
+      - api.devops.local
+    upstream_id: devops-system
+    plugins:
+      cors:
+        # allow_origins 是逗号分隔字符串（cors 插件 schema 要求 string，不接受 YAML 数组）
+        allow_origins: http://localhost:5173,http://localhost:3000
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Content-Type,Authorization,X-Requested-With
+        allow_credentials: true
+        max_age: 3600
+      prometheus: {}
+      traffic-split:
+        # 原 higress canary-weight: "10" → 10% 流量进灰度 upstream。
+        # 只带 weight、不带 upstream/upstream_id 的条目 = 走路由自身 upstream（主实例）。
+        rules:
+          - weighted_upstreams:
+              - upstream_id: devops-system-gray
+                weight: 10
+              - weight: 90
+          # Header 定向灰度（需要时取消注释；匹配条件为 lua-resty-expr 语法）：
+          # - match:
+          #     - vars:
+          #         - ["http_x_canary", "==", "true"]
+          #   weighted_upstreams:
+          #     - upstream_id: devops-system-gray
+  # 灰度专用域名（原 ingresses/devops-system-gray-route.yaml）：100% 直达灰度实例
+  - id: devops-system-gray-route
+    name: devops-system-gray-route
+    uris:
+      - /api
+      - /api/*
+      - /.well-known/jwks.json
+      - /.well-known/jwks.json/*
+    hosts:
+      - gray.devops.local
+    upstream_id: devops-system-gray
+    plugins:
+      cors:
+        allow_origins: http://localhost:5173,http://localhost:3000
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Content-Type,Authorization,X-Requested-With
+        allow_credentials: true
+        max_age: 3600
+      prometheus: {}
+#END

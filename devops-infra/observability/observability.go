@@ -13,9 +13,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -139,14 +141,24 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 	if rt.meterProvider != nil {
 		otel.SetMeterProvider(rt.meterProvider)
 	}
-	// W3C tracecontext + baggage：与 Higress 网关、前端及跨服务 gRPC/HTTP 传播对齐
+	// W3C tracecontext + baggage：与 APISIX 网关、前端及跨服务 gRPC/HTTP 传播对齐
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
 
-	// 日志 trace 关联：包装当前默认 handler，现有 slog 调用自动携带 trace_id/span_id
-	slog.SetDefault(slog.New(TraceHandler{Handler: slog.Default().Handler()}))
+	// 日志 trace 关联：包装当前默认 handler，现有 slog 调用自动携带 trace_id/span_id。
+	// 自递归防护：SetDefault 会把 log 包默认输出桥接回 slog.Default()；若当前默认
+	// handler 仍是内建 defaultHandler（写 log.Default()），TraceHandler→log.Default()
+	// →TraceHandler 成环，请求路径第一条日志即在 log 互斥锁上自死锁。log 默认
+	// writer 仍是 os.Stderr 说明从未 SetDefault 过（logging.Init 未先行，典型如
+	// 单元测试），此时以等价的直写 stderr handler 顶替；生产路径 logging.Init 的
+	// 文件/控制台 handler 直写 writer、不经 log.Default()，原样包装。
+	base := slog.Default().Handler()
+	if log.Default().Writer() == os.Stderr {
+		base = slog.NewTextHandler(os.Stderr, nil)
+	}
+	slog.SetDefault(slog.New(TraceHandler{Handler: base}))
 
 	return rt, nil
 }

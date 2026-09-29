@@ -44,7 +44,7 @@ try {
     switch ($Command) {
         "up" {
             # 启动中间件 + 网关 + 可观测栈，随后自动拉起本地业务服务
-            Invoke-Compose @("up", "-d", "mysql", "redis", "nacos", "etcd", "higress")
+            Invoke-Compose @("up", "-d", "mysql", "redis", "nacos", "etcd", "apisix")
             Invoke-Compose @("up", "-d", "jaeger", "prometheus", "alertmanager", "grafana")
             Write-Host ''
             Write-Host '中间件与可观测栈已启动。'
@@ -65,7 +65,7 @@ try {
             Invoke-Compose @("--profile", "app", "run", "--rm", "devops-system", "migrate")
         }
         "down" { Invoke-Compose @("down") }
-        "restart" { Invoke-Compose @("restart", "mysql", "redis", "nacos", "etcd", "higress") }
+        "restart" { Invoke-Compose @("restart", "mysql", "redis", "nacos", "etcd", "apisix") }
         "logs" { Invoke-Compose @("logs", "-f") }
         "ps" { Invoke-Compose @("ps") }
     }

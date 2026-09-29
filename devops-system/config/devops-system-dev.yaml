@@ -32,7 +32,7 @@ redis:
 
 jwt:
   # RS256 私钥（PKCS#8 PEM）。存量 HS256 token 升级时整体失效，refresh 会话不受影响；
-  # 公钥经 /.well-known/jwks.json 暴露给 Higress（jwt-auth 插件 jwksFromUrl）与服务验签。
+  # 公钥经 /.well-known/jwks.json 暴露给需要验签的调用方与服务。
   signing_key: |
     -----BEGIN PRIVATE KEY-----
     MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDHFfzn5JLlNA4a
@@ -84,7 +84,7 @@ idclient:                          # devops-id 发号服务接入
 observability:
   otlp_endpoint: "http://127.0.0.1:4318"
   sampler_ratio: 1.0
-  metrics_enabled: true       # /metrics 与 /healthz 同级，仅本机访问，不经 Higress
+  metrics_enabled: true       # /metrics 与 /healthz 同级，仅本机访问，不经网关
 
 apidoc:
   enabled: true

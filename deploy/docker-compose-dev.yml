@@ -43,7 +43,7 @@ services:
     networks:
       default:
         aliases:
-          # 完整域名格式，供 Higress DNS 服务来源（mcpbridges/default.yaml 的 devops-redis）解析
+          # 完整域名格式，供网关侧以完整域名引用 Redis（如 APISIX limit-count/limit-req 集群限流）
           - redis.devops.local
     deploy:
       resources:
@@ -79,43 +79,27 @@ services:
           cpus: "1.0"
           memory: 512m   # JVM 已限 256m，容器层兜底堆外开销
 
-  # 一次性配置灌入：把 deploy/higress 下 git 管理的资源目录灌进命名卷（/data），
-  # 避免 Windows bind mount 直接挂 /data 导致的高 CPU。每次 up 都会刷新这三个目录，
-  # 控制台对其中文件的运行时改动会被覆盖——配置一律改 deploy/higress 下的 yaml。
-  higress-init:
-    image: busybox:1.36
-    volumes:
-      - ./higress:/src:ro
-      - higress-data:/data
-    command:
-      - sh
-      - -c
-      - tar cf - -C /src mcpbridges ingresses services  wasmplugins | tar xf - -C /data
-
-  higress:
-    image: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/all-in-one:2.2.3
-    environment:
-      # 内置 prometheus/loki/promtail/grafana 保持关闭（默认即 off，显式声明以固化意图），
-      # 监控使用本 compose 的外部 prometheus/grafana
-      O11Y: "off"
-      # envoy worker 线程数，默认 16 对 dev 机器过多
-      GATEWAY_CONCURRENCY: "2"
+  # APISIX 网关（standalone 数据面 + YAML 配置源）：
+  # 路由/上游是 deploy/apisix 下 git 管理的声明式文件，变更约 1 秒热加载，
+  # 无需 admin API/etcd，也没有一次性灌入容器。配置一律改 deploy/apisix 下的 yaml。
+  apisix:
+    image: apache/apisix:3.18.0-debian
     ports:
-      - "8001:8001"
-      - "8080:8080"
-      - "8443:8443"
+      - "8080:9080"          # HTTP 网关（对外保持 8080，调用方不变）
+      - "8443:9443"          # HTTPS 网关（TLS 需配置 ssls 资源，见 deploy/apisix/README.md）
     volumes:
-      - higress-data:/data
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      - apisix-logs:/usr/local/apisix/logs
     depends_on:
       nacos:
         condition: service_healthy
-      higress-init:
-        condition: service_completed_successfully
     deploy:
       resources:
         limits:
           cpus: "1.0"
-          memory: 1g   # envoy(2 worker) + pilot，压测吞吐的主要路径
+          memory: 512m   # nginx worker(2) + lua 运行时，远轻于原 all-in-one
+
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -221,4 +205,4 @@ volumes:
   nacos-data:
   etcd-data:
   grafana-data:
-  higress-data:
+  apisix-logs:

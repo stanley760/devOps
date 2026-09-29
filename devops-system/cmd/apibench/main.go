@@ -11,7 +11,7 @@
 //	# 20 并发持续创建用户 30 秒（消耗 ID，驱动缓冲补充），直连后端
 //	go run ./devops-system/cmd/apibench -c 20 -d 30s
 //
-//	# 经 Higress 网关压测（边缘 + 后端全链路）
+//	# 经 APISIX 网关压测（边缘 + 后端全链路）
 //	go run ./devops-system/cmd/apibench -addr http://127.0.0.1:8080 -host api.devops.local -c 20 -d 30s
 //
 //	# 压测登录接口（bcrypt 校验为主要开销；注意每个成功登录都会创建一个会话）
@@ -53,7 +53,7 @@ type loginData struct {
 
 func main() {
 	addr := flag.String("addr", "http://127.0.0.1:9999", "devops-system 基地址（经网关时填网关地址并配 -host）")
-	host := flag.String("host", "", "HTTP Host 头（经 Higress 时为 api.devops.local；直连留空）")
+	host := flag.String("host", "", "HTTP Host 头（经网关时为 api.devops.local；直连留空）")
 	mode := flag.String("mode", "create", "压测模式：create（创建用户，消耗 ID）| login（登录）| mixed（各半）")
 	username := flag.String("username", "admin", "登录账号（须有 system:user:create 权限）")
 	password := flag.String("password", "Admin@123", "登录密码")
