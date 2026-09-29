@@ -1,7 +1,7 @@
 // huma 版认证/鉴权中间件（D2/D7）。
 //
 // 决策在 infra，呈现靠 HumaOptions 回调注入——
-// 默认回调只写裸状态码（401/403/503 无 body），业务侧接 WriteHumaEnvelope 保持信封一致。
+// 默认回调以统一信封（code/msg/data）呈现 401/403/503，业务侧可注入文案定制。
 package middleware
 
 import (
@@ -12,6 +12,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"devops-infra/http/response"
 	securityauthz "devops-infra/security/authz"
 	securityjwt "devops-infra/security/jwt"
 )
@@ -63,14 +64,23 @@ func HumaAuthenticate(authn BearerAuthenticator, opts HumaOptions) func(huma.Con
 	}
 }
 
+// claimsOrReject claims 缺失时已写 401 并返回 false；业务中间件 fail-closed 守卫的公共收口。
+func claimsOrReject(hctx huma.Context, opts HumaOptions) (*securityjwt.Claims, bool) {
+	claims := HumaCurrentClaims(hctx.Context())
+	if claims == nil {
+		opts.OnUnauthorized(hctx, ErrUnauthorized)
+		return nil, false
+	}
+	return claims, true
+}
+
 // HumaRequirePermission 域内鉴权（uid × tid × perm）。
 // authorizer 未装配（nil）时 fail-closed 拒绝（与 gin 版行为一致）。
 func HumaRequirePermission(authorizer securityauthz.Authorizer, permission string, opts HumaOptions) func(huma.Context, func(huma.Context)) {
 	opts = withHumaDefaults(opts)
 	return func(hctx huma.Context, next func(huma.Context)) {
-		claims := HumaCurrentClaims(hctx.Context())
-		if claims == nil {
-			opts.OnUnauthorized(hctx, ErrUnauthorized)
+		claims, ok := claimsOrReject(hctx, opts)
+		if !ok {
 			return
 		}
 		if authorizer == nil {
@@ -100,9 +110,8 @@ func HumaRequirePermission(authorizer securityauthz.Authorizer, permission strin
 func HumaRequirePlatformPermission(authorizer securityauthz.Authorizer, permission string, opts HumaOptions) func(huma.Context, func(huma.Context)) {
 	opts = withHumaDefaults(opts)
 	return func(hctx huma.Context, next func(huma.Context)) {
-		claims := HumaCurrentClaims(hctx.Context())
-		if claims == nil {
-			opts.OnUnauthorized(hctx, ErrUnauthorized)
+		claims, ok := claimsOrReject(hctx, opts)
+		if !ok {
 			return
 		}
 		if authorizer == nil {
@@ -119,7 +128,7 @@ func HumaRequirePlatformPermission(authorizer securityauthz.Authorizer, permissi
 			opts.OnForbidden(hctx, ErrNotPlatformAdmin)
 			return
 		}
-		ok, err := authorizer.EnforcePlatform(hctx.Context(), subject, permission)
+		ok, err = authorizer.EnforcePlatform(hctx.Context(), subject, permission)
 		if err != nil {
 			opts.OnInfrastructureError(hctx, err)
 			return
@@ -132,15 +141,22 @@ func HumaRequirePlatformPermission(authorizer securityauthz.Authorizer, permissi
 	}
 }
 
+// withHumaDefaults 默认回调以统一信封呈现（文案为 HTTP 状态短语），避免忘注入回调时返回无 body 的裸状态码。
 func withHumaDefaults(opts HumaOptions) HumaOptions {
 	if opts.OnUnauthorized == nil {
-		opts.OnUnauthorized = func(hctx huma.Context, _ error) { hctx.SetStatus(http.StatusUnauthorized) }
+		opts.OnUnauthorized = func(hctx huma.Context, _ error) {
+			response.WriteHumaEnvelope(hctx, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		}
 	}
 	if opts.OnForbidden == nil {
-		opts.OnForbidden = func(hctx huma.Context, _ error) { hctx.SetStatus(http.StatusForbidden) }
+		opts.OnForbidden = func(hctx huma.Context, _ error) {
+			response.WriteHumaEnvelope(hctx, http.StatusForbidden, http.StatusText(http.StatusForbidden))
+		}
 	}
 	if opts.OnInfrastructureError == nil {
-		opts.OnInfrastructureError = func(hctx huma.Context, _ error) { hctx.SetStatus(http.StatusServiceUnavailable) }
+		opts.OnInfrastructureError = func(hctx huma.Context, _ error) {
+			response.WriteHumaEnvelope(hctx, http.StatusServiceUnavailable, http.StatusText(http.StatusServiceUnavailable))
+		}
 	}
 	return opts
 }
