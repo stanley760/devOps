@@ -141,7 +141,7 @@ func Init(ctx context.Context, cfg Config) (*Runtime, error) {
 	if rt.meterProvider != nil {
 		otel.SetMeterProvider(rt.meterProvider)
 	}
-	// W3C tracecontext + baggage：与 APISIX 网关、前端及跨服务 gRPC/HTTP 传播对齐
+	// W3C tracecontext + baggage：与 Higress 网关、前端及跨服务 gRPC/HTTP 传播对齐
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},

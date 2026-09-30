@@ -82,9 +82,9 @@ type UpdatePasswordOutput struct {
 
 // ---- Handlers ----
 
-// Login POST /api/v1/auth/login（clientIP 经 withClientIP 中间件注入）。
+// Login POST /api/v1/auth/login（客户端元数据经 withClientMeta 中间件注入）。
 func (h *AuthHandler) Login(ctx context.Context, in *LoginInput) (*LoginOutput, error) {
-	resp, err := h.svc.Login(ctx, in.Body, ClientIPFrom(ctx))
+	resp, err := h.svc.Login(ctx, in.Body, ClientMetaFrom(ctx))
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -140,13 +140,14 @@ func (h *AuthHandler) UpdatePassword(ctx context.Context, in *UpdatePasswordInpu
 	return &UpdatePasswordOutput{Body: response.EmptyBody()}, nil
 }
 
-// ClientIPContextKey 登录客户端 IP 在 context 中的键（withClientIP 中间件注入）。
-type ClientIPContextKey struct{}
+// ClientMetaContextKey 登录客户端元数据在 context 中的键（withClientMeta 中间件注入）。
+type ClientMetaContextKey struct{}
 
-// ClientIPFrom 取登录请求的客户端 IP（withClientIP 之后可用）。
-func ClientIPFrom(ctx context.Context) string {
-	if v, ok := ctx.Value(ClientIPContextKey{}).(string); ok {
+// ClientMetaFrom 取登录请求的客户端元数据（IP/UA/Geo，withClientMeta 之后可用），
+// 落 t_system_login_log 审计表。
+func ClientMetaFrom(ctx context.Context) service.LoginMeta {
+	if v, ok := ctx.Value(ClientMetaContextKey{}).(service.LoginMeta); ok {
 		return v
 	}
-	return ""
+	return service.LoginMeta{}
 }

@@ -1,0 +1,35 @@
+# 集群限流（Redis 集群级计数，多网关实例共享）：每 IP 100 QPS，超限 429。
+# 2026-09-30 从 higress-data 卷抢救入库（此前仅存在于运行时卷，违反 git 真源约定）。
+# 依赖 mcpbridges/default.yaml 的 devops-redis DNS 服务来源（redis.devops.local 网络别名，
+# 见 docker-compose-dev.yml 的 redis 服务）。密码生产从密管注入，不提交明文。
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: devops-cluster-key-rate-limit
+  namespace: higress-system
+spec:
+  defaultConfig:
+    redis:
+      service_name: devops-redis.dns
+      service_port: 6379
+      password: "123456"
+  url: oci://higress-registry.cn-hangzhou.cr.aliyuncs.com/plugins/cluster-key-rate-limit:1.0.0
+  matchRules:
+    - ingress:
+        - devops-system
+        - devops-system-gray-route
+      # matchRules 命中后的 config 会整体替换 defaultConfig，
+      # 因此 redis 连接信息必须在每条命中规则里重复携带。
+      config:
+        redis:
+          service_name: devops-redis.dns
+          service_port: 6379
+          password: "123456"
+        rule_name: devops-system
+        rule_items:
+          - limit_by_per_ip: from-remote-addr
+            limit_keys:
+              - key: 0.0.0.0/0
+                query_per_second: 100
+        rejected_code: 429
+        show_limit_quota_header: true

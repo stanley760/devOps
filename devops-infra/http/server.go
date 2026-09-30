@@ -120,9 +120,9 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 
 func ginMode() string {
 	switch config.Env() {
-	case "", "dev":
-		return gin.DebugMode
-	default:
+	case "prod", "PROD":
 		return gin.ReleaseMode
+	default:
+		return gin.DebugMode
 	}
 }

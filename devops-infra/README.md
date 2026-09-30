@@ -372,7 +372,7 @@ claims, err := tokenMgr.ParseAccess(tokenString)
 ### 6.4 JWKS 端点（网关验签对接）
 
 ```go
-// 暴露 RFC 7517 JWKS 文档，供需要验签的调用方或其他服务拉取公钥
+// 暴露 RFC 7517 JWKS 文档，供 Higress jwt-auth 插件（jwksFromUrl）或其他服务拉取公钥
 r.GET("/.well-known/jwks.json", func(c *gin.Context) {
     doc, err := tokenMgr.JWKS()   // {"keys":[{"kty":"RSA","kid":"...","use":"sig","alg":"RS256","n":"...","e":"..."}]}
     if err != nil {

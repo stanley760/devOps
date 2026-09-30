@@ -20,12 +20,13 @@ import (
 // 关联表（user_role/role_menu）复合主键不走发号，不在此列；
 // 新增业务表时须同步配置映射，否则建行 fail-fast。
 var tableBizTag = map[string]string{
-	"t_system_users": "user",
-	"t_system_role":  "role",
-	"t_system_menu":  "menu",
-	"t_system_dept":  "dept",
-	"t_system_post":  "post",
-	"t_tenant":       "tenant",
+	"t_system_users":      "user",
+	"t_system_role":       "role",
+	"t_system_menu":       "menu",
+	"t_system_dept":       "dept",
+	"t_system_post":       "post",
+	"t_tenant":            "tenant",
+	"t_system_login_log":  "login_log",
 }
 
 // idHook 进程级发号钩子，由 cmd 装配期注入生成器。

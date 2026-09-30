@@ -59,8 +59,8 @@ start_services() {
 case "$COMMAND" in
   up)
     # 启动中间件 + 网关 + 可观测栈，随后自动拉起本地业务服务
-    # APISIX 以 standalone 模式直接挂载 deploy/apisix 的声明式配置，无需灌入步骤
-    compose up -d mysql redis nacos etcd apisix
+    # higress-init 会在 higress 前自动灌入 deploy/higress 的配置（首次/down 后）
+    compose up -d mysql redis nacos etcd higress
     compose up -d jaeger prometheus alertmanager grafana
     echo ""
     echo "中间件与可观测栈已启动。"
@@ -81,11 +81,24 @@ case "$COMMAND" in
     docker compose -f "$COMPOSE_FILE" --profile app run --rm devops-system migrate
     ;;
   down) compose down ;;
-  restart) compose restart mysql redis nacos etcd apisix ;;
+  restart) compose restart mysql redis nacos etcd higress ;;
+  sync)
+    # 修改 deploy/higress 下 yaml 后的显式同步，兼治 envoy OOM 毒配置：
+    #   1. 停网关（apiserver 停机，改配置文件不会被内存副本覆盖）
+    #   2. 重跑 higress-init（--force-recreate 才会重跑已完成的一次性容器）灌 git 配置
+    #   3. 删除 higress-config 里 all-in-one 自动生成的 inclusionRegexps: [.*]
+    #      （全量指标 → envoy 统计表爆内存被 cgroup OOM 杀，supervisord 视 exit 0 为
+    #      expected 不自动拉起；文件为 CRLF 行尾，sed 前必须 tr 规范化）
+    #   4. 起网关。新卷首次 up 后建议跑一次本命令
+    compose stop higress
+    compose up -d --force-recreate higress-init
+    compose run --rm --entrypoint sh higress-init -c 'if [ -f /data/configmaps/higress-config.yaml ]; then tr -d "\r" < /data/configmaps/higress-config.yaml > /tmp/hc && mv /tmp/hc /data/configmaps/higress-config.yaml && sed -i "/^      proxyStatsMatcher:$/,/^        - \.\*$/d" /data/configmaps/higress-config.yaml; fi'
+    compose start higress
+    ;;
   logs) compose logs -f ;;
   ps) compose ps ;;
   *)
-    echo "用法: $0 [up|app|stop|down|restart|logs|ps|migrate]" >&2
+    echo "用法: $0 [up|app|stop|down|restart|sync|logs|ps|migrate]" >&2
     exit 2
     ;;
 esac

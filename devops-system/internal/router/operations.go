@@ -4,6 +4,7 @@ package router
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/danielgtaylor/huma/v2"
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
@@ -12,6 +13,7 @@ import (
 
 	apiv1 "devops-system/internal/api/v1"
 	"devops-system/internal/middleware"
+	"devops-system/internal/service"
 )
 
 // with 合并公共 Operation 字段（Tags/Responses），保持各注册点简洁。
@@ -25,9 +27,26 @@ func with(common huma.Operation, op huma.Operation) huma.Operation {
 	return op
 }
 
-// withClientIP 登录接口取客户端 IP（经 gin 适配器解包；可信代理已配置时为真实 IP）。
-func withClientIP(hctx huma.Context, next func(huma.Context)) {
-	next(huma.WithValue(hctx, apiv1.ClientIPContextKey{}, humagin.Unwrap(hctx).ClientIP()))
+// withClientMeta 登录接口提取客户端元数据（经 gin 适配器解包；可信代理已配置时
+// ClientIP 为真实 IP）。Geo 四项来自 higress geo-ip 插件注入的 X-Higress-Geo-* 头
+// （插件按 URL 转义写入，此处还原），随登录落 t_system_login_log 审计表。
+func withClientMeta(hctx huma.Context, next func(huma.Context)) {
+	c := humagin.Unwrap(hctx)
+	geo := func(name string) string {
+		v, err := url.QueryUnescape(c.GetHeader(name))
+		if err != nil { // 非法转义序列：用原值兜底，审计不因脏头失败
+			return c.GetHeader(name)
+		}
+		return v
+	}
+	next(huma.WithValue(hctx, apiv1.ClientMetaContextKey{}, service.LoginMeta{
+		IP:          c.ClientIP(),
+		UserAgent:   c.GetHeader("User-Agent"),
+		GeoCountry:  geo("X-Higress-Geo-Country"),
+		GeoProvince: geo("X-Higress-Geo-Province"),
+		GeoCity:     geo("X-Higress-Geo-City"),
+		GeoIsp:      geo("X-Higress-Geo-Isp"),
+	}))
 }
 
 // registerPosts posts 模块 5 接口（P2，迁移 SOP 样板）。
@@ -260,7 +279,7 @@ func registerAuth(api huma.API, h *apiv1.AuthHandler, kit *middleware.Kit) {
 		Summary:     "登录",
 		Description: "校验租户与用户后签发 access token 与 refresh token。",
 		Security:    []map[string][]string{}, // 公开接口覆盖全局安全要求
-		Middlewares: huma.Middlewares{withClientIP},
+		Middlewares: huma.Middlewares{withClientMeta},
 	}), h.Login)
 
 	huma.Register(api, with(common, huma.Operation{

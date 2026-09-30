@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("up", "app", "stop", "down", "restart", "logs", "ps", "migrate")]
+    [ValidateSet("up", "app", "stop", "down", "restart", "sync", "logs", "ps", "migrate")]
     [string]$Command = "up"
 )
 
@@ -43,8 +43,9 @@ Push-Location $Root
 try {
     switch ($Command) {
         "up" {
-            # 启动中间件 + 网关 + 可观测栈，随后自动拉起本地业务服务
-            Invoke-Compose @("up", "-d", "mysql", "redis", "nacos", "etcd", "apisix")
+            # 启动中间件 + 网关 + 可观测栈。higress-init 会在 higress 前自动灌入
+            # deploy/higress 的配置（首次/down 后）。
+            Invoke-Compose @("up", "-d", "mysql", "redis", "nacos", "etcd", "higress")
             Invoke-Compose @("up", "-d", "jaeger", "prometheus", "alertmanager", "grafana")
             Write-Host ''
             Write-Host '中间件与可观测栈已启动。'
@@ -65,7 +66,17 @@ try {
             Invoke-Compose @("--profile", "app", "run", "--rm", "devops-system", "migrate")
         }
         "down" { Invoke-Compose @("down") }
-        "restart" { Invoke-Compose @("restart", "mysql", "redis", "nacos", "etcd", "apisix") }
+        "restart" { Invoke-Compose @("restart", "mysql", "redis", "nacos", "etcd", "higress") }
+        "sync" {
+            # 修改 deploy/higress 下 yaml 后的显式同步，兼治 envoy OOM 毒配置：
+            #   停网关 → 重灌 git 配置 → 删 higress-config 的 inclusionRegexps（新卷首启
+            #   自动再生；CRLF 行尾需先 tr 规范化；envoy 因此被 OOM 杀且 supervisord 不拉起）
+            #   → 起网关。新卷首次 up 后建议跑一次本命令
+            Invoke-Compose @("stop", "higress")
+            Invoke-Compose @("up", "-d", "--force-recreate", "higress-init")
+            Invoke-Compose @("run", "--rm", "--entrypoint", "sh", "higress-init", "-c", 'if [ -f /data/configmaps/higress-config.yaml ]; then tr -d "\r" < /data/configmaps/higress-config.yaml > /tmp/hc && mv /tmp/hc /data/configmaps/higress-config.yaml && sed -i "/^      proxyStatsMatcher:$/,/^        - \.\*$/d" /data/configmaps/higress-config.yaml; fi')
+            Invoke-Compose @("start", "higress")
+        }
         "logs" { Invoke-Compose @("logs", "-f") }
         "ps" { Invoke-Compose @("ps") }
     }

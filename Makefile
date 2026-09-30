@@ -29,9 +29,10 @@ logs:
 ps:
 	$(COMPOSE) ps
 
-# dev-up 只启动中间件 + 网关 + 可观测栈；业务服务由本地 go run 启动
+# dev-up 只启动中间件 + 网关 + 可观测栈；业务服务由本地 go run 启动。
+# higress-init 一次性服务会自动把 deploy/higress 配置灌入命名卷（首次/down 后）。
 dev-up:
-	$(DEV_COMPOSE) up -d mysql redis nacos etcd apisix
+	$(DEV_COMPOSE) up -d mysql redis nacos etcd higress
 	$(DEV_COMPOSE) up -d jaeger prometheus alertmanager grafana
 
 dev-down:

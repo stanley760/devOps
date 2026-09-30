@@ -69,7 +69,7 @@ sh deploy/dev.sh down     # 停止并清理容器
 Higress 的 `/data` 使用命名卷 `higress-data`（避免 Windows bind mount 跨文件系统导致的
 高 CPU）。`deploy/higress/` 仍是配置的唯一真源：compose 的 `higress-init` 一次性服务
 在网关启动前自动把其中的 `mcpbridges/`、`ingresses/`、`wasmplugins/` 灌入卷，
-每次 `up` 都会刷新；修改 yaml 后执行 `sync` 可立即生效（重跑灌入 + 重启网关）。
+首次 `up` / `down` 后会自动灌入；修改 yaml 后执行 `sync` 可立即生效（重跑灌入 + 重启网关）。
 init 会覆盖这三个目录，控制台里做的路由/插件改动请先移回 yaml。
 
 ### 访问地址

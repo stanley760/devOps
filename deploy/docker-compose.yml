@@ -1,16 +1,16 @@
-# 单机容器化部署：MySQL + Redis + Nacos + etcd / APISIX + devops-id + devops-system
+# 单机容器化部署：MySQL + Redis + Nacos + etcd / Higress + devops-id + devops-system
 #
 # 标准流程（也可用根目录 Makefile 快捷命令）：
 #   docker compose -f deploy/docker-compose.yml build
 #   docker compose -f deploy/docker-compose.yml run --rm devops-system migrate   # 业务表 + 种子数据
 #   docker compose -f deploy/docker-compose.yml up -d
-#   后端不直接发布到宿主机，统一通过网关访问：
+#   后端不直接发布到宿主机，统一通过 Higress 访问：
 #   curl -H 'Host: api.devops.local' http://localhost:8080/healthz
 #
-# APISIX 网关（可选）：
+# Higress 网关（可选）：
 #   docker compose -f deploy/docker-compose.yml --profile gateway up -d
 #   curl -H 'Host: api.devops.local' http://localhost:8080/healthz
-#   Nacos 控制台 http://localhost:8848/nacos
+#   控制台 http://localhost:8001；Nacos 控制台 http://localhost:8848/nacos
 #
 # devops-id 使用 snowflake，并按 leaf_name + biz_tag 在 etcd 中分配独立 worker：
 #   docker compose -f deploy/docker-compose.yml exec etcd etcdctl \
@@ -74,17 +74,16 @@ services:
       retries: 30
     restart: unless-stopped
 
-  # APISIX 网关（standalone 数据面 + YAML 配置源）：路由/上游为 deploy/apisix 下的 git 声明式文件，
-  # 变更热加载；多节点/需要 admin API 时再切 traditional 模式（+ etcd），见 deploy/apisix/README.md。
-  apisix:
-    image: apache/apisix:3.18.0-debian
+  # Higress all-in-one 仅适合本地/体验环境；生产请使用 Helm 部署到 K8s。
+  higress:
+    image: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/all-in-one:2.2.3
     profiles: ["gateway"]
     ports:
-      - "8080:9080"           # HTTP 网关
-      - "8443:9443"           # HTTPS 网关（TLS 需配置 ssls 资源）
+      - "8001:8001"           # 控制台
+      - "8080:8080"           # HTTP 网关
+      - "8443:8443"           # HTTPS 网关
     volumes:
-      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
-      - ./apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      - ./higress:/data
     depends_on:
       nacos:
         condition: service_healthy

@@ -19,6 +19,7 @@ import (
 	"devops-system/internal/auth"
 	"devops-system/internal/config"
 	"devops-system/internal/dao"
+	"devops-system/internal/model"
 	"devops-system/internal/types"
 )
 
@@ -48,14 +49,32 @@ func loginResultAttr(err error) attribute.KeyValue {
 // loginCodeAttr 失败原因码：BizError 携带的有界业务码，非 BizError 按 500 归类。
 // 失败的具体细节（密码错误/租户停用/过期等）走访问日志与 slog，不进指标标签控制基数。
 func loginCodeAttr(err error) attribute.KeyValue {
+	return attribute.Int("code", loginErrCode(err))
+}
+
+// loginErrCode 登录结果业务码（成功 200；失败取 BizError 的 4xx/5xx，非业务错误按 500）。
+// 指标标签与 t_system_login_log.code 同源。
+func loginErrCode(err error) int {
 	if err == nil {
-		return attribute.Int("code", errs.CodeOK)
+		return errs.CodeOK
 	}
 	var be *errs.BizError
 	if errors.As(err, &be) && be.Code >= 400 && be.Code <= 599 {
-		return attribute.Int("code", be.Code)
+		return be.Code
 	}
-	return attribute.Int("code", errs.CodeInternal)
+	return errs.CodeInternal
+}
+
+// LoginMeta 登录审计元数据：请求侧解析（withClientMeta 中间件注入 ctx），
+// 随登录写入 t_system_login_log。Geo 字段来自 higress geo-ip 插件注入的
+// X-Higress-Geo-* 头（未启用插件时为空，内网 IP 为「内网IP」）。
+type LoginMeta struct {
+	IP          string
+	UserAgent   string
+	GeoCountry  string
+	GeoProvince string
+	GeoCity     string
+	GeoIsp      string
 }
 
 // Auth 认证服务。
@@ -71,14 +90,32 @@ func NewAuth(cfg config.Config, authM *auth.Manager) *Auth {
 
 // Login 登录：租户校验（存在/停用/过期）→ 用户校验（密码/停用）→ 签发双 token。
 // 业务指标：无论成败记一次 auth_login_total{result, code}，指标故障不影响登录。
-func (s *Auth) Login(ctx context.Context, req types.LoginReq, clientIP string) (*types.LoginResp, error) {
-	resp, err := s.login(ctx, req, clientIP)
+func (s *Auth) Login(ctx context.Context, req types.LoginReq, meta LoginMeta) (*types.LoginResp, error) {
+	resp, err := s.login(ctx, req, meta)
 	loginCounter().Add(ctx, 1, metric.WithAttributes(loginResultAttr(err), loginCodeAttr(err)))
 	return resp, err
 }
 
-// login 登录主流程。
-func (s *Auth) login(ctx context.Context, req types.LoginReq, clientIP string) (*types.LoginResp, error) {
+// login 登录主流程。defer 落一行登录审计（t_system_login_log）：闭包捕获的 ctx
+// 是租户注入后的富化 ctx、err 是最终结果，覆盖全部出口（含失败路径）。
+func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (resp *types.LoginResp, err error) {
+	audit := &model.LoginLog{
+		Username:    req.Username,
+		IP:          meta.IP,
+		UserAgent:   meta.UserAgent,
+		GeoCountry:  meta.GeoCountry,
+		GeoProvince: meta.GeoProvince,
+		GeoCity:     meta.GeoCity,
+		GeoIsp:      meta.GeoIsp,
+	}
+	defer func() {
+		if err != nil {
+			audit.Result = 1
+		}
+		audit.Code = loginErrCode(err)
+		dao.CreateLoginLog(ctx, audit) // 尽力而为：审计故障不影响登录
+	}()
+
 	code := req.TenantCode
 	if code == "" {
 		code = s.cfg.Tenant.DefaultCode
@@ -103,6 +140,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, clientIP string) (
 	if err != nil {
 		return nil, err
 	}
+	audit.UserID = u.ID // 用户命中：审计行带上 user_id（后续失败路径也可追溯）
 	if bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)) != nil {
 		return nil, errs.New(errs.CodeUnauthorized, "用户名或密码错误")
 	}
@@ -114,7 +152,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, clientIP string) (
 	if err != nil {
 		return nil, err
 	}
-	dao.TouchLogin(ctx, u.ID, clientIP)
+	dao.TouchLogin(ctx, u.ID, meta.IP)
 
 	return &types.LoginResp{
 		AccessToken:  access,

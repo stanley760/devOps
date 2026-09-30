@@ -6,12 +6,13 @@
 
 ```
 deploy/higress/
-├── mcpbridges/default.yaml          # 服务来源：Nacos 注册中心对接
+├── mcpbridges/default.yaml          # 服务来源：Nacos 注册中心对接（devops-nacos）
 ├── ingresses/devops-system.yaml     # 路由：api.devops.local -> devops-system
 ├── ingresses/devops-system-canary.yaml  # 灰度路由（10% 流量到 gray 实例）
-├── wasmplugins/cors.yaml            # 跨域：网关统一处理
-├── wasmplugins/cluster-key-rate-limit.yaml  # 集群限流：Redis + 每 IP 100 QPS
-└── wasmplugins/geo-ip-1.0.0.yaml    # GeoIP：按 IP 解析地理位置注入 Header
+├── ingresses/devops-system-gray-route.yaml  # 灰度专用域名：gray.devops.local 100% 直达
+├── services/higress-gateway.yaml    # all-in-one 内置 Service 声明（K8s 迁移参考）
+├── wasmplugins/cors-1.0.0.yaml      # 跨域：网关统一处理（控制台导出格式）
+└── wasmplugins/geo-ip-1.0.0.yaml    # GeoIP：注入 X-Higress-Geo-* 头（登录审计消费）
 ```
 
 > `.gitignore` 采用白名单：只跟踪 `mcpbridges/`、`ingresses/`、`wasmplugins/` 下的
@@ -57,13 +58,13 @@ all-in-one 容器持续向 `/data` 写状态（pilot、console、内置可观测
 启动前把本目录 `mcpbridges/`、`ingresses/`、`wasmplugins/` 三个 git 管理目录复制进
 命名卷（`docker-compose-dev.yml` 中定义，busybox 镜像，跑完即退出）。因此：
 
-- 每次 `up`（`sh deploy/dev.sh` / `.\deploy\dev.ps1`）都会自动刷新这三个目录，
-  无需任何手动 cp；
-- 修改本目录 yaml 后的显式同步：
+- `up` 只在卷为空/`down` 后重跑 init 灌入（compose 不会重跑已完成的容器）；
+- 修改本目录 yaml 后的显式同步（停网关 → 重灌 → 修毒配置 → 起网关）：
 
 ```bash
 sh deploy/dev.sh sync       # 或 .\deploy\dev.ps1 -Command sync
-# 强制重跑 higress-init + 重启网关
+# 强制重跑 higress-init 灌入，并删除 higress-config 里自动再生的
+# inclusionRegexps: [.*]（见 2.3 坑表），然后重启网关
 ```
 
 > init 每次都会覆盖这三个目录。**约定：配置一律改本目录 yaml 再 sync，控制台只用来
@@ -76,7 +77,8 @@ sh deploy/dev.sh sync       # 或 .\deploy\dev.ps1 -Command sync
 |---|---|---|
 | 控制台「服务来源」显示 `higress-console` 而非 `devops-nacos` | 卷里是 all-in-one 首次启动生成的默认 McpBridge，git 配置没灌入 | 执行 `sync`；确认 `/data/mcpbridges/default.yaml` 里是 `devops-nacos` |
 | 路由 404 / Ingress 不生效 | 同上，`/data/ingresses/` 为空 | 同上 |
-| Docker 引擎 500 / CPU 异常高 | ① Windows bind mount（已改命名卷）；② all-in-one 内置 prometheus/loki/promtail/grafana 与外部栈重复运行；③ `higress-config` 里 `proxyStatsMatcher.inclusionRegexps: [.*]` 导致 Envoy 全量高基数指标 | 用命名卷；禁用内置可观测组件（见「七、可观测性」）；删除该 inclusionRegexps 配置 |
+| Docker 引擎 500 / CPU 异常高 | ① Windows bind mount（已改命名卷）；② all-in-one 内置 prometheus/loki/promtail/grafana 与外部栈重复运行；③ `higress-config` 里 `proxyStatsMatcher.inclusionRegexps: [.*]` 导致 Envoy 全量高基数指标 | 用命名卷；禁用内置可观测组件（见「七、可观测性」）；`sync` 已内含该修复（见下行） |
+| envoy 启动 ~1 分钟后消失，8080 TCP 通但空回复（8001 正常） | `higress-config` 的 `inclusionRegexps: [.*]`（**新卷每次首启都会自动重新生成**，且文件为 CRLF 行尾）→ envoy 统计表爆内存，被 cgroup OOM 杀；supervisord 视其 exit 0 为 expected 不自动拉起 | `sh deploy/dev.sh sync`（停机删配置再启动）；dev compose 内存上限已提 2g 兜底 |
 | all-in-one 内部各进程批量 exited | 容器停止/重启的 supervisor shutdown 序列，日志形如 `exited: prometheus (exit status 0; expected)` | 先看 `docker compose ps` 确认容器是否在重启循环 |
 
 ---
@@ -209,7 +211,8 @@ envoy 中的 route name 是 `devops-system`（而非 K8s 模式下的
 **控制台「插件配置」页不显示手写 yaml 为"生效"属正常现象**：该页面只识别带
 `higress.io/resource-definer: higress`、`higress.io/wasm-plugin-built-in: "true"`、
 `higress.io/wasm-plugin-name` 等 label 的资源（即从控制台创建/导出的，如
-geo-ip-1.0.0.yaml）；手写的 cors.yaml 无这些 label，控制台不归类展示，但 envoy
+geo-ip-1.0.0.yaml / cors-1.0.0.yaml，均为控制台导出格式含 label）；手写的
+cluster-key-rate-limit.yaml 无这些 label，控制台不归类展示，但 envoy
 中照常加载执行。以 `config_dump` 为准：
 `docker compose -f deploy/docker-compose-dev.yml exec higress sh -c 'curl -s localhost:15000/config_dump' | grep higress-system.cors`。
 
@@ -277,9 +280,12 @@ matchRules:
 
 ### 6.3 GeoIP（geo-ip-1.0.0.yaml）
 
-AUTHN 阶段解析客户端 IP 地理位置，注入 `X-Higress-Geo-*` 类 Header 供后续插件
-和后端使用。当前 `ip_source_type: header` + `ip_header_name: X-Real-Ip`，即信任
-前置代理传入的真实 IP；若网关直接暴露公网，改为 `remote-addr` 防伪造。
+AUTHN 阶段解析客户端 IP 归属地，URL 转义后注入 `X-Higress-Geo-Country/-Province/
+-City/-Isp` 请求头；内网 IP 时值为「内网IP」。消费方是 devops-system 登录审计：
+`router/operations.go` 的 `withClientMeta` 中间件反转义这四个头 + gin ClientIP，
+随登录写入 `t_system_login_log`（geo 字段），IP 本身另有 X-Forwarded-For 链，
+不依赖本插件。取源 `ip_source_type: origin-source`（下行连接真实来源，客户端
+直连 8080 无前置 LB）；若前置再加一层代理，改 `header` + 对应头并确保该层写入。
 
 ### 6.4 JWT 认证（生产必配，尚未落地）
 

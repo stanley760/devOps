@@ -90,6 +90,7 @@ func autoMigrate(gdb *gorm.DB, schemaMode bool) error {
 		&model.Post{},
 		&model.UserRole{},
 		&model.RoleMenu{},
+		&model.LoginLog{},
 	)
 }
 
