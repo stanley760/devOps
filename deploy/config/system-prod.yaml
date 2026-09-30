@@ -36,7 +36,7 @@ jwt:
 idclient:
   endpoint: "nacos:///devops-id"
 
-# 生产观测口径：采样 0.1 起步（问题排查临时调高）；/metrics 仅内网抓取，不经网关。
+# 生产观测口径：采样 0.1 起步（问题排查临时调高）；/metrics 仅内网抓取，不经 Higress。
 # otlp_endpoint 留空 = 本地 span 不上报；接入 Jaeger/Tempo/otel-collector 后填写其 OTLP HTTP 地址。
 observability:
   otlp_endpoint: ""
@@ -48,7 +48,7 @@ apidoc:
   base_path: /apidoc
 
 server:
-  # APISIX/Docker 默认网段；K8s 部署时按实际 Pod/Service 网段调整
+  # Higress/Docker 默认网段；K8s 部署时按实际 Pod/Service 网段调整
   trusted_proxies:
     - "172.16.0.0/12"
     - "192.168.0.0/16"

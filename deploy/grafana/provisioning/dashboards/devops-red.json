@@ -501,7 +501,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "网关边缘：QPS×状态类",
-      "description": "APISIX prometheus 插件计数 apisix_http_status（毫秒级含网关自身处理），按状态类 1xx–5xx 聚合（label_replace 从 code 标签提取首数字）。网关自产的 4xx/5xx（无路由、upstream 挂）后端永远看不到，只有这层可见",
+      "description": "Envoy HTTP connection manager 计数 envoy_http_downstream_rq，按 response_code_class（1xx–5xx）聚合；http_conn_manager_prefix=~outbound.* 只取 8080/8443 对外监听器（排除 admin/agent/stats 内部端点）。网关自产的 4xx/5xx（无路由、upstream 挂）后端永远看不到，只有这层可见",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -525,8 +525,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status_class) (label_replace(rate(apisix_http_status{job=\"apisix-gateway\"}[5m]), \"status_class\", \"${1}xx\", \"code\", \"([1-5]).*\"))",
-          "legendFormat": "{{status_class}}"
+          "expr": "sum by (response_code_class) (rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m]))",
+          "legendFormat": "{{response_code_class}}"
         }
       ],
       "options": {
@@ -543,7 +543,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "网关边缘：4xx/5xx 比例",
-      "description": "边缘错误占比（apisix_http_status 4xx+5xx / 全部），含网关自产错误；无错误时 or vector(0) 补零显示 0",
+      "description": "边缘错误占比（envoy_http_downstream_rq 4xx+5xx / 全部），含网关自产错误；无错误时 or vector(0) 补零显示 0",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -586,7 +586,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum(rate(apisix_http_status{job=\"apisix-gateway\", code=~\"4..|5..\"}[5m])) or vector(0)) / (sum(rate(apisix_http_status{job=\"apisix-gateway\"}[5m])) or vector(0))",
+          "expr": "(sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\", response_code_class=~\"4xx|5xx\"}[5m])) or vector(0)) / (sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m])) or vector(0))",
           "legendFormat": "边缘错误比例"
         }
       ],
@@ -603,8 +603,8 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "网关边缘：P99 延迟（按路由）",
-      "description": "apisix_http_latency_bucket（毫秒直方图，/1000 转秒）P99，route 标签为路由名（devops-system / devops-system-gray-route），可区分灰度专用域名的流量；同一路由内主/灰度实例不拆分（APISIX 指标无 upstream 节点维度），灰度占比看 traffic-split 权重",
+      "title": "网关边缘：P99 延迟（按目标）",
+      "description": "envoy_cluster_upstream_rq_time_bucket（毫秒直方图，/1000 转秒）P99，cluster_name 为 Envoy upstream 全名（outbound|端口||服务名.分组.命名空间.nacos），可区分灰度实例。业务流量经网关后才会出现对应 cluster 序列",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -628,8 +628,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le, route) (rate(apisix_http_latency_bucket{job=\"apisix-gateway\"}[5m]))) / 1000",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.99, sum by (le, cluster_name) (rate(envoy_cluster_upstream_rq_time_bucket{job=\"higress-gateway\", cluster_name=~\"outbound.*\"}[5m]))) / 1000",
+          "legendFormat": "{{cluster_name}}"
         }
       ],
       "options": {

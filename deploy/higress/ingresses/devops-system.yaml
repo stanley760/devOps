@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-system
+  namespace: higress-system
+  annotations:
+    higress.io/destination: devops-system.DEVOPS-GROUP.public.nacos:9999
+  creationTimestamp: "2026-09-28T09:06:38Z"
+  labels:
+    higress.io/domain_higress-default-domain: "true"
+    higress.io/resource-definer: higress
+  managedFields:
+  - apiVersion: networking.k8s.io/v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .: {}
+          f:higress.io/destination: {}
+          f:higress.io/ignore-path-case: {}
+          f:higress.io/match-method: {}
+        f:labels:
+          .: {}
+          f:higress.io/domain_higress-default-domain: {}
+          f:higress.io/resource-definer: {}
+      f:spec:
+        f:ingressClassName: {}
+        f:rules: {}
+    manager: Kubernetes Java Client
+    operation: Update
+    time: "2026-09-28T09:06:38Z"
+  name: devops-system
+  namespace: higress-system
+  resourceVersion: "1"
+spec:
+  ingressClassName: higress
+  rules:
+    - host: api.devops.local
+      http:
+        paths:
+          # 只路由业务 API 与 JWKS（Higress jwt-auth 插件拉取验签公钥）。
+          # 运维端点（/metrics /apidoc /healthz /readyz）仅内网访问，禁止经公网网关暴露。
+          - path: /api
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

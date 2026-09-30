@@ -32,7 +32,7 @@ type Config struct {
 //
 // access token 已从 HS256 升级为 RS256 + kid（存量 HS256 token 升级时整体失效，
 // refresh 会话不受影响）。signing_key 语义随之变更为 RSA 私钥 PEM（PKCS#1/PKCS#8），
-// 由配置/密钥管理持有；公钥经 JWKS 暴露给各调用方与服务验签。
+// 由配置/密钥管理持有；公钥经 JWKS 暴露给 Higress 与各服务验签。
 type JWTConfig struct {
 	SigningKey    string        `mapstructure:"signing_key"`    // RS256 私钥 PEM
 	KeyID         string        `mapstructure:"key_id"`         // kid 头（轮换标识），缺省 DefaultJWTKeyID

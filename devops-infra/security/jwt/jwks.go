@@ -9,7 +9,7 @@ import (
 )
 
 // JWKSDocument 生成 RFC 7517 JWKS 文档（{"keys":[...]}），
-// 供需要验签的调用方与各服务拉取公钥做 RS256 验签。
+// 供 Higress jwt-auth 插件（jwks 或 jwksFromUrl）与各服务做 RS256 验签。
 // 仅输出公钥材料（n/e），不暴露私钥。
 func JWKSDocument(pub *rsa.PublicKey, keyID string) (map[string]any, error) {
 	if pub == nil || pub.N == nil || pub.E <= 0 {

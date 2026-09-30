@@ -10,7 +10,7 @@ import (
 )
 
 // Middleware 返回 gin 入口 trace 埋点：
-// 提取上游（网关/前端）W3C traceparent → 建 server span → 结束记录路由属性。
+// 提取上游（Higress/前端）W3C traceparent → 建 server span → 结束记录路由属性。
 // 挂载在业务中间件链最前，JWT/Tenant/Perm 与 handler 的耗时都落在同一 server span 内。
 func Middleware(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
 	return otelgin.Middleware(serviceName, opts...)

@@ -35,7 +35,7 @@ func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manag
 	tenantH := apiv1.NewTenantHandler(tenantSvc)
 
 	return func(r *gin.Engine) {
-		// 验签公钥（RFC 7517 JWKS）：调用方/服务拉取自验签（网关不做重复验签）
+		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
 		r.GET("/.well-known/jwks.json", jwksHandler(authM))
 
 		// huma API 恒装配（D5）：Enabled 只门控文档端点，路由注册不受影响。

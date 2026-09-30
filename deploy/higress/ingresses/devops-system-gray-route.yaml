@@ -1,0 +1,30 @@
+# 灰度实例专用路由：gray.devops.local 100% 直达 devops-system-gray，
+# 用于灰度版本的定向验证（不走 canary 权重随机）。
+# 与主路由同口径：仅业务 API 与 JWKS，运维端点不经公网网关暴露。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-system-gray-route
+  namespace: higress-system
+  annotations:
+    higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
+spec:
+  ingressClassName: higress
+  rules:
+    - host: gray.devops.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

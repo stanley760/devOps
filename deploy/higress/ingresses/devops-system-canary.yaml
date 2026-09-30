@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-system-canary
+  namespace: higress-system
+  annotations:
+    higress.io/canary: "true"
+    higress.io/canary-weight: "10"
+    higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
+spec:
+  ingressClassName: higress
+  rules:
+    - host: api.devops.local
+      http:
+        paths:
+          # 与 devops-system.yaml 同口径：仅业务 API 与 JWKS，运维端点不经公网网关暴露。
+          - path: /api
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

@@ -67,7 +67,7 @@ func TestRouterDoesNotHandleCORS(t *testing.T) {
 	}
 	for header := range recorder.Header() {
 		if strings.HasPrefix(header, "Access-Control-") {
-			t.Fatalf("CORS header %q should be handled by the gateway", header)
+			t.Fatalf("CORS header %q should be handled by Higress", header)
 		}
 	}
 }
