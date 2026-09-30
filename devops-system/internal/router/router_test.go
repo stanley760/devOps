@@ -77,7 +77,8 @@ func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
 	svcCfg := config.Config{}
 	reg := Register(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, newTestKit(m), m,
 		service.NewAuth(svcCfg, m), service.NewUser(m, func(){}), service.NewRole(func(){}),
-		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, m))
+		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, m),
+		service.NewLoginLog())
 	r := gin.New()
 	reg(r)
 	return m, pub, r
@@ -191,7 +192,8 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 	r := gin.New()
 	Register(config.APIDocConfig{}, newTestKit(authMgr), authMgr,
 		service.NewAuth(svcCfg, authMgr), service.NewUser(authMgr, func(){}), service.NewRole(func(){}),
-		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, authMgr))(r)
+		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, authMgr),
+		service.NewLoginLog())(r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))

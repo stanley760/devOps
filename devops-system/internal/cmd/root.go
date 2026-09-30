@@ -255,6 +255,7 @@ var serverCmd = &cobra.Command{
 		deptSvc := service.NewDept()
 		postSvc := service.NewPost()
 		tenantSvc := service.NewTenant(cfg, authM)
+		loginLogSvc := service.NewLoginLog()
 
 		serviceName := cfg.Nacos.Registry.ServiceName
 		if serviceName == "" {
@@ -270,7 +271,7 @@ var serverCmd = &cobra.Command{
 			{Name: "devops-id", Check: idc.Ping},
 		}
 		err = httpinfra.RunWithOptions(cfg.Server, router.Register(cfg.APIDoc, kit, authM, authSvc,
-			userSvc, roleSvc, menuSvc, deptSvc, postSvc, tenantSvc), obsRuntime, readiness...)
+			userSvc, roleSvc, menuSvc, deptSvc, postSvc, tenantSvc, loginLogSvc), obsRuntime, readiness...)
 
 		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
 		_ = nacos.Deregister(serviceName, cfg.Server.Port)

@@ -227,6 +227,42 @@ func registerUsers(api huma.API, h *apiv1.UserHandler, kit *middleware.Kit) {
 	}), h.Delete)
 }
 
+// registerLoginLogs 登录审计模块 3 接口（查询侧；写入侧随登录 defer 落库）。
+// 删除/清空为留存量管控入口，独立权限；行按租户隔离（TenantPlugin 注入 tenant_id）。
+func registerLoginLogs(api huma.API, h *apiv1.LoginLogHandler, kit *middleware.Kit) {
+	common := huma.Operation{
+		Tags:      []string{"login-logs"},
+		Responses: humaerr.CommonErrResponses(),
+	}
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "loginlog-list",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/login-logs",
+		Summary:     "登录日志列表",
+		Description: "登录审计分页查询（成功与失败尝试各一行），支持用户名/IP/结果/时间范围筛选。",
+		Middlewares: kit.Biz("system:loginlog:list"),
+	}), h.List)
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "loginlog-delete",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/login-logs",
+		Summary:     "删除登录日志",
+		Description: "按 ID 批量物理删除（ids 逗号分隔，如 ?ids=12,34,56）。",
+		Middlewares: kit.Biz("system:loginlog:delete"),
+	}), h.Delete)
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "loginlog-clean",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/login-logs/clean",
+		Summary:     "清空登录日志",
+		Description: "清空本租户全部登录审计行（留存量管控，独立权限门控）。",
+		Middlewares: kit.Biz("system:loginlog:clean"),
+	}), h.Clean)
+}
+
 // registerTenants tenants 模块 6 接口（P5，平台路由 kit.plat）。
 func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) {
 	common := huma.Operation{
