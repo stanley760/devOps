@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	goredis "github.com/redis/go-redis/v9"
 
+	httpinfra "devops-infra/http"
 	securityjwt "devops-infra/security/jwt"
 	securitysession "devops-infra/security/session"
 
@@ -33,6 +35,20 @@ import (
 // newTestKit 构造测试中间件套件（无 DB/缓存环境；测试路径只到 JWT 层）。
 func newTestKit(m *auth.Manager) *middleware.Kit {
 	return middleware.NewKit(m, middleware.Deps{})
+}
+
+func newTestRegister(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manager, svcCfg config.Config) httpinfra.Register {
+	modules := Modules{
+		Auth:      NewAuthRoutes(service.NewAuth(svcCfg, authM), kit),
+		Users:     NewUserRoutes(service.NewUser(authM, func() {}), kit),
+		Roles:     NewRoleRoutes(service.NewRole(func() {}), kit),
+		Menus:     NewMenuRoutes(service.NewMenu(), kit),
+		Depts:     NewDeptRoutes(service.NewDept(), kit),
+		Posts:     NewPostRoutes(service.NewPost(), kit),
+		Tenants:   NewTenantRoutes(service.NewTenant(svcCfg, authM), kit),
+		LoginLogs: NewLoginLogRoutes(service.NewLoginLog(), kit),
+	}
+	return NewRegister(docCfg, authM, modules)
 }
 
 // jwksEnv 构建真实共享安全装配（RS256 + miniredis 会话）与业务路由。
@@ -75,10 +91,7 @@ func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
 	m := auth.New(cfg, tokens, securitysession.NewRedisClientStore(client, cfg.RefreshExpire))
 
 	svcCfg := config.Config{}
-	reg := Register(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, newTestKit(m), m,
-		service.NewAuth(svcCfg, m), service.NewUser(m, func(){}), service.NewRole(func(){}),
-		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, m),
-		service.NewLoginLog())
+	reg := newTestRegister(config.APIDocConfig{Enabled: true, BasePath: "/apidoc"}, newTestKit(m), m, svcCfg)
 	r := gin.New()
 	reg(r)
 	return m, pub, r
@@ -96,6 +109,7 @@ func TestRegisterAPIDoc(t *testing.T) {
 	var doc struct {
 		Paths map[string]map[string]struct {
 			OperationID string             `json:"operationId"`
+			Tags        []string           `json:"tags"`
 			Security    []map[string][]any `json:"security"`
 		} `json:"paths"`
 		Components struct {
@@ -114,6 +128,19 @@ func TestRegisterAPIDoc(t *testing.T) {
 	}
 	if _, ok := doc.Paths["/api/v1/auth/refresh"]; !ok {
 		t.Fatalf("refresh operation missing: %+v", doc.Paths)
+	}
+	// 业务接口计数：apidoc 文档启用时自注册 export-openapi（tag "apidoc"），须排除
+	operationCount := 0
+	for _, path := range doc.Paths {
+		for _, op := range path {
+			if slices.Contains(op.Tags, "apidoc") {
+				continue
+			}
+			operationCount++
+		}
+	}
+	if operationCount != 43 {
+		t.Fatalf("business operation count = %d, want 43", operationCount)
 	}
 	bearer, ok := doc.Components.SecuritySchemes["bearerAuth"]
 	if !ok || bearer.Type != "http" {
@@ -190,10 +217,7 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 	svcCfg := config.Config{}
 
 	r := gin.New()
-	Register(config.APIDocConfig{}, newTestKit(authMgr), authMgr,
-		service.NewAuth(svcCfg, authMgr), service.NewUser(authMgr, func(){}), service.NewRole(func(){}),
-		service.NewMenu(), service.NewDept(), service.NewPost(), service.NewTenant(svcCfg, authMgr),
-		service.NewLoginLog())(r)
+	newTestRegister(config.APIDocConfig{}, newTestKit(authMgr), authMgr, svcCfg)(r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/apidoc/openapi.json", nil))

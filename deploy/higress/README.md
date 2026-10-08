@@ -289,7 +289,7 @@ AUTHN 阶段解析客户端 IP 归属地，URL 转义后注入 `X-Higress-Geo-Co
 
 审计读取侧为管理端 `/api/v1/login-logs`（分页查询/删除/清空，权限
 `system:loginlog:list|delete|clean`，菜单种子见
-`internal/migration/sql/global/0002_seed_loginlog_menu.sql`）；落库前 dao 层按
+`internal/migration/sql/global/0003_seed_loginlog_menu.sql`）；落库前 dao 层按
 列宽截断 UA/Geo 头，超长头不会丢审计行。
 
 ### 6.4 JWT 认证（生产必配，尚未落地）

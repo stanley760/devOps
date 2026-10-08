@@ -13,28 +13,13 @@ import (
 	httpinfra "devops-infra/http"
 	"devops-infra/http/apidoc"
 
-	apiv1 "devops-system/internal/api/v1"
 	"devops-system/internal/auth"
 	"devops-system/internal/config"
-	"devops-system/internal/middleware"
-	"devops-system/internal/service"
 )
 
-// Register 返回业务路由注册回调，交给 httpinfra.Run 组装。
-// kit 为业务中间件套件（cmd/root.go 装配：Deps 注入 DB/缓存/鉴权器后经 NewKit 构造）。
-func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manager, authSvc *service.Auth,
-	userSvc *service.User, roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept,
-	postSvc *service.Post, tenantSvc *service.Tenant, loginLogSvc *service.LoginLog,
-) httpinfra.Register {
-	authH := apiv1.NewAuthHandler(authSvc)
-	userH := apiv1.NewUserHandler(userSvc)
-	roleH := apiv1.NewRoleHandler(roleSvc)
-	menuH := apiv1.NewMenuHandler(menuSvc)
-	deptH := apiv1.NewDeptHandler(deptSvc)
-	postH := apiv1.NewPostHandler(postSvc)
-	tenantH := apiv1.NewTenantHandler(tenantSvc)
-	loginLogH := apiv1.NewLoginLogHandler(loginLogSvc)
-
+// NewRegister 组合应用层提供的业务模块路由，返回交给 httpinfra.Run 的注册回调。
+// 模块及其依赖由 internal/app 装配；infra 不依赖任何业务类型。
+func NewRegister(docCfg config.APIDocConfig, authM *auth.Manager, modules Modules) httpinfra.Register {
 	return func(r *gin.Engine) {
 		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
 		r.GET("/.well-known/jwks.json", jwksHandler(authM))
@@ -50,16 +35,15 @@ func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manag
 			Enabled:      docCfg.Enabled,
 		})
 
-		// 全量业务注册（43 接口，auth 7 + users 6 + roles 6 + menus 5 + depts 5 + posts 5
-		// + tenants 6 + login-logs 3）。
-		registerAuth(humaAPI, authH, kit)
-		registerUsers(humaAPI, userH, kit)
-		registerRoles(humaAPI, roleH, kit)
-		registerMenus(humaAPI, menuH, kit)
-		registerDepts(humaAPI, deptH, kit)
-		registerPosts(humaAPI, postH, kit)
-		registerTenants(humaAPI, tenantH, kit)
-		registerLoginLogs(humaAPI, loginLogH, kit)
+		// 各业务模块拥有自己的 Handler、Service 和中间件依赖。
+		modules.Auth(humaAPI)
+		modules.Users(humaAPI)
+		modules.Roles(humaAPI)
+		modules.Menus(humaAPI)
+		modules.Depts(humaAPI)
+		modules.Posts(humaAPI)
+		modules.Tenants(humaAPI)
+		modules.LoginLogs(humaAPI)
 	}
 }
 

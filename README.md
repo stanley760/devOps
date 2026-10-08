@@ -232,18 +232,25 @@ Base64 形式的 32 字节随机值通常是 44 个字符，长度满足当前 H
 
 ## 架构要点
 
-- **分层**：`cmd → router → api → service → dao → model`；基础设施（db/authz/store/logger）包级 `Init/Close` 单例，业务层构造注入
+- **分层与装配**：`cmd` 管理启动顺序和资源生命周期，`internal/app` 用 Wire 编译期装配业务对象图，`router` 显式组合业务模块路由；请求链为 `router → api → service → dao → model`。`devops-infra` 只提供通用基础设施，不依赖业务模块
+- **新增业务模块**：提供模块自己的 Service/Handler/路由注册器，在 `router.Modules` 与 `internal/app/providers.go` 中显式加入；重新生成并提交 `internal/app/wire_gen.go`。不向公共 `Register` 追加业务 Service 参数
+- **Wire 生成**：在 `devops-system` 目录执行 `go generate -tags=wireinject ./internal/app`。生成文件提交入库，常规 build/test 不需要安装或运行 Wire 生成器
 - **租户隔离 fail-closed**：纯模型查询由 GORM `TenantPlugin` 自动注入 `tenant_id`；原生 JOIN 由 dao 显式过滤（插件注入裸列会歧义）；模式B 主库不建租户表，误路由表现为「表不存在」
 - **软删除改名**：删除用户/角色等唯一字段实体时改名（`admin` → `admin_del_1694...`），允许同名重建
 - **ID 空间隔离**：Snowflake worker 按 `leaf_name + biz_tag` 独立分配；同 `biz_tag` 唯一且趋势递增，不同 `biz_tag` 允许重号。DTO 层 ID 字符串化，避免 JavaScript 精度丢失
 - **事务边界**：DB 事务只管业务表（user_role/role_menu），casbin 策略在事务外同步更新（gorm-adapter 自持事务）；失败补偿 + 重试由调用方语义保证
-- **优雅退出**：system 先停 HTTP 排空在途请求，再关 resolver → authz → idclient → store → db；snowflake 退出 revoke 所有已分配 tag 的 lease 并释放槽位
+- **优雅退出**：HTTP 停止并排空在途请求后，按初始化逆序注销 Nacos、关闭 idclient/Redis/authz/resolver/MySQL；启动中途失败也执行已完成资源的清理，并汇总清理错误。snowflake 退出 revoke 所有已分配 tag 的 lease 并释放槽位
 
 ## 测试 / Testing
 
 ```bash
 go work sync
 go test ./devops-infra/... ./devops-id/... ./devops-system/...
+
+# 验证 Wire injector 与已提交的生成代码保持一致
+cd devops-system
+go generate -tags=wireinject ./internal/app
+git diff --exit-code -- internal/app/wire_gen.go
 ```
 
 覆盖：infra（日志滚动、panic 恢复、CORS、响应信封）、id 集成测试（需本地 `:9090` 服务在跑，未启动自动 Skip）。

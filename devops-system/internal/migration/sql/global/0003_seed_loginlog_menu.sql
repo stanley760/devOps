@@ -1,6 +1,7 @@
--- 0002 登录日志菜单（t_system_menu 母本增量）：菜单 8 + 按钮 81/82。
+-- 0003 登录日志菜单（t_system_menu 母本增量）：菜单 8 + 按钮 81/82。
 -- 独立版本文件而非改 0001：0001 已应用库存量有 checksum 记账，改动会被
 -- migration 拒绝启动（防篡改）；增量走新版本号。
+-- 曾误用 0002 与 seed_tenant 撞号（load 阶段 fail-closed，从未执行过），改 0003。
 -- ID 段沿用母本约定：目录/菜单 1-7，按钮 = 父菜单 ID*10+序号（81/82）。
 -- 模式B 下新菜单经 tenantdb 菜单母本 fan-out 同步到各租户库。
 INSERT INTO t_system_menu

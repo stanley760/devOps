@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"crypto/rsa"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -24,14 +25,13 @@ import (
 
 	"devops-id/pkg/idclient"
 	client "devops-infra/database/mysql"
+	"devops-system/internal/app"
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
 	"devops-system/internal/db"
 	"devops-system/internal/middleware"
 	"devops-system/internal/model"
-	"devops-system/internal/router"
-	"devops-system/internal/service"
 	"devops-system/internal/store"
 	"devops-system/internal/tenantdb"
 )
@@ -164,7 +164,23 @@ func Execute(version string) {
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "启动 HTTP 服务",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (runErr error) {
+		type cleanup struct {
+			name string
+			run  func() error
+		}
+		var cleanups []cleanup
+		addCleanup := func(name string, run func() error) {
+			cleanups = append(cleanups, cleanup{name: name, run: run})
+		}
+		defer func() {
+			for i := len(cleanups) - 1; i >= 0; i-- {
+				if err := cleanups[i].run(); err != nil {
+					runErr = errors.Join(runErr, fmt.Errorf("清理 %s 失败: %w", cleanups[i].name, err))
+				}
+			}
+		}()
+
 		var cfg config.Config
 		if err := infracfg.LoadInto(&cfg); err != nil {
 			return err
@@ -176,6 +192,7 @@ var serverCmd = &cobra.Command{
 		if err := client.Init(cfg.Mysql); err != nil {
 			return err
 		}
+		addCleanup("mysql", client.Close)
 		if err := obsRuntime.InstrumentGORM(client.Get(), cfg.Mysql.Database); err != nil {
 			return err
 		}
@@ -187,6 +204,10 @@ var serverCmd = &cobra.Command{
 			if err := tenantdb.InitResolver(cfg.Mysql, cfg.Tenant); err != nil {
 				return err
 			}
+			addCleanup("租户数据库 resolver", func() error {
+				tenantdb.CloseResolver()
+				return nil
+			})
 		}
 
 		// 启动期迁移（混合方案，详见 internal/migration 包文档）：
@@ -204,12 +225,17 @@ var serverCmd = &cobra.Command{
 		if err := authz.Init(client.Get()); err != nil {
 			return err
 		}
+		addCleanup("authz", func() error {
+			authz.Close()
+			return nil
+		})
 		if err := authz.SeedPolicies(1, 1); err != nil { // 幂等（AddPolicyIfAbsent）
 			return fmt.Errorf("casbin 策略种子失败: %w", err)
 		}
 		if err := store.Init(cfg.Redis); err != nil {
 			return err
 		}
+		addCleanup("redis", store.Close)
 		if err := obsRuntime.InstrumentRedis(store.Get()); err != nil {
 			return err
 		}
@@ -235,6 +261,7 @@ var serverCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		addCleanup("devops-id 连接", func() error { return grpcinfra.Close(conn) })
 		idc := idclient.New(conn, idclient.BufferConfig{
 			Batch:       cfg.IDClient.Batch,
 			LowWater:    cfg.IDClient.LowWater,
@@ -248,15 +275,6 @@ var serverCmd = &cobra.Command{
 			Cache: store.Cache(),
 		})
 
-		authSvc := service.NewAuth(cfg, authM)
-		userSvc := service.NewUser(authM, kit.InvalidateDataScope)
-		roleSvc := service.NewRole(kit.InvalidateDataScope)
-		menuSvc := service.NewMenu()
-		deptSvc := service.NewDept()
-		postSvc := service.NewPost()
-		tenantSvc := service.NewTenant(cfg, authM)
-		loginLogSvc := service.NewLoginLog()
-
 		serviceName := cfg.Nacos.Registry.ServiceName
 		if serviceName == "" {
 			return fmt.Errorf("nacos.registry.service_name 未配置")
@@ -264,22 +282,16 @@ var serverCmd = &cobra.Command{
 		if err := nacos.Register(serviceName, cfg.Server.Port, cfg.Nacos.Registry.Meta); err != nil {
 			return err
 		}
+		addCleanup("nacos 服务注册", func() error {
+			return nacos.Deregister(serviceName, cfg.Server.Port)
+		})
 
 		readiness := []httpinfra.ReadinessCheck{
 			{Name: "mysql", Check: client.Default().Ping},
 			{Name: "redis", Check: store.Ping},
 			{Name: "devops-id", Check: idc.Ping},
 		}
-		err = httpinfra.RunWithOptions(cfg.Server, router.Register(cfg.APIDoc, kit, authM, authSvc,
-			userSvc, roleSvc, menuSvc, deptSvc, postSvc, tenantSvc, loginLogSvc), obsRuntime, readiness...)
-
-		// 优雅退出顺序：先停 HTTP 排空（在途 Create 已取号），再关 resolver、authz、idclient、store、db
-		_ = nacos.Deregister(serviceName, cfg.Server.Port)
-		tenantdb.CloseResolver()
-		authz.Close()
-		_ = grpcinfra.Close(conn)
-		_ = store.Close()
-		_ = client.Close()
-		return err
+		register := app.InitializeHTTP(cfg, kit, authM)
+		return httpinfra.RunWithOptions(cfg.Server, register, obsRuntime, readiness...)
 	},
 }

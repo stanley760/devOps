@@ -7,7 +7,7 @@ grpc:
 nacos:
   enabled: true
   endpoints:
-    - "192.168.148.4:8848"
+    - "127.0.0.1:8848"
   namespace: ""
   group: "DEVOPS_GROUP"
   username: "nacos"
