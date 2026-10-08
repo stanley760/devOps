@@ -287,6 +287,11 @@ AUTHN 阶段解析客户端 IP 归属地，URL 转义后注入 `X-Higress-Geo-Co
 不依赖本插件。取源 `ip_source_type: origin-source`（下行连接真实来源，客户端
 直连 8080 无前置 LB）；若前置再加一层代理，改 `header` + 对应头并确保该层写入。
 
+审计读取侧为管理端 `/api/v1/login-logs`（分页查询/删除/清空，权限
+`system:loginlog:list|delete|clean`，菜单种子见
+`internal/migration/sql/global/0002_seed_loginlog_menu.sql`）；落库前 dao 层按
+列宽截断 UA/Geo 头，超长头不会丢审计行。
+
 ### 6.4 JWT 认证（生产必配，尚未落地）
 
 生产环境应为 `api.devops.local` 配置 `jwt-auth` 插件，在网关完成第一道校验：

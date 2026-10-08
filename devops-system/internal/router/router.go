@@ -24,7 +24,7 @@ import (
 // kit 为业务中间件套件（cmd/root.go 装配：Deps 注入 DB/缓存/鉴权器后经 NewKit 构造）。
 func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manager, authSvc *service.Auth,
 	userSvc *service.User, roleSvc *service.Role, menuSvc *service.Menu, deptSvc *service.Dept,
-	postSvc *service.Post, tenantSvc *service.Tenant,
+	postSvc *service.Post, tenantSvc *service.Tenant, loginLogSvc *service.LoginLog,
 ) httpinfra.Register {
 	authH := apiv1.NewAuthHandler(authSvc)
 	userH := apiv1.NewUserHandler(userSvc)
@@ -33,6 +33,7 @@ func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manag
 	deptH := apiv1.NewDeptHandler(deptSvc)
 	postH := apiv1.NewPostHandler(postSvc)
 	tenantH := apiv1.NewTenantHandler(tenantSvc)
+	loginLogH := apiv1.NewLoginLogHandler(loginLogSvc)
 
 	return func(r *gin.Engine) {
 		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
@@ -49,7 +50,8 @@ func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manag
 			Enabled:      docCfg.Enabled,
 		})
 
-		// 全量业务注册（40 接口，auth 7 + users 6 + roles 6 + menus 5 + depts 5 + posts 5 + tenants 6）。
+		// 全量业务注册（43 接口，auth 7 + users 6 + roles 6 + menus 5 + depts 5 + posts 5
+		// + tenants 6 + login-logs 3）。
 		registerAuth(humaAPI, authH, kit)
 		registerUsers(humaAPI, userH, kit)
 		registerRoles(humaAPI, roleH, kit)
@@ -57,6 +59,7 @@ func Register(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manag
 		registerDepts(humaAPI, deptH, kit)
 		registerPosts(humaAPI, postH, kit)
 		registerTenants(humaAPI, tenantH, kit)
+		registerLoginLogs(humaAPI, loginLogH, kit)
 	}
 }
 
