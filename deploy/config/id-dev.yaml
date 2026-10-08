@@ -30,4 +30,4 @@ observability:
   otlp_endpoint: "http://jaeger:4318"
   sampler_ratio: 1.0
   metrics_enabled: true
-  metrics_listen: ":9091"
+  metrics_listen: ":9991"

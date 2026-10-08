@@ -14,9 +14,9 @@ etcd:                    # snowflake worker 协调（dev compose 映射到宿主
   dial_timeout: 5s
   lease_ttl: 10s         # 宕机后槽位释放延迟
 
-# 本地进程开发：Jaeger 由 dev compose 暴露在宿主机 4318；指标走独立 HTTP 端口 9091。
+# 本地进程开发：Jaeger 由 dev compose 暴露在宿主机 4318；指标走独立 HTTP 端口 9991。
 observability:
   otlp_endpoint: "http://127.0.0.1:4318"
   sampler_ratio: 1.0
   metrics_enabled: true
-  metrics_listen: ":9091"
+  metrics_listen: ":9991"

@@ -97,7 +97,7 @@ func main() {
 	fmt.Println("[5.5] conn state =", conn.GetState())
 
 	// 直连测试(绕过 nacos resolver,排除 TCP 层问题)
-	for _, addr := range []string{"127.0.0.1:9991", "172.16.60.150:9991"} {
+	for _, addr := range []string{"127.0.0.1:9990", "172.16.60.150:9990"} {
 		rawConn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil { fmt.Printf("    直连 %s NewClient err: %v\n", addr, err); continue }
 		pctx, pcancel := context.WithTimeout(context.Background(), 3*time.Second)

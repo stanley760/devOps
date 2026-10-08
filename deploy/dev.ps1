@@ -40,7 +40,7 @@ function Start-LocalServices {
 }
 
 # —— watch：监测本地业务服务（存活+就绪）。存活失败自动重启（退避+熔断），就绪失败仅告警 ——
-# 端点为 dev 配置硬编码：devops-id 存活探针走 metrics :9091（若关闭 metrics 会被误判死亡，
+# 端点为 dev 配置硬编码：devops-id 存活探针走 metrics :9991（若关闭 metrics 会被误判死亡，
 # 由熔断兜底）；devops-system /readyz 内含 mysql/redis/devops-id 三项依赖检查。
 $WatchIntervalSec = 10
 $WatchBackoffSec  = 60
@@ -134,10 +134,10 @@ function Restart-WatchSvc {
 
 function Watch-Services {
     $bodyFile = Join-Path $env:TEMP "devops-watch-readyz.json"
-    $id  = New-WatchSvc -Name "devops-id"     -Dir "devops-id"     -AliveUrl "http://127.0.0.1:9091/metrics"
+    $id  = New-WatchSvc -Name "devops-id"     -Dir "devops-id"     -AliveUrl "http://127.0.0.1:9991/metrics"
     $sys = New-WatchSvc -Name "devops-system" -Dir "devops-system" -AliveUrl "http://127.0.0.1:9999/healthz" -ReadyUrl "http://127.0.0.1:9999/readyz"
 
-    Write-Host "监测 devops-id（存活 :9091/metrics）与 devops-system（存活 :9999/healthz，就绪 :9999/readyz）"
+    Write-Host "监测 devops-id（存活 :9991/metrics）与 devops-system（存活 :9999/healthz，就绪 :9999/readyz）"
     Write-Host "每 ${WatchIntervalSec}s 轮询；存活失败自动重启（退避 ${WatchBackoffSec}s，连续 ${WatchBreakerMax} 次熔断）；就绪失败仅告警。Ctrl-C 退出。"
     Write-Host ''
 

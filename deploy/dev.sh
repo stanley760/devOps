@@ -57,13 +57,13 @@ start_services() {
 }
 
 # —— watch：监测本地业务服务（存活+就绪）。存活失败自动重启（退避+熔断），就绪失败仅告警 ——
-# 端点为 dev 配置硬编码：devops-id 存活探针走 metrics :9091（若关闭 metrics 会被误判死亡，
+# 端点为 dev 配置硬编码：devops-id 存活探针走 metrics :9991（若关闭 metrics 会被误判死亡，
 # 由熔断兜底）；devops-system /readyz 内含 mysql/redis/devops-id 三项依赖检查。
 
 WATCH_INTERVAL=10  # 轮询间隔（秒）
 WATCH_BACKOFF=60   # 单服务重启退避（秒）
 WATCH_BREAKER=5    # 连续重启熔断阈值（次）
-ID_ALIVE_URL="http://127.0.0.1:9091/metrics"
+ID_ALIVE_URL="http://127.0.0.1:9991/metrics"
 SYS_ALIVE_URL="http://127.0.0.1:9999/healthz"
 SYS_READY_URL="http://127.0.0.1:9999/readyz"
 

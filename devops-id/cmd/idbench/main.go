@@ -6,10 +6,10 @@
 // 使用示例（在仓库根目录运行）：
 //
 //	# 4 个 biz_tag、50 并发、batch=100（模拟 idclient 预取形态），跑 30 秒
-//	go run ./devops-id/cmd/idbench -addr 127.0.0.1:9991 -method batch -batch 100 -tags b1,b2,b3,b4 -c 50 -d 30s
+//	go run ./devops-id/cmd/idbench -addr 127.0.0.1:9990 -method batch -batch 100 -tags b1,b2,b3,b4 -c 50 -d 30s
 //
 //	# 单 tag 单发（测单 worker 串行 + gRPC 栈开销上限）
-//	go run ./devops-id/cmd/idbench -addr 127.0.0.1:9991 -method next -tags user -c 100 -d 15s
+//	go run ./devops-id/cmd/idbench -addr 127.0.0.1:9990 -method next -tags user -c 100 -d 15s
 //
 // 语义要点（决定怎么读结果）：
 //   - 同一 biz_tag 在服务端固定映射到同一个 snowflake worker（tagGenerator 互斥锁），
@@ -39,7 +39,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:9991", "devops-id gRPC 地址")
+	addr := flag.String("addr", "127.0.0.1:9990", "devops-id gRPC 地址")
 	method := flag.String("method", "batch", "发号方法：next | batch")
 	batch := flag.Int("batch", 1, "BatchNext 单次取号数量（method=batch 时生效，1..100000）")
 	tags := flag.String("tags", "bench", "biz_tag 列表，逗号分隔；多个 tag 表示压测多个 snowflake worker 并行")

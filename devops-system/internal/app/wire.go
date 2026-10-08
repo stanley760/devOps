@@ -4,9 +4,7 @@ package app
 
 import (
 	"github.com/google/wire"
-
 	httpinfra "devops-infra/http"
-
 	"devops-system/internal/auth"
 	"devops-system/internal/config"
 	"devops-system/internal/middleware"

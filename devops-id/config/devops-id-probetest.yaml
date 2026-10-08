@@ -1,5 +1,5 @@
 grpc:
-  listen: ":19991"
+  listen: ":19990"
 
 nacos:
   enabled: false        # 测试实例不注册

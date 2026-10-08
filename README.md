@@ -62,10 +62,11 @@ cd devops-system && go run . server   # HTTP :8080
 
 ```bash
 # 登录（admin / Admin@123，默认租户 default）
-curl -s -X POST http://localhost:8080/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"Admin@123"}'
-# → {"code":200,"msg":"ok","data":{"access_token":"...","refresh_token":"..."}}
+curl -s -X POST "http://127.0.0.1:8080/api/v1/auth/login" \
+  -H "Host: api.devops.local" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_code":"default","username":"admin","password":"Admin@123"}'
+# → {"code":200,"msg":"ok","data":{"access_token":"...","refresh_token":"...","expires_in":7200,"tenant":{"id":"1","name":"devOps","code":"default"}}}
 
 # 携带 token 查询用户列表
 curl -s http://localhost:8080/api/v1/users?page_no=1&page_size=10 \

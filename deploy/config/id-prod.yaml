@@ -30,4 +30,4 @@ observability:
   otlp_endpoint: ""
   sampler_ratio: 0.1
   metrics_enabled: true
-  metrics_listen: ":9091"
+  metrics_listen: ":9991"
