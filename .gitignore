@@ -18,6 +18,9 @@ coverage.txt
 # 日志
 logs/
 
+# 本地开发脚本运行产物（dev.sh 后台服务 pid/日志、watch 状态文件）
+deploy/.dev-logs/
+
 # 运行时状态（snowflake worker 槽位/发号水位缓存）
 data/
 

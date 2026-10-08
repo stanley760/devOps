@@ -115,7 +115,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 2g   # 4 JVM(console/pilot/apiserver/controller ~450MB 稳态) + envoy(含 wasm 插件)；
+          memory: 4g   # 4 JVM(console/pilot/apiserver/controller ~450MB 稳态) + envoy(含 wasm 插件)；
                        # 启动风暴期瞬时超 1GiB 会触发 cgroup OOM 杀 envoy，且 supervisord 视其
                        # exit 0 为 expected 不重启 —— 2026-09-30 实测 1g 起不来，提到 2g
 
