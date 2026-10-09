@@ -213,11 +213,7 @@ import (
 	"devops-id/pkg/idgorm"
 )
 
-var tableBizTag = map[string]string{
-	"t_order": "order",
-}
-
-var idHook = idgorm.New(nil, tableBizTag)
+var idHook = idgorm.New(nil, nil)
 
 func SetIDGenerator(generator idgorm.Generator) {
 	idHook.SetGenerator(generator)
@@ -234,7 +230,9 @@ func (m *Order) BeforeCreate(tx *gorm.DB) error {
 }
 ```
 
-`idHook.Assign` 会保留非零显式 ID，只对零值主键发号。新业务接入时只需要维护表名到 `biz_tag` 的映射；Snowflake worker 会在首次发号时按 `leaf_name + biz_tag` 自动分配，无需数据库预注册。
+`idHook.Assign` 会保留非零显式 ID，只对零值主键发号。Snowflake worker 会在首次发号时按 `leaf_name + biz_tag` 自动分配，无需数据库预注册。
+
+默认 `biz_tag` 从 GORM 模型的 Go 类型名推导为 `snake_case`（例如 `OrderItem` → `order_item`），新增常规模型无需维护表名映射。若要让多个模型共用一个 ID 空间，或类型名不适合作为业务标识，可实现 `idgorm.BizTagProvider` 显式返回稳定的 tag；建议需跨代码重命名保持 ID 空间不变时使用显式 tag。旧的表名到 tag 映射仍可通过 `idgorm.New(generator, map[string]string{...})` 用于兼容已有 tag 或特殊情况。
 
 ## grpcurl 快速验证
 

@@ -12,6 +12,12 @@ type fakeGenerator struct {
 	calls []string
 }
 
+type AuditEvent struct{}
+
+type ExplicitTagModel struct{}
+
+func (ExplicitTagModel) BizTag() string { return "custom_event" }
+
 func (g *fakeGenerator) Next(_ context.Context, bizTag string) (int64, error) {
 	g.calls = append(g.calls, bizTag)
 	return int64(len(g.calls)), nil
@@ -68,6 +74,53 @@ func TestAssignUsesTableBizTag(t *testing.T) {
 	}
 	if len(generator.calls) != 1 || generator.calls[0] != "demo" {
 		t.Fatalf("generator calls = %v, want [demo]", generator.calls)
+	}
+}
+
+func TestAssignDerivesBizTagFromModel(t *testing.T) {
+	generator := &fakeGenerator{}
+	hook := New(generator, nil)
+	id := int64(0)
+	tx := &gorm.DB{Statement: &gorm.Statement{
+		Context: context.Background(),
+		Table:   "t_audit_events",
+		Model:   &AuditEvent{},
+	}}
+
+	if err := hook.Assign(tx, &id); err != nil {
+		t.Fatalf("Assign() error = %v", err)
+	}
+	if len(generator.calls) != 1 || generator.calls[0] != "audit_event" {
+		t.Fatalf("generator calls = %v, want [audit_event]", generator.calls)
+	}
+}
+
+func TestAssignUsesExplicitModelBizTag(t *testing.T) {
+	generator := &fakeGenerator{}
+	hook := New(generator, nil)
+	id := int64(0)
+	tx := &gorm.DB{Statement: &gorm.Statement{
+		Context: context.Background(),
+		Table:   "t_custom_events",
+		Model:   &ExplicitTagModel{},
+	}}
+
+	if err := hook.Assign(tx, &id); err != nil {
+		t.Fatalf("Assign() error = %v", err)
+	}
+	if len(generator.calls) != 1 || generator.calls[0] != "custom_event" {
+		t.Fatalf("generator calls = %v, want [custom_event]", generator.calls)
+	}
+}
+
+func TestBizTagOfUsesModelOverride(t *testing.T) {
+	hook := New(nil, nil)
+	tag, err := hook.BizTagOf(ExplicitTagModel{})
+	if err != nil {
+		t.Fatalf("BizTagOf() error = %v", err)
+	}
+	if tag != "custom_event" {
+		t.Fatalf("BizTagOf() = %q, want custom_event", tag)
 	}
 }
 

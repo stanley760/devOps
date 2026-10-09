@@ -91,29 +91,24 @@ func TestBeforeCreateGeneratesID(t *testing.T) {
 	t.Logf("发号成功: u1=%d u2=%d", u1.ID, u2.ID)
 }
 
-// TestBizTagOf 表名 → biz_tag 映射。
+// TestBizTagOf 模型类型 → biz_tag 推导。
 func TestBizTagOf(t *testing.T) {
 	cases := []struct {
-		table string
+		model any
 		tag   string
-		ok    bool
 	}{
-		{"t_system_users", "user", true},
-		{"t_system_role", "role", true},
-		{"t_system_menu", "menu", true},
-		{"t_system_dept", "dept", true},
-		{"t_system_post", "post", true},
-		{"t_tenant", "tenant", true},
-		{"t_system_user_role", "", false}, // 关联表不走发号，无映射
-		{"", "", false},
+		{&model.User{}, "user"},
+		{&model.Role{}, "role"},
+		{&model.Menu{}, "menu"},
+		{&model.Dept{}, "dept"},
+		{&model.Post{}, "post"},
+		{&model.Tenant{}, "tenant"},
+		{&model.LoginLog{}, "login_log"},
 	}
 	for _, c := range cases {
-		tag, err := model.BizTagOf(c.table)
-		if c.ok && (err != nil || tag != c.tag) {
-			t.Errorf("BizTagOf(%q) = %q, %v; want %q, nil", c.table, tag, err, c.tag)
-		}
-		if !c.ok && err == nil {
-			t.Errorf("BizTagOf(%q) 应返回错误，得到 %q", c.table, tag)
+		tag, err := model.BizTagOf(c.model)
+		if err != nil || tag != c.tag {
+			t.Errorf("BizTagOf(%T) = %q, %v; want %q, nil", c.model, tag, err, c.tag)
 		}
 	}
 }

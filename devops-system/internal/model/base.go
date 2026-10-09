@@ -18,21 +18,9 @@ import (
 	"devops-system/internal/auditctx"
 )
 
-// tableBizTag 表名 → biz_tag 显式映射（单数命名）。
-// 关联表（user_role/role_menu）复合主键不走发号，不在此列；
-// 新增业务表时须同步配置映射，否则建行 fail-fast。
-var tableBizTag = map[string]string{
-	"t_system_users":     "user",
-	"t_system_role":      "role",
-	"t_system_menu":      "menu",
-	"t_system_dept":      "dept",
-	"t_system_post":      "post",
-	"t_tenant":           "tenant",
-	"t_system_login_log": "login_log",
-}
-
 // idHook 进程级发号钩子，由 cmd 装配期注入生成器。
-var idHook = idgorm.New(nil, tableBizTag)
+// 默认 biz_tag 由具体模型的 Go 类型名推导；特殊命名通过 BizTagProvider 覆盖。
+var idHook = idgorm.New(nil, nil)
 
 // SetIDGenerator 注入发号客户端（server 命令装配期调用；migrate 种子不依赖）。
 func SetIDGenerator(generator idgorm.Generator) { idHook.SetGenerator(generator) }
@@ -90,5 +78,5 @@ func (m *BaseModel) BeforeUpdate(tx *gorm.DB) error {
     return nil
 }
 
-// BizTagOf 表名 → biz_tag（独立 snowflake worker 空间标识）。
-func BizTagOf(table string) (string, error) { return idHook.BizTagOf(table) }
+// BizTagOf 模型 → biz_tag（独立 snowflake worker 空间标识）。
+func BizTagOf(model any) (string, error) { return idHook.BizTagOf(model) }
