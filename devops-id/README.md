@@ -8,7 +8,7 @@
 | --- | --- |
 | 协议 | gRPC / protobuf |
 | 服务名 | `idgen.IdGen` |
-| 默认监听 | `:9090` |
+| 默认监听 | `:9990` |
 | 方法 | `Next`、`BatchNext` |
 | ID 类型 | `int64` |
 | 健康检查 | `grpc.health.v1.Health/Check` |
@@ -123,7 +123,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9090", 2*time.Second)
+	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9990", 2*time.Second)
 	if err != nil {
 		panic(err)
 	}
@@ -177,7 +177,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9090", 2*time.Second)
+	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9990", 2*time.Second)
 	if err != nil {
 		panic(err)
 	}
@@ -242,16 +242,16 @@ func (m *Order) BeforeCreate(tx *gorm.DB) error {
 
 ```bash
 # 查看服务
-grpcurl -plaintext 127.0.0.1:9090 list
+grpcurl -plaintext 127.0.0.1:9990 list
 
 # 健康检查
-grpcurl -plaintext -d '{}' 127.0.0.1:9090 grpc.health.v1.Health/Check
+grpcurl -plaintext -d '{}' 127.0.0.1:9990 grpc.health.v1.Health/Check
 
 # 取单个 ID
-grpcurl -plaintext -d '{"biz_tag":"user"}' 127.0.0.1:9090 idgen.IdGen/Next
+grpcurl -plaintext -d '{"biz_tag":"user"}' 127.0.0.1:9990 idgen.IdGen/Next
 
 # 取一批 ID
-grpcurl -plaintext -d '{"biz_tag":"user","count":10}' 127.0.0.1:9090 idgen.IdGen/BatchNext
+grpcurl -plaintext -d '{"biz_tag":"user","count":10}' 127.0.0.1:9990 idgen.IdGen/BatchNext
 ```
 
 Protobuf JSON 会把 `int64` 输出为字符串：
@@ -269,6 +269,30 @@ Protobuf JSON 会把 `int64` 输出为字符串：
 3. 调用 `/idgen.IdGen/Next` 或 `/idgen.IdGen/BatchNext`。
 4. 使用 gRPC 标准健康检查 `/grpc.health.v1.Health/Check` 判断服务是否 `SERVING`。
 5. 对外 API 或 JSON 数据结构将 `int64` ID 按字符串暴露。
+
+## 代码结构（DDD 分层）
+
+```text
+internal/
+├── cmd/                # cobra 入口：配置/日志/观测初始化 + server 生命周期编排
+├── config/             # 配置结构体（复用 devops-infra/config 各段）
+├── app/                # Wire 依赖注入（wire.go / providers.go / wire_gen.go）
+├── domain/idgen/       # 领域层：Snowflake 位布局、tag 生成器、Manager、
+│                       # 领域错误与端口（LeaseLifecycle / SlotCoordinator / WorkerCache）
+├── application/idgen/  # 应用层：Next / BatchNext 用例服务
+├── infrastructure/     # 基础设施层：etcdcoord（lease + 槽位协调适配）、
+│                       # workerfile（本地 worker 缓存文件）
+└── interfaces/grpc/    # 接口层：IdGen gRPC handler（参数校验、错误映射）
+```
+
+依赖方向：`interfaces → application → domain ← infrastructure`。领域层只依赖标准库，
+etcd 协调与磁盘缓存经端口注入；etcd lease / 槽位协调的通用实现位于共享库 `devops-infra/etcd`。
+
+依赖图变更后重新生成 injector：
+
+```bash
+go generate -tags=wireinject ./internal/app
+```
 
 ## 接入检查清单
 

@@ -9,24 +9,26 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"devops-id/pkg/idgorm"
+	"devops-system/internal/auditctx"
 )
 
 // tableBizTag 表名 → biz_tag 显式映射（单数命名）。
 // 关联表（user_role/role_menu）复合主键不走发号，不在此列；
 // 新增业务表时须同步配置映射，否则建行 fail-fast。
 var tableBizTag = map[string]string{
-	"t_system_users":      "user",
-	"t_system_role":       "role",
-	"t_system_menu":       "menu",
-	"t_system_dept":       "dept",
-	"t_system_post":       "post",
-	"t_tenant":            "tenant",
-	"t_system_login_log":  "login_log",
+	"t_system_users":     "user",
+	"t_system_role":      "role",
+	"t_system_menu":      "menu",
+	"t_system_dept":      "dept",
+	"t_system_post":      "post",
+	"t_tenant":           "tenant",
+	"t_system_login_log": "login_log",
 }
 
 // idHook 进程级发号钩子，由 cmd 装配期注入生成器。
@@ -54,10 +56,38 @@ type BaseTenantModel struct {
 	TenantID int64 `gorm:"index;not null"`
 }
 
-// BeforeCreate 主键统一由 devops-id 发号（ID 为 0 时）。
-// 事务内失败 → Create 整体回滚，绝不落库半行。
+// BeforeCreate 填充当前操作者并由 devops-id 分配主键（ID 为 0 时）。
+// 无操作者时保留显式审计字段，供迁移/种子等系统写入使用。
 func (m *BaseModel) BeforeCreate(tx *gorm.DB) error {
+	actor, ok := auditctx.From(tx.Statement.Context)
+    username := strings.TrimSpace(actor.Username)
+
+    if ok && username != "" {
+        // 可信认证用户覆盖调用方传入的值。
+        m.Creator = username
+        m.Updater = username
+    } else {
+        // 无认证操作者时，保留显式系统值，只补空字段。
+        if m.Creator == "" {
+            m.Creator = "system"
+        }
+        if m.Updater == "" {
+            m.Updater = "system"
+        }
+    }
 	return idHook.Assign(tx, &m.ID)
+}
+
+// BeforeUpdate overwrites updater from the authenticated request context.
+func (m *BaseModel) BeforeUpdate(tx *gorm.DB) error {
+	actor, ok := auditctx.From(tx.Statement.Context)
+    username := strings.TrimSpace(actor.Username)
+    if !ok || username == "" {
+        username = "system"
+    }
+
+    tx.Statement.SetColumn("updater", username)
+    return nil
 }
 
 // BizTagOf 表名 → biz_tag（独立 snowflake worker 空间标识）。

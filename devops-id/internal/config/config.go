@@ -20,7 +20,7 @@ type Config struct {
 
 // GrpcConfig gRPC 服务配置
 type GrpcConfig struct {
-	Listen     string `mapstructure:"listen"`     // 监听地址，如 ":9090"
+	Listen     string `mapstructure:"listen"`     // 监听地址，如 ":9990"
 	Reflection bool   `mapstructure:"reflection"` // 是否开启 reflection（dev 调试用）
 }
 

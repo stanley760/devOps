@@ -1,4 +1,4 @@
-// server 子命令：装配 snowflake 发号器并启动 gRPC 服务。
+// server 子命令：装配依赖图（wire）并启动 gRPC 服务与 metrics。
 package cmd
 
 import (
@@ -7,25 +7,21 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	// 挂载 /debug/pprof/* 到 DefaultServeMux（见 startMetricsServer）
+	_ "net/http/pprof"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	infracfg "devops-infra/config"
-	etcdinfra "devops-infra/etcd"
 	grpcinfra "devops-infra/grpc"
 	"devops-infra/nacos"
 	"devops-infra/observability"
 
+	"devops-id/internal/app"
 	"devops-id/internal/config"
-	"devops-id/internal/server"
-	"devops-id/internal/snowflake"
-	"devops-id/pkg/idgenpb"
 )
 
 var serverCmd = &cobra.Command{
@@ -37,22 +33,14 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		// 发号器装配：snowflake 依赖 etcd；worker slot 在首次使用 biz_tag 时懒加载。
-		cli, err := etcdinfra.New(cfg.Etcd)
+		// 依赖图装配（wire）：etcd client → per-tag 基础设施工厂 →
+		// snowflake Manager → 应用服务 → gRPC handler；worker slot 在
+		// 首次使用 biz_tag 时懒加载。
+		register, cleanupGraph, err := app.InitializeGRPC(cfg)
 		if err != nil {
 			return err
 		}
-		defer cli.Close()
-
-		sf, err := snowflake.New(context.Background(), cli, snowflake.Config{
-			LeafName:    cfg.IDGen.LeafName,
-			LeaseTTL:    cfg.Etcd.LeaseTTL,
-			WorkerCache: cfg.IDGen.WorkerCache,
-		})
-		if err != nil {
-			return err
-		}
-		defer sf.Close() // 优雅退出：revoke 所有 per-tag lease，立即释放槽位
+		defer cleanupGraph() // 优雅退出：revoke 所有 per-tag lease，立即释放槽位，再关 etcd
 
 		reflection := cfg.Grpc.Reflection
 		if infracfg.Env() == "dev" {
@@ -80,10 +68,7 @@ var serverCmd = &cobra.Command{
 				Listen:       cfg.Grpc.Listen,
 				Reflection:   reflection,
 				StatsHandler: otelgrpc.NewServerHandler(),
-			}, func(s *grpc.Server, hc *health.Server) {
-				idgenpb.RegisterIdGenServer(s, server.NewIdGenServer(sf))
-				hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
-			})
+			}, register)
 		}()
 
 		metricsServer, metricsErr, err := startMetricsServer(obsRuntime, cfg.Observability.MetricsListen)
@@ -114,6 +99,9 @@ func startMetricsServer(obs *observability.Runtime, listen string) (*http.Server
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", obs.MetricsHandler)
+	// 诊断出口：goroutine/block 等 profile 用于排查 handler 卡死类故障
+	// （2026-10-08 BatchNext 疑似卡死无现场可查）。仅 metrics_listen 配置时生效。
+	mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	server := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,

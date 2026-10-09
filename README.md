@@ -52,7 +52,7 @@ GRANT CREATE ON `tenant\_%`.* TO 'devops'@'%';  -- 仅模式B需要（建租户�
 ### 启动
 
 ```bash
-cd devops-id && go run . server    # gRPC :9090（Snowflake 发号）
+cd devops-id && go run . server    # gRPC :9990（Snowflake 发号）
 
 cd devops-system && go run . migrate  # 建业务表 + 种子（租户 default、admin/Admin@123、菜单树、角色）
 cd devops-system && go run . server   # HTTP :8080
@@ -81,7 +81,7 @@ devops-system            用户权限系统
   migrate                建表 + 复合唯一索引 + 种子数据（幂等）
 
 devops-id                分布式 ID 发号服务
-  server                 启动 gRPC Snowflake 发号服务（:9090）
+  server                 启动 gRPC Snowflake 发号服务（:9990）
 ```
 
 全局参数：`-f, --config-file` 指定配置路径（默认 `config/config.yaml`）；`--version` 查看版本。
@@ -97,7 +97,7 @@ devops-id 的 protobuf 源文件和生成文件位于 `devops-id` 模块：
 | [`pkg/idgenpb/idgen_grpc.pb.go`](./devops-id/pkg/idgenpb/idgen_grpc.pb.go) | `protoc-gen-go-grpc` 生成 | 生成 `IdGenClient`、`IdGenServer`、RPC handler 和 `RegisterIdGenServer`                    |
 
 生成的 `.pb.go` 文件禁止手工修改；服务端实现位于
-[`internal/server/idgen.go`](./devops-id/internal/server/idgen.go)，启动时注册生成的 gRPC server。
+[`internal/interfaces/grpc/idgen.go`](./devops-id/internal/interfaces/grpc/idgen.go)，启动时注册生成的 gRPC server。
 其中 `Next` 用于单个取号，`BatchNext` 原子分配一批 ID，是
 [`pkg/idclient/idclient.go`](./devops-id/pkg/idclient/idclient.go) 客户端预取缓冲实际使用的 RPC。
 
@@ -252,18 +252,21 @@ go test ./devops-infra/... ./devops-id/... ./devops-system/...
 cd devops-system
 go generate -tags=wireinject ./internal/app
 git diff --exit-code -- internal/app/wire_gen.go
+
+cd ../devops-id
+go generate -tags=wireinject ./internal/app
+git diff --exit-code -- internal/app/wire_gen.go
 ```
 
-覆盖：infra（日志滚动、panic 恢复、CORS、响应信封）、id 集成测试（需本地 `:9090` 服务在跑，未启动自动 Skip）。
+覆盖：infra（日志滚动、panic 恢复、CORS、响应信封）、id 集成测试（需本地 `:9990` 服务在跑，未启动自动 Skip）。
 
 ## Roadmap
 
 - [ ] 操作/登录日志、账号配额、行级数据权限
-- [x] 迁移数据是否可以sql化，不要写死代码
-- [x] Prometheus 发号监控
-- [x] 数据权限功能
-- [x] 处理/metric 接口无法在jaeger中追踪的问题
-
+- [ ] 可视化AI agent 数据
+- [ ] 用户员工提交数据管理
+- [ ] AI agent 数据过程分析
+- [ ] AI agent 和用户行为数据分析
 ## Docker 开发环境故障排查
 
 单节点开发环境使用独立编排文件：

@@ -72,7 +72,7 @@ stringData:
     jwt:
       signing_key: "YOUR_JWT_SIGNING_KEY_MIN_32_CHARS"
     idclient:
-      endpoint: "devops-id.devops.svc.cluster.local:9090"  # K8s 直连 Service DNS（无 scheme，passthrough resolver）
+      endpoint: "devops-id.devops.svc.cluster.local:9990"  # K8s 直连 Service DNS（无 scheme，passthrough resolver）
     # otlp_endpoint 留空 = 本地 span 不上报；接入集群内 Jaeger/Tempo/otel-collector 后填其 OTLP HTTP 地址
     observability:
       otlp_endpoint: ""
@@ -164,12 +164,12 @@ spec:
           # K8s ≥1.24 原生 grpc 探针，探测 grpc.health.v1
           livenessProbe:
             grpc:
-              port: 9090
+              port: 9990
             initialDelaySeconds: 5
             periodSeconds: 15
           readinessProbe:
             grpc:
-              port: 9090
+              port: 9990
             initialDelaySeconds: 3
             periodSeconds: 10
           volumeMounts:

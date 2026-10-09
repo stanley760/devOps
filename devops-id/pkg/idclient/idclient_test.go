@@ -1,5 +1,5 @@
 // 集成测试：验证 idclient 预取缓冲 + 服务端发号链路。
-// 依赖本地 devops-id 服务（:9090），
+// 依赖本地 devops-id 服务（:9990），
 // 跳过条件：连接失败（服务未启动）时 t.Skip。
 package idclient_test
 
@@ -20,7 +20,7 @@ func dial(t *testing.T) *idclient.Client {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9090", 2*time.Second)
+	conn, err := grpcinfra.Dial(ctx, "127.0.0.1:9990", 2*time.Second)
 	if err != nil {
 		t.Skipf("devops-id 服务未启动，跳过集成测试: %v", err)
 	}

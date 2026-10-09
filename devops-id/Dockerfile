@@ -5,7 +5,7 @@
 #
 # 镜像内配置仅为占位（config/config.yaml），实际环境差异通过
 # APP_ENV 合并环境文件覆盖（挂载 devops-id-prod.yaml，见 deploy/）。
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 ARG VERSION=dev
 # 默认走国内代理（与宿主机 go env GOPROXY 一致），海外构建可 --build-arg GOPROXY= 覆盖
@@ -52,12 +52,12 @@ RUN mkdir -p /app/log /app/logs /app/data \
 USER app
 ENV TZ=Asia/Shanghai \
     APP_ENV=prod
-EXPOSE 9090
+EXPOSE 9990
 
 # gRPC 无 HTTP 端点，容器级健康检查退化为 TCP 探活；
 # K8s 请用原生 grpc 探针（见 deploy/k8s/devops.yaml）
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-    CMD nc -z 127.0.0.1 9090 || exit 1
+    CMD nc -z 127.0.0.1 9990 || exit 1
 
 # 优雅退出由程序自身处理（revoke lease 立即释放槽位），务必用 exec 形式传信号
 ENTRYPOINT ["devops-id"]

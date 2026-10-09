@@ -23,15 +23,28 @@ import (
 	securitymw "devops-infra/security/middleware"
 	tenantinfra "devops-infra/tenant"
 
+	"devops-system/internal/auditctx"
 	"devops-system/internal/auth"
 )
 
 // securityJWT huma 认证中间件：infra 决策 + 本服务信封呈现。
 func securityJWT(m *auth.Manager) humaMiddleware {
-	return securitymw.HumaAuthenticate(m, securitymw.HumaOptions{
+	authenticate := securitymw.HumaAuthenticate(m, securitymw.HumaOptions{
 		OnUnauthorized:        writeHuma401,
 		OnInfrastructureError: writeHumaAuthInfraErr,
 	})
+	return func(hctx huma.Context, next func(huma.Context)) {
+		authenticate(hctx, func(authenticated huma.Context) {
+			claims := auth.ClaimsFrom(authenticated.Context())
+			if claims != nil && claims.Username != "" {
+				ctx := auditctx.WithActor(authenticated.Context(), auditctx.Actor{
+					Username: claims.Username,
+				})
+				authenticated = huma.WithContext(authenticated, ctx)
+			}
+			next(authenticated)
+		})
+	}
 }
 
 // securityTenant 租户校验 + 上下文注入（可用性判定经 Deps 注入 DB 与缓存）。

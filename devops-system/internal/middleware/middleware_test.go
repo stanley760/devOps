@@ -23,6 +23,7 @@ import (
 	securityjwt "devops-infra/security/jwt"
 	securitysession "devops-infra/security/session"
 
+	"devops-system/internal/auditctx"
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/config"
@@ -158,6 +159,35 @@ func TestHumaJWTMiddlewareRegressions(t *testing.T) {
 	resp = api.Get("/", "Authorization: Bearer "+access2)
 	if resp.Code != http.StatusUnauthorized || !strings.Contains(resp.Body.String(), "登录状态已失效，请重新登录") {
 		t.Fatalf("revoked session: %d %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestHumaJWTMiddlewareInjectsAuditActor(t *testing.T) {
+	m, authorizer, _, cleanup := testEnv(t)
+	defer cleanup()
+
+	kit := NewKit(m, Deps{Authorizer: authorizer})
+	cfg := huma.DefaultConfig("audit-actor-test", "v1")
+	cfg.CreateHooks = nil
+	_, api := humatest.New(t, cfg)
+
+	var actor auditctx.Actor
+	var actorOK bool
+	huma.Register(api, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/",
+		Middlewares: huma.Middlewares{kit.JWT()},
+	}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		actor, actorOK = auditctx.From(ctx)
+		return nil, nil
+	})
+
+	_, access := login(t, m, 42, 7)
+	if code := api.Get("/", "Authorization: Bearer "+access).Code; code != http.StatusNoContent {
+		t.Fatalf("authenticated request: %d", code)
+	}
+	if !actorOK || actor.Username != "alice" {
+		t.Fatalf("audit actor = (%q, %v), want (alice, true)", actor.Username, actorOK)
 	}
 }
 

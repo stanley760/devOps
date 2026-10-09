@@ -113,7 +113,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (r
 			audit.Result = 1
 		}
 		audit.Code = loginErrCode(err)
-		dao.CreateLoginLog(ctx, audit) // 尽力而为：审计故障不影响登录
+		dao.CreateLoginLog(ctx, audit) 
 	}()
 
 	code := req.TenantCode
