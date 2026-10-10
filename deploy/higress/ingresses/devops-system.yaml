@@ -40,7 +40,7 @@ spec:
         paths:
           # 只路由业务 API 与 JWKS（Higress jwt-auth 插件拉取验签公钥）。
           # 运维端点（/metrics /apidoc /healthz /readyz）仅内网访问，禁止经公网网关暴露。
-          - path: /api
+          - path: /system
             pathType: Prefix
             backend:
               resource:
