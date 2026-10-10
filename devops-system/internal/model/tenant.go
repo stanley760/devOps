@@ -1,5 +1,5 @@
 // t_tenant 租户注册表（全局表，无 tenant_id）。
-// code 全局唯一：模式B 库名 tenant_{code}、前端租户标识、登录入参。
+// code 全局唯一：前端租户标识与登录入参。
 package model
 
 import "time"

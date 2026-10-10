@@ -1,37 +1,37 @@
 // 租户管理服务：CRUD + 启停/过期 + 租户初始超管。
 //
 // 平台路由 ctx 无租户：t_tenant 为全局表可直接访问；创建租户初始超管时
-// 显式注入新租户 ctx（tenantdb.With），user/role 行由 TenantPlugin 填充 tenant_id。
+// 显式注入新租户 ctx，user/role 行由 TenantPlugin 填充 tenant_id。
 //
 // 停用语义：状态落库 + 撤销租户全部会话（RevokeTenantSessions，
 // 全员 access 立即 401）+ 清除 Tenant 中间件的 Redis 状态缓存（防 5min 缓存误放行）。
 package service
 
 import (
-	"fmt"
 	"context"
+	"fmt"
+
 	"golang.org/x/crypto/bcrypt"
+
 	"devops-infra/errs"
+	infratenant "devops-infra/tenant"
+
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
-	"devops-system/internal/config"
 	"devops-system/internal/dao"
 	"devops-system/internal/model"
 	"devops-system/internal/store"
-	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"
-	infratenant "devops-infra/tenant"
 )
 
 // Tenant 租户管理服务。
 type Tenant struct {
-	cfg   config.Config
 	authM *auth.Manager
 }
 
 // NewTenant 创建服务。
-func NewTenant(cfg config.Config, authM *auth.Manager) *Tenant {
-	return &Tenant{cfg: cfg, authM: authM}
+func NewTenant(authM *auth.Manager) *Tenant {
+	return &Tenant{authM: authM}
 }
 
 // List 分页查询。
@@ -58,7 +58,6 @@ func (s *Tenant) Get(ctx context.Context, id types.ID) (*types.TenantDTO, error)
 }
 
 // Create 创建租户 + 租户初始超管（super_admin 角色 + casbin 域内全通 p/g 行）。
-// 模式B：先建库迁移（provision），数据写入走租户库连接（tenantdb resolver）。
 func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req types.TenantCreateReq) (*types.TenantDTO, error) {
 	exists, err := dao.TenantCodeExists(ctx, req.Code, 0)
 	if err != nil {
@@ -87,15 +86,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		return nil, err
 	}
 
-	// 模式B：为新租户建库 + AutoMigrate（数据随后经 resolver 写入租户库）
-	if s.cfg.Tenant.Mode == "schema" {
-		if err := tenantdb.ProvisionSchema(ctx, t.Code); err != nil {
-			_ = dao.HardDeleteTenant(ctx, t.ID)
-			return nil, err
-		}
-	}
-
-	// 租户初始超管：注入新租户 ctx（平台路由 ctx 无租户；模式B 据此路由到租户库）
+	// 租户初始超管写入共享数据库时仍需注入租户上下文，以填充 tenant_id。
 	tctx := infratenant.With(ctx, t.ID, t.Code)
 	admin := &model.User{
 		BaseTenantModel: model.BaseTenantModel{
@@ -113,7 +104,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		Name: "超级管理员", Code: "super_admin", Type: 1, DataScope: 1, Status: 0,
 	}
 	if err := dao.SeedTenantAdmin(tctx, role, admin); err != nil {
-		// 补偿：回滚租户行，避免「有租户无超管」的中间态（模式B 库保留，migrate 幂等可复用）
+		// 补偿：回滚租户行，避免「有租户无超管」的中间态。
 		_ = dao.HardDeleteTenant(ctx, t.ID)
 		return nil, err
 	}
@@ -176,7 +167,7 @@ func (s *Tenant) UpdateStatus(ctx context.Context, claims *auth.AccessClaims, id
 	return nil
 }
 
-// Delete 删除租户：默认租户不可删；未停用不可删；模式A 逻辑删（数据保留）。
+// Delete 删除租户：默认租户不可删；未停用不可删；逻辑删除后保留数据。
 func (s *Tenant) Delete(ctx context.Context, claims *auth.AccessClaims, id types.ID) error {
 	t, err := dao.GetTenantByID(ctx, id.Int64())
 	if err != nil {
@@ -198,7 +189,7 @@ func (s *Tenant) Delete(ctx context.Context, claims *auth.AccessClaims, id types
 	if c := store.Cache(); c != nil {
 		_ = c.Delete(ctx, fmt.Sprintf("tenant:%d", t.ID))
 	}
-	// 模式A：casbin g/p 行与业务数据保留（租户已删不可登录），清理工具列 Roadmap
+	// casbin g/p 行与业务数据保留（租户已删不可登录），清理工具列 Roadmap。
 	return nil
 }
 

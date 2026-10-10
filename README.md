@@ -13,9 +13,7 @@ Go 工作区（go.work）三模块：**devops-infra**（共享基础设施）+ *
 
 - **JWT 双 token**：access（短效）+ refresh（Redis 会话，支持登出/踢下线/租户停用全员下线）
 - **RBAC + 域模型**：Casbin `g, r, p` 域模型（`g` 域内用户-角色、`g2` 平台管理员），菜单权限按钮级控制
-- **多租户双模式**：
-  - 模式A `shared`（默认）：共享 Schema + `tenant_id` 判别列，GORM 插件自动注入过滤（fail-closed，无租户上下文直接报错防串数据）
-  - 模式B `schema`：每租户独立库（`tenant_{code}`），Resolver 按 ctx 路由连接池 + 建库自动 provision + 菜单 fan-out
+- **单库多租户**：所有租户共享数据库，通过 `tenant_id` 判别列隔离；GORM 插件自动注入过滤（fail-closed，无租户上下文直接报错防串数据）
 - **分布式 ID（Snowflake）**：etcd 按 `leaf_name + biz_tag` 分配独立 worker ID（lease 保活、宕机 TTL 释放），同 `biz_tag` 内唯一且趋势递增；时钟回拨保护（<5ms 自旋、≥5ms 拒发）
 - **工程化**：统一响应信封、结构化异步日志（大小/时间双滚动）、CORS、优雅退出链、多环境配置（`APP_ENV` 覆盖）
 
@@ -46,7 +44,6 @@ Go 工作区（go.work）三模块：**devops-infra**（共享基础设施）+ *
 CREATE DATABASE devops DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'devops'@'%' IDENTIFIED BY 'changeme';
 GRANT ALL PRIVILEGES ON devops.* TO 'devops'@'%';
-GRANT CREATE ON `tenant\_%`.* TO 'devops'@'%';  -- 仅模式B需要（建租户库）
 ```
 
 ### 启动
@@ -138,7 +135,7 @@ devops-system 关键段：
 | `mysql`    | `host` / `database` …                                                | 业务库连接                                                                                                 |
 | `redis`    | `host` / `db`                                                        | 会话存储                                                                                                   |
 | `jwt`      | `signing_key`（≥32 位）/ `access_expire` / `refresh_expire`          | 双 token 参数                                                                                              |
-| `tenant`   | `mode`（shared \| schema）/ `schema_template` / `default_code`       | 多租户模式                                                                                                 |
+| `tenant`   | `default_code`                                                       | 登录未指定租户时使用的默认租户编码                                                                         |
 | `idclient` | `endpoint` / `batch` / `low_water` / `dial_timeout` / `call_timeout` | devops-id gRPC 接入；`batch=1` 关闭预取，`low_water` 触发异步补充，两个 timeout 分别限制拨号和单次取号调用 |
 
 devops-id 关键段：
@@ -236,11 +233,11 @@ Base64 形式的 32 字节随机值通常是 44 个字符，长度满足当前 H
 - **分层与装配**：`cmd` 管理启动顺序和资源生命周期，`internal/app` 用 Wire 编译期装配业务对象图，`router` 显式组合业务模块路由；请求链为 `router → api → service → dao → model`。`devops-infra` 只提供通用基础设施，不依赖业务模块
 - **新增业务模块**：提供模块自己的 Service/Handler/路由注册器，在 `router.Modules` 与 `internal/app/providers.go` 中显式加入；重新生成并提交 `internal/app/wire_gen.go`。不向公共 `Register` 追加业务 Service 参数
 - **Wire 生成**：在 `devops-system` 目录执行 `go generate -tags=wireinject ./internal/app`。生成文件提交入库，常规 build/test 不需要安装或运行 Wire 生成器
-- **租户隔离 fail-closed**：纯模型查询由 GORM `TenantPlugin` 自动注入 `tenant_id`；原生 JOIN 由 dao 显式过滤（插件注入裸列会歧义）；模式B 主库不建租户表，误路由表现为「表不存在」
+- **租户隔离 fail-closed**：纯模型查询由 GORM `TenantPlugin` 自动注入 `tenant_id`；原生 JOIN 由 dao 显式过滤（插件注入裸列会歧义）
 - **软删除改名**：删除用户/角色等唯一字段实体时改名（`admin` → `admin_del_1694...`），允许同名重建
 - **ID 空间隔离**：Snowflake worker 按 `leaf_name + biz_tag` 独立分配；同 `biz_tag` 唯一且趋势递增，不同 `biz_tag` 允许重号。DTO 层 ID 字符串化，避免 JavaScript 精度丢失
 - **事务边界**：DB 事务只管业务表（user_role/role_menu），casbin 策略在事务外同步更新（gorm-adapter 自持事务）；失败补偿 + 重试由调用方语义保证
-- **优雅退出**：HTTP 停止并排空在途请求后，按初始化逆序注销 Nacos、关闭 idclient/Redis/authz/resolver/MySQL；启动中途失败也执行已完成资源的清理，并汇总清理错误。snowflake 退出 revoke 所有已分配 tag 的 lease 并释放槽位
+- **优雅退出**：HTTP 停止并排空在途请求后，按初始化逆序注销 Nacos、关闭 idclient/Redis/authz/MySQL；启动中途失败也执行已完成资源的清理，并汇总清理错误。snowflake 退出 revoke 所有已分配 tag 的 lease 并释放槽位
 
 ## 测试 / Testing
 

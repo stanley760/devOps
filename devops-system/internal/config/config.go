@@ -63,12 +63,9 @@ func (c JWTConfig) SharedJWTConfig(keySet securityjwt.KeySet) securityjwt.Config
 	}
 }
 
-// TenantConfig 多租户配置
+// TenantConfig 单库多租户配置。
 type TenantConfig struct {
-	Mode           string `mapstructure:"mode"`            // shared 共享Schema（默认）| schema 租户独立库
-	SchemaTemplate string `mapstructure:"schema_template"` // 模式B 库名模板，如 tenant_{code}
-	MaxPools       int    `mapstructure:"max_pools"`       // 模式B 租户连接池上限（LRU 淘汰）
-	DefaultCode    string `mapstructure:"default_code"`    // 登录未指定租户时的默认租户 code
+	DefaultCode string `mapstructure:"default_code"` // 登录未指定租户时的默认租户 code
 }
 
 // IDClientConfig devops-id 发号服务接入配置（含客户端预取缓冲）

@@ -2,13 +2,12 @@
 //
 // 职责边界：DDL 仍由 GORM AutoMigrate 负责（模型即代码），本包只管
 // 「数据」的版本化 SQL——种子数据与后续数据变更写成有序 .sql 文件，
-// go:embed 进二进制，服务启动时按序执行；执行过的版本记录在
+// 嵌入二进制后由服务启动时按序执行；执行过的版本记录在
 // t_system_migration 版本表里直接跳过，天然满足「执行过不再执行」。
 //
-// scope（版本表 version 键带 scope 前缀，两 scope 可指向同一库）：
-//   - ScopeGlobal  主库全局数据（菜单母本、t_tenant），两种模式都跑；
+// scope（版本表 version 键带 scope 前缀；两 scope 都记录在同一业务库）：
+//   - ScopeGlobal  全局数据（菜单母本、t_tenant）；
 //   - ScopeTenant  租户业务数据（部门/岗位/角色/用户/授权）。
-//     shared 模式目标即主库；模式B 目标为租户库（版本表随库记账）。
 //
 // 幂等与并发：
 //   - 版本表 version 主键去重 + checksum 防已应用文件被篡改；

@@ -133,7 +133,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (r
 		return nil, errs.New(errs.CodeForbidden, "租户已过期")
 	}
 
-	// 公开路由无 Tenant 中间件：解析出租户后显式注入 ctx（TenantPlugin/Resolver 依据）
+	// 公开路由无 Tenant 中间件：解析出租户后显式注入 ctx，供 TenantPlugin 使用。
 	ctx = infratenant.With(ctx, t.ID, t.Code)
 
 	u, err := dao.GetUserByUsername(ctx, req.Username)
@@ -169,7 +169,7 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 		return nil, errs.New(errs.CodeUnauthorized, "刷新令牌无效或已过期")
 	}
 
-	// 公开路由：先校验租户可用，再注入租户 ctx（含 code，模式B 切库依据）
+	// 公开路由：先校验租户可用，再注入租户 ctx。
 	t, err := dao.GetTenantByID(ctx, tid)
 	if err != nil || t.Status != 0 {
 		return nil, errs.New(errs.CodeForbidden, "租户不可用")

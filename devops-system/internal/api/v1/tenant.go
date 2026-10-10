@@ -100,7 +100,7 @@ func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetO
 	return &TenantGetOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Create POST /api/v1/tenants（含租户初始超管；模式B 自动建库+迁移+菜单同步）。
+// Create POST /api/v1/tenants（含租户初始超管）。
 func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*TenantCreateOutput, error) {
 	resp, err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body)
 	if err != nil {

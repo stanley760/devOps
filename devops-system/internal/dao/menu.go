@@ -1,4 +1,4 @@
-// 菜单管理 dao（P6）：菜单为全局表（模式B 下为租户库拷贝），TenantPlugin 放行。
+// 菜单管理 dao：菜单为全局表，TenantPlugin 放行。
 package dao
 
 import (

@@ -68,9 +68,6 @@ jwt:
   refresh_expire: 168h   # refresh token（会话）有效期
 
 tenant:
-  mode: shared                     # shared 共享Schema（默认）| schema 租户独立库
-  schema_template: "tenant_{code}" # 模式B 库名模板
-  max_pools: 64                    # 模式B 租户连接池上限（LRU 淘汰）
   default_code: "default"          # 登录未指定租户时的默认租户 code
 
 idclient:                          # devops-id 发号服务接入

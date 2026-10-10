@@ -3,7 +3,6 @@
 -- migration 拒绝启动（防篡改）；增量走新版本号。
 -- 曾误用 0002 与 seed_tenant 撞号（load 阶段 fail-closed，从未执行过），改 0003。
 -- ID 段沿用母本约定：目录/菜单 1-7，按钮 = 父菜单 ID*10+序号（81/82）。
--- 模式B 下新菜单经 tenantdb 菜单母本 fan-out 同步到各租户库。
 INSERT INTO t_system_menu
     (id, creator, create_time, updater, update_time,
      name, permission, type, sort, parent_id, path, icon, component,

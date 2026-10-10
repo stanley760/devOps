@@ -1,4 +1,4 @@
--- 0001 菜单母本（t_system_menu，全局表；模式B 由 provision fan-out 同步到各租户库）。
+-- 0001 菜单初始化数据（t_system_menu，全局表）。
 -- 数据对齐原 Go 种子 buildSeedMenus：显式 ID、不走发号；按钮 always_show=FALSE。
 -- ON DUPLICATE KEY UPDATE 兼容「已跑过旧 Go 种子」的存量库：版本表为空但
 -- 菜单已存在时首轮按 no-op 补记账，此后由版本表跳过（MySQL 方言）。

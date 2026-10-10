@@ -280,7 +280,7 @@ func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) 
 	}), h.Get)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-create", Method: http.MethodPost, Path: "/api/v1/tenants",
-		Summary: "创建租户", Description: "含租户初始超管；模式B 自动建库+迁移+菜单同步。",
+		Summary: "创建租户", Description: "含租户初始超管。",
 		Middlewares: kit.PlatChain("platform:tenant:create"),
 	}), h.Create)
 	huma.Register(api, with(common, huma.Operation{

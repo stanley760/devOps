@@ -123,13 +123,13 @@ func SoftDeleteTenant(ctx context.Context, tenantID int64, code string) error {
 	})
 }
 
-// HardDeleteTenant 物理删除租户行：创建流程补偿回滚用（模式B 租户库保留，migrate 幂等可复用）。
+// HardDeleteTenant 物理删除租户行：创建流程补偿回滚用。
 func HardDeleteTenant(ctx context.Context, tenantID int64) error {
 	return tenantdb.DB(ctx).Unscoped().Delete(&model.Tenant{}, tenantID).Error
 }
 
 // SeedTenantAdmin 建租户初始超管（super_admin 角色 + 用户 + 关联，单事务）。
-// ctx 须为新租户 ctx（tenantdb.With 注入；模式B 据此路由到租户库）。
+// ctx 须为新租户 ctx，用于填充 tenant_id。
 func SeedTenantAdmin(ctx context.Context, role *model.Role, admin *model.User) error {
 	return WithTx(ctx, func(tx *gorm.DB) error {
 		if err := tx.Create(role).Error; err != nil {

@@ -1,4 +1,4 @@
-// TenantPlugin（模式A 核心，方案 5.3）：GORM 回调自动注入/过滤 tenant_id。
+// TenantPlugin：GORM 回调自动注入/过滤 tenant_id。
 //
 // fail-closed 语义：
 //   - stmt.Schema 不含 tenant_id 字段（全局表）→ 放行

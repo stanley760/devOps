@@ -1,7 +1,6 @@
 -- 0001 租户 1（default）业务种子：部门 / 岗位 / 角色 / 用户 admin / 授权。
 -- 显式 ID + tenant_id，与原 Go 种子 seedTenantData 完全对齐；
 -- 密码 Admin@123 的 bcrypt(cost=10) 固化哈希（种子即代码，与原 Go 硬编码同级）。
--- 落点：shared 模式 = 主库；模式B = tenant_default 库（版本表随库记账）。
 -- ON DUPLICATE KEY UPDATE 兼容存量库补记账（MySQL 方言）。
 
 -- 部门：100=devOps(root) → 101 技术部、102 运维部

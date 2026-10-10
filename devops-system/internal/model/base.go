@@ -38,7 +38,7 @@ type BaseModel struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
 }
 
-// BaseTenantModel 租户表基模型：模式A 共享 Schema 的 tenant_id 判别列。
+// BaseTenantModel 租户表基模型：共享数据库中的 tenant_id 判别列。
 type BaseTenantModel struct {
 	BaseModel
 	TenantID int64 `gorm:"index;not null"`
