@@ -16,7 +16,7 @@
       }
     ]
   },
-  "description": "devops 微服务可观测性仪表盘：服务 RED（HTTP/gRPC 服务端+客户端）+ 边缘网关 + 依赖 USE（MySQL/Redis 连接池）+ Go 运行时。用 $service/$env 变量过滤，新增服务无需复制面板。业务指标（http_server_*）来自 OTel Prometheus exporter，service_name 标签来自 OTel Resource。",
+  "description": "devops 微服务可观测性仪表盘：服务 RED（HTTP/gRPC 服务端+客户端）+ 边缘网关 + 依赖 USE（MySQL/Redis 连接池）+ Go 运行时。用 $service/$env 变量过滤，新增服务无需复制面板。业务指标（http_server_*）来自 OTel Prometheus exporter，service_name 标签来自 OTel Resource。HTTP 延迟分位独立展示，其他对照指标按图例名固定颜色区分。",
   "editable": true,
   "graphTooltip": 1,
   "links": [
@@ -81,8 +81,8 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "HTTP 5xx 错误率",
-      "description": "5xx 占总请求比例。无 5xx 时显示 0 而非 No data（分子 or vector(0) 补零）；整体无数据 = 无流量。>1% 黄、>5% 红",
+      "title": "错误率：应用 5xx vs 网关边缘",
+      "description": "同一图上对照两条错误率曲线：应用 5xx（红，http_server_requests_total，业务/服务故障）与网关 4xx+5xx（橙，envoy_http_downstream_rq，含网关自产错误如无路由、upstream 挂——后端永远看不到）。边缘抬高而应用平稳 = 网关/路由问题；两边一起高 = 服务本身。无错误时 or vector(0) 补零显示 0；整体无数据 = 无流量。>1% 黄、>5% 红",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -120,13 +120,51 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "应用 5xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "网关 4xx+5xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
           "refId": "A",
           "expr": "(sum(rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\", status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_server_requests_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
-          "legendFormat": "5xx 比例"
+          "legendFormat": "应用 5xx"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\", response_code_class=~\"4xx|5xx\"}[5m])) or vector(0)) / (sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m])) or vector(0))",
+          "legendFormat": "网关 4xx+5xx"
         }
       ],
       "options": {
@@ -135,7 +173,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "multi"
         }
       }
     },
@@ -184,8 +222,8 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "HTTP P99 延迟（按路由）",
-      "description": "histogram_quantile(0.99, http_server_request_duration_seconds_bucket)",
+      "title": "HTTP 延迟 P95（按路由）",
+      "description": "按路由展示 HTTP 请求延迟 P95，便于定位整体慢请求的路由；与 P99 面板对照可判断是否主要由尾部请求拉高延迟。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -193,8 +231,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 8
+        "x": 0,
+        "y": 16
       },
       "fieldConfig": {
         "defaults": {
@@ -204,13 +242,30 @@
             "lineWidth": 2
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
+          "legendFormat": "P95 {{route}}"
         }
       ],
       "options": {
@@ -230,8 +285,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "HTTP P95 延迟（按路由）",
-      "description": "histogram_quantile(0.95, http_server_request_duration_seconds_bucket)",
+      "title": "HTTP 延迟 P99（按路由）",
+      "description": "按路由展示 HTTP 请求延迟 P99，反映尾部慢请求；持续逼近 SLO 1s（DevOpsHTTPP99High）即压测不达标。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -239,7 +294,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 16
       },
       "fieldConfig": {
@@ -250,13 +305,30 @@
             "lineWidth": 2
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
-          "legendFormat": "{{route}}"
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, route))",
+          "legendFormat": "P99 {{route}}"
         }
       ],
       "options": {
@@ -285,8 +357,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 16
+        "x": 0,
+        "y": 24
       },
       "fieldConfig": {
         "defaults": {
@@ -327,7 +399,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 24
       },
       "fieldConfig": {
@@ -363,8 +435,8 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "gRPC P99 延迟（服务端）",
-      "description": "histogram_quantile(0.99, rpc_server_call_duration_seconds_bucket)",
+      "title": "gRPC P99 延迟：服务端 vs 客户端",
+      "description": "同一图上对照 gRPC 两侧 P99：服务端（蓝，rpc_server_*，被调方视角）与客户端（紫，rpc_client_*，调用方视角——发号调用 devops-system → devops-id 的 BatchNext/预取补充端到端耗时）。服务端平稳而客户端高 = 网络/超时重试/客户端队列；两边一起高 = 服务本身慢（对照领域层基准约 427ns/号的天花板）。颜色按图例名正则覆盖，图例名区分方法",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -372,8 +444,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 24
+        "x": 0,
+        "y": 32
       },
       "fieldConfig": {
         "defaults": {
@@ -383,13 +455,51 @@
             "lineWidth": 2
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "服务端.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "客户端.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
       },
       "targets": [
         {
           "refId": "A",
           "expr": "histogram_quantile(0.99, sum(rate(rpc_server_call_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, rpc_method))",
-          "legendFormat": "{{rpc_method}}"
+          "legendFormat": "服务端 {{rpc_method}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum(rate(rpc_client_call_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, rpc_method))",
+          "legendFormat": "客户端 {{rpc_method}}"
         }
       ],
       "options": {
@@ -418,7 +528,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 32
       },
       "fieldConfig": {
@@ -444,52 +554,6 @@
           "placement": "bottom",
           "calcs": [
             "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "gRPC 客户端 P99 延迟",
-      "description": "histogram_quantile(0.99, rpc_client_call_duration_seconds_bucket)：发号调用（BatchNext/预取补充）的端到端耗时",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 32
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          }
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.99, sum(rate(rpc_client_call_duration_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, rpc_method))",
-          "legendFormat": "{{rpc_method}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
           ]
         },
         "tooltip": {
@@ -540,67 +604,6 @@
       }
     },
     {
-      "id": 12,
-      "type": "timeseries",
-      "title": "网关边缘：4xx/5xx 比例",
-      "description": "边缘错误占比（envoy_http_downstream_rq 4xx+5xx / 全部），含网关自产错误；无错误时 or vector(0) 补零显示 0",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 40
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "min": 0,
-          "max": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.01
-              },
-              {
-                "color": "red",
-                "value": 0.05
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "(sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\", response_code_class=~\"4xx|5xx\"}[5m])) or vector(0)) / (sum(rate(envoy_http_downstream_rq{job=\"higress-gateway\", http_conn_manager_prefix=~\"outbound.*\"}[5m])) or vector(0))",
-          "legendFormat": "边缘错误比例"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      }
-    },
-    {
       "id": 13,
       "type": "timeseries",
       "title": "网关边缘：P99 延迟（按目标）",
@@ -612,8 +615,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 48
+        "x": 12,
+        "y": 40
       },
       "fieldConfig": {
         "defaults": {
@@ -654,7 +657,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 48
       },
       "fieldConfig": {
@@ -706,8 +709,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 56
+        "x": 12,
+        "y": 48
       },
       "fieldConfig": {
         "defaults": {
@@ -753,7 +756,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 56
       },
       "fieldConfig": {
@@ -805,8 +808,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 64
+        "x": 12,
+        "y": 56
       },
       "fieldConfig": {
         "defaults": {
@@ -852,7 +855,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 64
       },
       "fieldConfig": {
@@ -894,8 +897,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 72
+        "x": 12,
+        "y": 64
       },
       "fieldConfig": {
         "defaults": {
@@ -941,7 +944,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 72
       },
       "fieldConfig": {
@@ -997,8 +1000,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 80
+        "x": 12,
+        "y": 72
       },
       "fieldConfig": {
         "defaults": {
@@ -1044,7 +1047,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 80
       },
       "fieldConfig": {
@@ -1086,8 +1089,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 88
+        "x": 12,
+        "y": 80
       },
       "fieldConfig": {
         "defaults": {
@@ -1133,7 +1136,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 88
       },
       "fieldConfig": {
@@ -1171,53 +1174,6 @@
     {
       "id": 25,
       "type": "timeseries",
-      "title": "登录：结果 & 失败码",
-      "description": "auth_login_total 业务指标（devops-system/service）：result=success|failure；code 为失败业务码（401=凭据/租户问题，403=停用/过期，500=内部故障）。失败细节看访问日志与 slog，不进指标标签控制基数。失败率异常升高是暴力破解或后端故障信号",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 96
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          }
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (result) (rate(auth_login_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
-          "legendFormat": "{{result}}"
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (code) (rate(auth_login_total{result=\"failure\", service_name=~\"$service\", deployment_environment=~\"$env\"}[5m]))",
-          "legendFormat": "失败 code={{code}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 26,
-      "type": "timeseries",
       "title": "发号补充延迟 P99（按 biz_tag×trigger）",
       "description": "idgen_refill_duration_seconds：BatchNext 补充耗时。async 走高会先于缓冲耗尽出现（预取变慢），sync 走高直接影响用户写请求",
       "datasource": {
@@ -1227,7 +1183,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 96
       },
       "fieldConfig": {
@@ -1251,6 +1207,278 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "发号服务：拒绝 & 降级事件",
+      "description": "devops-id 服务端发号故障事件速率（正常应恒为 0）：拒绝/s（红，idgen_requests_rejected_total）是业务 500 的直接上游；本地降级/s（橙，idgen_fallback_total）= etcd 不可用降级本地槽位，有重复 ID 风险；lease 失效/s（紫，idgen_lease_lost_total）= 槽位可能被抢占、发号已熔断；时钟回拨/s（黄，idgen_clock_rollback_total）。任一条脱离 0 立即结合健康状态面板与 devops-id 日志定位",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "拒绝/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "本地降级/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lease 失效/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "时钟回拨/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(idgen_requests_rejected_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) or vector(0)",
+          "legendFormat": "拒绝/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(idgen_fallback_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) or vector(0)",
+          "legendFormat": "本地降级/s"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(idgen_lease_lost_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) or vector(0)",
+          "legendFormat": "lease 失效/s"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(rate(idgen_clock_rollback_total{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) or vector(0)",
+          "legendFormat": "时钟回拨/s"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "发号服务：健康状态",
+      "description": "idgen_health_state（biz_tag 维度）：0=serving（正常发号）、1=degraded（降级：本地 fallback 或水位持久化连续失败）、2=not_serving（lease 失效/已关闭，发号被拒）。跳到 1/2 时用户写路径开始受影响。曲线在首次取号（懒初始化）后出现",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 104
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "min": 0,
+          "max": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "idgen_health_state{service_name=~\"$service\", deployment_environment=~\"$env\"}",
+          "legendFormat": "{{biz_tag}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 29,
+      "type": "timeseries",
+      "title": "发号服务端：延迟分位 P95 / P99",
+      "description": "idgen_batch_latency_seconds（devops-id 进程内 Next/BatchNext 端到端耗时，按 method 维度）：P95=黄、P99=红。与「发号补充延迟」（调用方视角）对照可分离网络开销；与领域层基准对照（单号热路径 ~427ns、批量摊销后 ~2.4M ids/s 天花板）可判断是发号本身变慢还是被 gRPC/批量大小拖慢",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 104
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "P95.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "P99.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "type": "fixed",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(idgen_batch_latency_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, method))",
+          "legendFormat": "P95 {{method}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum(rate(idgen_batch_latency_seconds_bucket{service_name=~\"$service\", deployment_environment=~\"$env\"}[5m])) by (le, method))",
+          "legendFormat": "P99 {{method}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi"
@@ -1335,6 +1563,6 @@
   "timezone": "browser",
   "title": "DevOps 可观测性（RED + USE + 边缘网关）",
   "uid": "devops-red",
-  "version": 4,
+  "version": 6,
   "weekStart": ""
 }

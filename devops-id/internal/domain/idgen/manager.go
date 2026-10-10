@@ -224,6 +224,11 @@ func (m *Manager) generator(ctx context.Context, bizTag string) (*tagGenerator, 
 				st = HealthDegraded
 			}
 			m.states[bizTag] = st
+			// Emit the initial health state. Without this, idgen_health_state
+			// never receives a sample on the happy path (only degradation and
+			// close events fire), so the gauge stays empty on a healthy
+			// service and monitoring shows "No data" instead of "serving".
+			m.obs.OnState(bizTag, st)
 		}
 		m.mu.Unlock()
 		close(call.done)
