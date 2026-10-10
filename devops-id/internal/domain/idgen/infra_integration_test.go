@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	etcdinfra "devops-infra/etcd"
-
 	"devops-id/internal/infrastructure/workerfile"
 )
 
@@ -67,7 +65,7 @@ func TestManagerAcquiresSlotAndCachesWorker(t *testing.T) {
 
 	manager, err := NewManager(Config{LeafName: "leaf"}, func(bizTag string) TagInfra {
 		return TagInfra{Lease: lease, Slots: slots, Cache: workerfile.New(cache, "leaf", bizTag)}
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +103,7 @@ func TestManagerUsesIndependentWorkerSpacePerBizTag(t *testing.T) {
 		leases = append(leases, lease)
 		slots = append(slots, coordinator)
 		return TagInfra{Lease: lease, Slots: coordinator, Cache: workerfile.New(cache, "leaf", bizTag)}
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +158,7 @@ func TestManagerUsesIndependentWorkerSpacePerBizTag(t *testing.T) {
 }
 
 func TestManagerRejectsInvalidBizTag(t *testing.T) {
-	manager, err := NewManager(Config{}, nil)
+	manager, err := NewManager(Config{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +170,7 @@ func TestManagerRejectsInvalidBizTag(t *testing.T) {
 }
 
 func TestManagerClosedRejectsNewRequests(t *testing.T) {
-	manager, err := NewManager(Config{}, nil)
+	manager, err := NewManager(Config{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +181,8 @@ func TestManagerClosedRejectsNewRequests(t *testing.T) {
 	}
 }
 
-func TestManagerUsesLocalFallbackPerBizTag(t *testing.T) {
+func TestManagerUsesLocalModeSlot(t *testing.T) {
+	// 本地模式（nil Lease/Slots = 无协调基础设施）：使用缓存槽位
 	cache := t.TempDir()
 	workerFile := filepath.Join(cache, "leaf", "user", "worker_id")
 	if err := os.MkdirAll(filepath.Dir(workerFile), 0o755); err != nil {
@@ -195,7 +194,73 @@ func TestManagerUsesLocalFallbackPerBizTag(t *testing.T) {
 
 	manager, err := NewManager(Config{LeafName: "leaf"}, func(bizTag string) TagInfra {
 		return TagInfra{Cache: workerfile.New(cache, "leaf", bizTag)}
-	})
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	id, err := manager.Next(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workerOf(id) != 5 {
+		t.Fatalf("local mode worker = %d, want 5", workerOf(id))
+	}
+}
+
+func TestNoFallbackWithoutOptIn(t *testing.T) {
+	// P0-1 fail-closed: etcd 不可用且未开启 AllowLocalFallback → 拒绝发号
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{}), grantErr: errors.New("etcd down")}
+	slots := &fakeSlotCoordinator{}
+
+	manager, err := NewManager(Config{LeafName: "leaf"}, func(bizTag string) TagInfra {
+		return TagInfra{Lease: lease, Slots: slots, Cache: workerfile.New(t.TempDir(), "leaf", bizTag)}
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	_, err = manager.Next(context.Background(), "user")
+	if !errors.Is(err, ErrInfraUnavailable) {
+		t.Fatalf("fail-closed 应返回 ErrInfraUnavailable, got %v", err)
+	}
+}
+
+func TestFallbackWithoutCachedSlotFails(t *testing.T) {
+	// P0-1: 开启 AllowLocalFallback 但无缓存槽位 → ErrNoCachedSlot（永不 slot 0）
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{}), grantErr: errors.New("etcd down")}
+
+	manager, err := NewManager(Config{LeafName: "leaf", AllowLocalFallback: true}, func(bizTag string) TagInfra {
+		return TagInfra{Lease: lease, Slots: &fakeSlotCoordinator{}, Cache: workerfile.New(t.TempDir(), "leaf", bizTag)}
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	_, err = manager.Next(context.Background(), "user")
+	if !errors.Is(err, ErrNoCachedSlot) {
+		t.Fatalf("无缓存槽位应返回 ErrNoCachedSlot, got %v", err)
+	}
+}
+
+func TestFallbackWithCachedSlotUsesCached(t *testing.T) {
+	// P0-1: 开启 AllowLocalFallback 且有缓存槽位 → 使用缓存
+	cache := t.TempDir()
+	workerFile := filepath.Join(cache, "leaf", "user", "worker_id")
+	if err := os.MkdirAll(filepath.Dir(workerFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workerFile, []byte("5"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{}), grantErr: errors.New("etcd down")}
+
+	manager, err := NewManager(Config{LeafName: "leaf", AllowLocalFallback: true}, func(bizTag string) TagInfra {
+		return TagInfra{Lease: lease, Slots: &fakeSlotCoordinator{}, Cache: workerfile.New(cache, "leaf", bizTag)}
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,17 +275,35 @@ func TestManagerUsesLocalFallbackPerBizTag(t *testing.T) {
 	}
 }
 
-func TestManagerDoesNotFallbackWhenSlotOccupied(t *testing.T) {
-	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
-	slots := &fakeSlotCoordinator{acquireErr: etcdinfra.ErrSlotOccupied}
+func TestNoFallbackOnContextCancel(t *testing.T) {
+	// P1-6: ctx 取消不触发 fallback
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{}), grantErr: context.Canceled}
 
-	manager, err := NewManager(Config{}, func(bizTag string) TagInfra {
-		return TagInfra{Lease: lease, Slots: slots, Cache: workerfile.New(t.TempDir(), "devops-id", bizTag)}
-	})
+	manager, err := NewManager(Config{LeafName: "leaf", AllowLocalFallback: true}, func(bizTag string) TagInfra {
+		return TagInfra{Lease: lease, Slots: &fakeSlotCoordinator{}, Cache: workerfile.New(t.TempDir(), "leaf", bizTag)}
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Next(context.Background(), "user"); !errors.Is(err, etcdinfra.ErrSlotOccupied) {
+	defer manager.Close()
+
+	_, err = manager.Next(context.Background(), "user")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ctx cancel 应原样返回, got %v", err)
+	}
+}
+
+func TestManagerDoesNotFallbackWhenSlotOccupied(t *testing.T) {
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
+	slots := &fakeSlotCoordinator{acquireErr: ErrSlotOccupied}
+
+	manager, err := NewManager(Config{}, func(bizTag string) TagInfra {
+		return TagInfra{Lease: lease, Slots: slots, Cache: workerfile.New(t.TempDir(), "devops-id", bizTag)}
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Next(context.Background(), "user"); !errors.Is(err, ErrSlotOccupied) {
 		t.Fatalf("Next() error = %v, want ErrSlotOccupied", err)
 	}
 	if lease.releaseCalls != 1 {
@@ -232,7 +315,7 @@ func TestInfraLeaseLostRejectsNewIDs(t *testing.T) {
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
 	manager, err := NewManager(Config{}, func(bizTag string) TagInfra {
 		return TagInfra{Lease: lease, Slots: &fakeSlotCoordinator{}, Cache: workerfile.New(t.TempDir(), "devops-id", bizTag)}
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +342,7 @@ func TestCloseWithInfraReleasesLease(t *testing.T) {
 	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
 	manager, err := NewManager(Config{}, func(bizTag string) TagInfra {
 		return TagInfra{Lease: lease, Slots: &fakeSlotCoordinator{}, Cache: workerfile.New(t.TempDir(), "devops-id", bizTag)}
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,5 +353,116 @@ func TestCloseWithInfraReleasesLease(t *testing.T) {
 	manager.Close()
 	if lease.releaseCalls != 1 {
 		t.Fatalf("release calls = %d, want 1", lease.releaseCalls)
+	}
+}
+
+func TestBatchNextRespectsMaxBatchCount(t *testing.T) {
+	manager, err := NewManager(Config{MaxBatchCount: 10}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	_, err = manager.BatchNext(context.Background(), "user", 11)
+	if !errors.Is(err, ErrBatchTooLarge) {
+		t.Fatalf("BatchNext error = %v, want ErrBatchTooLarge", err)
+	}
+}
+
+func TestMaxGeneratorsLimit(t *testing.T) {
+	manager, err := NewManager(Config{MaxGenerators: 2}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	if _, err := manager.Next(context.Background(), "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Next(context.Background(), "b"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Next(context.Background(), "c")
+	if !errors.Is(err, ErrTooManyTags) {
+		t.Fatalf("third tag error = %v, want ErrTooManyTags", err)
+	}
+}
+
+func TestConcurrentFirstUseInitializesOnce(t *testing.T) {
+	// P1-5: 并发首次使用同一 tag 只初始化一次
+	slots := &fakeSlotCoordinator{acquireSlot: 3}
+	lease := &fakeLeaseLifecycle{lost: make(chan struct{})}
+
+	manager, err := NewManager(Config{LeafName: "leaf"}, func(bizTag string) TagInfra {
+		time.Sleep(50 * time.Millisecond) // 模拟慢 I/O
+		return TagInfra{Lease: lease, Slots: slots, Cache: workerfile.New(t.TempDir(), "leaf", bizTag)}
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	const n = 20
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			_, err := manager.Next(context.Background(), "user")
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("goroutine %d error: %v", i, err)
+		}
+	}
+	if slots.acquireCalls != 1 {
+		t.Fatalf("acquire calls = %d, want 1", slots.acquireCalls)
+	}
+}
+
+func TestWatermarkStartupWait(t *testing.T) {
+	// P0-2: 启动时等待水位窗口过去
+	cache := t.TempDir()
+	// 预设水位为 now+100ms
+	wmPath := filepath.Join(cache, "leaf", "user", "watermark")
+	if err := os.MkdirAll(filepath.Dir(wmPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wm := time.Now().UnixMilli() + 100
+	if err := os.WriteFile(wmPath, []byte(strconv.FormatInt(wm, 10)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	manager, err := NewManager(Config{LeafName: "leaf"}, func(bizTag string) TagInfra {
+		return TagInfra{Cache: workerfile.New(cache, "leaf", bizTag)}
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	id, err := manager.Next(context.Background(), "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(started)
+	_ = id
+	if elapsed < 50*time.Millisecond {
+		t.Fatalf("启动等待时间 %v 太短，水位窗口可能未等待", elapsed)
+	}
+}
+
+func TestValidateNameLengthLimit(t *testing.T) {
+	manager, err := NewManager(Config{MaxBizTagLen: 10}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	longTag := "this_is_a_very_long_biz_tag_name"
+	_, err = manager.Next(context.Background(), longTag)
+	if !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("超长 tag error = %v, want ErrInvalidName", err)
 	}
 }

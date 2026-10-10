@@ -7,6 +7,13 @@ log:
 idgen:
   leaf_name: devops-id
   worker_cache: "data"
+  allow_local_fallback: false
+  max_biz_tag_len: 64
+  max_generators: 1024
+  max_batch_count: 100000
+  watermark_safety_margin: 5s
+  watermark_persist_interval: 3s
+  watermark_max_wait: 30s
 
 etcd:                    # snowflake worker 协调
   endpoints:

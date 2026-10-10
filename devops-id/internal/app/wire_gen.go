@@ -29,14 +29,16 @@ func InitializeGRPC(cfg config.Config) (func(*grpc.Server, *health.Server), func
 		return nil, nil, err
 	}
 	tagInfraFactory := newTagInfraFactory(client, cfg)
-	manager, cleanup2, err := provideManager(idgenConfig, tagInfraFactory)
+	healthBridge := provideHealthBridge()
+	idgenObserver := provideObserver(healthBridge)
+	manager, cleanup2, err := provideManager(idgenConfig, tagInfraFactory, idgenObserver)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	service := idgen.NewService(manager)
 	idGenServer := grpc2.NewIdGenServer(service)
-	v := newGRPCRegister(idGenServer)
+	v := newGRPCRegister(idGenServer, healthBridge)
 	return v, func() {
 		cleanup2()
 		cleanup()

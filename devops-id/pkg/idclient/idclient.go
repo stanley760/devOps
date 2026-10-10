@@ -6,6 +6,9 @@
 //   - 剩余低于水位 → 异步单飞补充
 //   - 缓冲耗尽且补充失败 → fail-fast 返回错误（同服务端哲学：宁可拒发不可重号）
 //
+// 补充采用 per-tag 单飞（single-flight）：同一 biz_tag 的同步和异步补充
+// 共享同一个 in-flight 请求，杜绝批次重排导致本地 ID 递减。
+//
 // 多副本消费方各持独立缓冲：同一 biz_tag 内 ID 趋势递增，但跨副本交错。
 package idclient
 
@@ -42,15 +45,24 @@ type Client struct {
 	buffers map[string]*tagBuffer
 
 	metrics *bufferMetrics
+
+	// fetchFn is the test seam for BatchNext; defaults to stub call.
+	fetchFn func(ctx context.Context, bizTag string) ([]int64, error)
+}
+
+// inflightFetch tracks a single in-flight refill request per tag.
+type inflightFetch struct {
+	done chan struct{}
 }
 
 // tagBuffer 单个 biz_tag 的缓冲状态。
 // attrs 为预构建的 biz_tag 属性集：发号热路径零属性分配。
 type tagBuffer struct {
-	mu      sync.Mutex
-	ids     []int64
-	loading bool // 异步补充单飞去重
-	attrs   metric.MeasurementOption
+	mu         sync.Mutex
+	ids        []int64
+	inflight   *inflightFetch // 单飞：同时最多一个补充请求
+	lastIssued int64          // 最近发出的 ID，用于入队校验
+	attrs      metric.MeasurementOption
 }
 
 // bufferMetrics 发号缓冲指标集。仪表创建失败时 OTel 返回 noop 仪表（非 nil），
@@ -80,6 +92,7 @@ func New(conn *grpc.ClientConn, cfg BufferConfig) *Client {
 		cfg:     cfg,
 		buffers: make(map[string]*tagBuffer),
 	}
+	c.fetchFn = c.fetchFromStub
 	c.initMetrics()
 	return c
 }
@@ -153,26 +166,25 @@ func (c *Client) initMetrics() {
 // bizTag 用于选择独立的 snowflake worker 空间。
 func (c *Client) Next(ctx context.Context, bizTag string) (int64, error) {
 	tb := c.get(bizTag)
-	tb.mu.Lock()
-
 	for {
+		tb.mu.Lock()
 		if len(tb.ids) > 0 {
 			// 从头部弹出：服务端返回的批内单调递增，头部弹出保证本地发号也递增
 			id := tb.ids[0]
 			tb.ids = tb.ids[1:]
+			tb.lastIssued = id
 			c.metrics.recordIssued(ctx, tb.attrs)
 			c.asyncRefill(tb, bizTag)
 			tb.mu.Unlock()
 			return id, nil
 		}
+		tb.mu.Unlock()
 
-		// 缓冲空：同步补充（batch=1 即逐次 RPC）
-		ids, err := c.fetchTracked(ctx, bizTag, "sync")
-		if err != nil {
-			tb.mu.Unlock()
+		// 缓冲空：同步补充（单飞，不会与异步补充并行导致重排）
+		if err := c.refill(ctx, tb, bizTag, "sync"); err != nil {
 			return 0, fmt.Errorf("ID 生成失败(biz_tag=%s): %w", bizTag, err)
 		}
-		tb.ids = ids
+		// 补充完成后循环重检缓冲（可能被并发消费）
 	}
 }
 
@@ -190,6 +202,69 @@ func (c *Client) get(bizTag string) *tagBuffer {
 	return tb
 }
 
+// refill 单飞补充：同一 biz_tag 的同步和异步补充共享同一个 in-flight 请求。
+// 有 in-flight 时等待其完成；否则发起新请求。fetch 不持有 tb.mu。
+func (c *Client) refill(ctx context.Context, tb *tagBuffer, bizTag, trigger string) error {
+	tb.mu.Lock()
+	if tb.inflight != nil {
+		// 已有补充在进行，等待其完成（不并行发起第二个请求）
+		done := tb.inflight.done
+		tb.mu.Unlock()
+		select {
+		case <-done:
+			return nil // 先行者已完成，调用方重检缓冲
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	call := &inflightFetch{done: make(chan struct{})}
+	tb.inflight = call
+	tb.mu.Unlock()
+
+	startedAt := time.Now()
+	ids, err := c.fetchFn(ctx, bizTag)
+	if c.metrics != nil {
+		c.metrics.recordRefill(ctx, bizTag, trigger, time.Since(startedAt), err != nil)
+	}
+
+	tb.mu.Lock()
+	if err == nil {
+		if mergeErr := mergeLocked(tb, ids); mergeErr != nil {
+			err = mergeErr
+			if c.metrics != nil {
+				c.metrics.recordRefill(ctx, bizTag, "validate", 0, true)
+			}
+		}
+	}
+	if tb.inflight == call {
+		tb.inflight = nil
+	}
+	tb.mu.Unlock()
+	close(call.done)
+	return err
+}
+
+// mergeLocked 校验并合并补充批次。必须持有 tb.mu。
+// 校验规则：非空、严格递增、首 ID 大于最近发出的 ID 和缓冲尾部 ID。
+func mergeLocked(tb *tagBuffer, ids []int64) error {
+	if len(ids) == 0 {
+		return fmt.Errorf("empty batch from server")
+	}
+	for i := 1; i < len(ids); i++ {
+		if ids[i] <= ids[i-1] {
+			return fmt.Errorf("non-monotonic batch: ids[%d]=%d <= ids[%d]=%d", i, ids[i], i-1, ids[i-1])
+		}
+	}
+	if ids[0] <= tb.lastIssued {
+		return fmt.Errorf("stale batch: first ID %d <= last issued %d", ids[0], tb.lastIssued)
+	}
+	if n := len(tb.ids); n > 0 && ids[0] <= tb.ids[n-1] {
+		return fmt.Errorf("stale batch: first ID %d <= buffer tail %d", ids[0], tb.ids[n-1])
+	}
+	tb.ids = append(tb.ids, ids...)
+	return nil
+}
+
 // asyncRefill 剩余低于水位时异步补充（调用方持有 tb.mu）。
 func (c *Client) asyncRefill(tb *tagBuffer, bizTag string) {
 	if c.cfg.Batch <= 1 { // 预取关闭
@@ -198,38 +273,36 @@ func (c *Client) asyncRefill(tb *tagBuffer, bizTag string) {
 	if len(tb.ids) >= int(float64(c.cfg.Batch)*c.cfg.LowWater) {
 		return
 	}
-	if tb.loading {
-		return
+	if tb.inflight != nil {
+		return // 已有补充在进行
 	}
-	tb.loading = true
+	// 标记 in-flight 防止 goroutine 启动前重复触发
+	call := &inflightFetch{done: make(chan struct{})}
+	tb.inflight = call
 	go func() {
-		defer func() {
-			tb.mu.Lock()
-			tb.loading = false
-			tb.mu.Unlock()
-		}()
-		ids, err := c.fetchTracked(context.Background(), bizTag, "async")
-		if err != nil {
-			return // 补充失败不打断发号：缓冲耗尽时 Next 会同步重试
+		startedAt := time.Now()
+		ids, err := c.fetchFn(context.Background(), bizTag)
+		if c.metrics != nil {
+			c.metrics.recordRefill(context.Background(), bizTag, "async", time.Since(startedAt), err != nil)
 		}
 		tb.mu.Lock()
-		defer tb.mu.Unlock()
-		tb.ids = append(tb.ids, ids...)
+		if err == nil {
+			if mergeErr := mergeLocked(tb, ids); mergeErr != nil {
+				if c.metrics != nil {
+					c.metrics.recordRefill(context.Background(), bizTag, "validate", 0, true)
+				}
+			}
+		}
+		if tb.inflight == call {
+			tb.inflight = nil
+		}
+		tb.mu.Unlock()
+		close(call.done)
 	}()
 }
 
-// fetchTracked 计时并记录补充结果指标（成功记耗时，失败记耗时+失败计数）。
-func (c *Client) fetchTracked(ctx context.Context, bizTag, trigger string) ([]int64, error) {
-	startedAt := time.Now()
-	ids, err := c.fetch(ctx, bizTag)
-	if c.metrics != nil {
-		c.metrics.recordRefill(ctx, bizTag, trigger, time.Since(startedAt), err != nil)
-	}
-	return ids, err
-}
-
-// fetch 调用 BatchNext 取一批号（带 CallTimeout 限时）。
-func (c *Client) fetch(ctx context.Context, bizTag string) ([]int64, error) {
+// fetchFromStub 调用 BatchNext 取一批号（带 CallTimeout 限时）。
+func (c *Client) fetchFromStub(ctx context.Context, bizTag string) ([]int64, error) {
 	if c.cfg.CallTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.cfg.CallTimeout)
@@ -242,7 +315,17 @@ func (c *Client) fetch(ctx context.Context, bizTag string) ([]int64, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reply.GetIds(), nil
+	ids := reply.GetIds()
+	// 服务端响应校验：非空 + 严格递增
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("server returned empty batch")
+	}
+	for i := 1; i < len(ids); i++ {
+		if ids[i] <= ids[i-1] {
+			return nil, fmt.Errorf("server returned non-monotonic batch")
+		}
+	}
+	return ids, nil
 }
 
 // Ping 探活：gRPC 标准健康检查（SERVING 状态）。

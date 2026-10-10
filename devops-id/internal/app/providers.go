@@ -18,6 +18,8 @@ var infraSet = wire.NewSet(
 
 var domainSet = wire.NewSet(
 	newDomainConfig,
+	provideHealthBridge,
+	provideObserver,
 	provideManager,
 )
 

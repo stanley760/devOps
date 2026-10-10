@@ -3,10 +3,10 @@ package app
 import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	etcdinfra "devops-infra/etcd"
 
+	idapp "devops-id/internal/application/idgen"
 	"devops-id/internal/config"
 	iddomain "devops-id/internal/domain/idgen"
 	"devops-id/internal/infrastructure/etcdcoord"
@@ -30,12 +30,31 @@ func newTagInfraFactory(cli *etcdinfra.Client, cfg config.Config) iddomain.TagIn
 
 // newDomainConfig 从服务配置提取领域配置。
 func newDomainConfig(cfg config.Config) iddomain.Config {
-	return iddomain.Config{LeafName: cfg.IDGen.LeafName}
+	return iddomain.Config{
+		LeafName:                 cfg.IDGen.LeafName,
+		AllowLocalFallback:       cfg.IDGen.AllowLocalFallback,
+		MaxBizTagLen:             cfg.IDGen.MaxBizTagLen,
+		MaxGenerators:            cfg.IDGen.MaxGenerators,
+		MaxBatchCount:            cfg.IDGen.MaxBatchCount,
+		WatermarkSafetyMargin:    cfg.IDGen.WatermarkSafetyMargin,
+		WatermarkPersistInterval: cfg.IDGen.WatermarkPersistInterval,
+		WatermarkMaxWait:         cfg.IDGen.WatermarkMaxWait,
+	}
+}
+
+// provideObserver 组合指标观察器与健康桥为统一 Observer。
+func provideObserver(bridge *HealthBridge) iddomain.Observer {
+	return newFanoutObserver(idapp.NewMetricsObserver(), bridge)
+}
+
+// provideHealthBridge 构造健康桥。
+func provideHealthBridge() *HealthBridge {
+	return NewHealthBridge()
 }
 
 // provideManager 构造发号 Manager；cleanup 负责优雅关闭（revoke 全部 lease）。
-func provideManager(cfg iddomain.Config, factory iddomain.TagInfraFactory) (*iddomain.Manager, func(), error) {
-	manager, err := iddomain.NewManager(cfg, factory)
+func provideManager(cfg iddomain.Config, factory iddomain.TagInfraFactory, obs iddomain.Observer) (*iddomain.Manager, func(), error) {
+	manager, err := iddomain.NewManager(cfg, factory, obs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,9 +62,10 @@ func provideManager(cfg iddomain.Config, factory iddomain.TagInfraFactory) (*idd
 }
 
 // newGRPCRegister 返回 gRPC 服务注册回调，交给 grpcinfra.Run 挂载。
-func newGRPCRegister(srv *idgrpc.IdGenServer) func(*grpc.Server, *health.Server) {
+// 注册时绑定健康桥，让 readiness/liveness 反映真实发号能力。
+func newGRPCRegister(srv *idgrpc.IdGenServer, bridge *HealthBridge) func(*grpc.Server, *health.Server) {
 	return func(s *grpc.Server, hc *health.Server) {
 		idgenpb.RegisterIdGenServer(s, srv)
-		hc.SetServingStatus("idgen.IdGen", healthpb.HealthCheckResponse_SERVING)
+		bridge.Bind(hc)
 	}
 }

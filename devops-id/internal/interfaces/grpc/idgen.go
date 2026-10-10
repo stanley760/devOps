@@ -17,8 +17,8 @@ import (
 	"devops-id/pkg/idgenpb"
 )
 
-// maxBatchCount 单次批量取号上限。
-const maxBatchCount = 100000
+// maxBatchCount 单次批量取号上限（与领域层共享常量，防止漂移）。
+const maxBatchCount = iddomain.DefaultMaxBatchCount
 
 // IdGenServer IdGen gRPC 实现。
 type IdGenServer struct {
@@ -45,7 +45,8 @@ func (s *IdGenServer) Next(ctx context.Context, req *idgenpb.NextRequest) (*idge
 	return &idgenpb.NextReply{Id: id}, nil
 }
 
-// BatchNext 原子分配 count 个 ID。
+// BatchNext 分配 count 个单调递增 ID（单调独占批次：批内严格递增，
+// 无并发调用穿插，跨毫秒不连续）。
 func (s *IdGenServer) BatchNext(ctx context.Context, req *idgenpb.BatchNextRequest) (*idgenpb.BatchNextReply, error) {
 	if req.GetBizTag() == "" {
 		return nil, status.Error(codes.InvalidArgument, "biz_tag 不能为空")
@@ -91,10 +92,25 @@ func logCall(ctx context.Context, method, bizTag string, count int, firstID, las
 }
 
 // mapErr 把发号层错误映射到 gRPC 状态码：
-// 参数非法 → InvalidArgument；时钟回拨 / lease 失效 → Unavailable；其余 → Internal。
+//   - context.Canceled / DeadlineExceeded → Canceled / DeadlineExceeded
+//   - 参数非法（ErrInvalidName, ErrBatchTooLarge） → InvalidArgument
+//   - 可重试的暂时性故障（时钟回拨 / lease 失效 / 槽位被占 / infra 不可用 /
+//     无缓存槽位 / 管理器关闭） → Unavailable
+//   - 资源耗尽（ErrSlotsExhausted, ErrTooManyTags） → ResourceExhausted
+//   - 槽位映射损坏（需运维介入） → FailedPrecondition
+//   - 其余 → Internal
 func mapErr(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return status.Error(codes.Canceled, "请求已取消")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, "请求超时")
+	}
 	if errors.Is(err, iddomain.ErrInvalidName) {
 		return status.Error(codes.InvalidArgument, "biz_tag 非法")
+	}
+	if errors.Is(err, iddomain.ErrBatchTooLarge) {
+		return status.Error(codes.InvalidArgument, "批量大小超过上限")
 	}
 	if errors.Is(err, iddomain.ErrClockBackward) {
 		return status.Error(codes.Unavailable, "时钟回拨，请稍后重试")
@@ -104,6 +120,24 @@ func mapErr(err error) error {
 	}
 	if errors.Is(err, iddomain.ErrManagerClosed) {
 		return status.Error(codes.Unavailable, "发号器已关闭，请稍后重试")
+	}
+	if errors.Is(err, iddomain.ErrSlotOccupied) {
+		return status.Error(codes.Unavailable, "worker 槽位被占用，请稍后重试")
+	}
+	if errors.Is(err, iddomain.ErrInfraUnavailable) {
+		return status.Error(codes.Unavailable, "发号基础设施不可用，请稍后重试")
+	}
+	if errors.Is(err, iddomain.ErrNoCachedSlot) {
+		return status.Error(codes.Unavailable, "发号器降级不可用（无缓存槽位），请稍后重试")
+	}
+	if errors.Is(err, iddomain.ErrSlotsExhausted) {
+		return status.Error(codes.ResourceExhausted, "worker 槽位已耗尽")
+	}
+	if errors.Is(err, iddomain.ErrTooManyTags) {
+		return status.Error(codes.ResourceExhausted, "biz_tag 数量已达上限")
+	}
+	if errors.Is(err, iddomain.ErrSlotMappingInvalid) {
+		return status.Error(codes.FailedPrecondition, "槽位映射损坏，请联系运维")
 	}
 	return status.Error(codes.Internal, "发号失败")
 }

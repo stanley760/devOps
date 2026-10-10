@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrSlotOccupied    = errors.New("etcd slot occupied")
-	ErrSlotsExhausted  = errors.New("etcd slots exhausted")
-	ErrEtcdUnavailable = errors.New("etcd unavailable")
+	ErrSlotOccupied      = errors.New("etcd slot occupied")
+	ErrSlotsExhausted    = errors.New("etcd slots exhausted")
+	ErrEtcdUnavailable   = errors.New("etcd unavailable")
+	ErrSlotMappingInvalid = errors.New("etcd slot mapping invalid")
 )
 
 type slotKV interface {
@@ -67,10 +68,10 @@ func (c *SlotCoordinator) Acquire(ctx context.Context, keyPrefix, identity strin
 	}
 	if found {
 		if mapping.Slot >= count {
-			return 0, fmt.Errorf("slot mapping %q slot %d is outside count %d", permanentKey, mapping.Slot, count)
+			return 0, fmt.Errorf("%w: slot mapping %q slot %d is outside count %d", ErrSlotMappingInvalid, permanentKey, mapping.Slot, count)
 		}
 		if mapping.Timestamp > time.Now().UnixMilli() {
-			return 0, fmt.Errorf("slot mapping %q timestamp %d is in the future", permanentKey, mapping.Timestamp)
+			return 0, fmt.Errorf("%w: slot mapping %q timestamp %d is in the future", ErrSlotMappingInvalid, permanentKey, mapping.Timestamp)
 		}
 		if err := c.Ensure(ctx, keyPrefix, identity, mapping.Slot); err != nil {
 			return 0, err
@@ -180,13 +181,13 @@ func (c *SlotCoordinator) readMapping(ctx context.Context, key string) (slotMapp
 
 	var mapping slotMapping
 	if err := json.Unmarshal(response.Kvs[0].Value, &mapping); err != nil {
-		return slotMapping{}, false, fmt.Errorf("invalid slot mapping %q: %w", key, err)
+		return slotMapping{}, false, fmt.Errorf("%w: invalid slot mapping %q: %w", ErrSlotMappingInvalid, key, err)
 	}
 	if mapping.WorkerID != 0 {
 		mapping.Slot = mapping.WorkerID
 	}
 	if mapping.Slot < 0 {
-		return slotMapping{}, false, fmt.Errorf("invalid slot mapping %q: slot %d", key, mapping.Slot)
+		return slotMapping{}, false, fmt.Errorf("%w: invalid slot mapping %q: slot %d", ErrSlotMappingInvalid, key, mapping.Slot)
 	}
 	return mapping, true, nil
 }

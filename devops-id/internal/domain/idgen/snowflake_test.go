@@ -10,7 +10,17 @@ import (
 )
 
 func newTestGenerator(workerID int64) *tagGenerator {
-	return &tagGenerator{workerID: workerID, lastTimestamp: time.Now().UnixMilli()}
+	return &tagGenerator{
+		workerID:      workerID,
+		lastTimestamp: time.Now().UnixMilli(),
+		nowFn:         func() int64 { return time.Now().UnixMilli() },
+		obs:           noopObserver{},
+		cfg: Config{
+			WatermarkSafetyMargin:    5 * time.Second,
+			WatermarkPersistInterval: 3 * time.Second,
+			WatermarkMaxWait:         30 * time.Second,
+		},
+	}
 }
 
 func TestNextBitLayoutAndMonotonic(t *testing.T) {
@@ -19,7 +29,7 @@ func TestNextBitLayoutAndMonotonic(t *testing.T) {
 
 	var prev int64
 	for i := 0; i < 1000; i++ {
-		id, err := generator.next()
+		id, err := generator.next(context.Background())
 		if err != nil {
 			t.Fatalf("第 %d 次发号失败: %v", i, err)
 		}
@@ -40,7 +50,7 @@ func TestNextBitLayoutAndMonotonic(t *testing.T) {
 }
 
 func TestBatchNextStrictlyIncreasing(t *testing.T) {
-	manager, err := NewManager(Config{}, nil)
+	manager, err := NewManager(Config{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +68,7 @@ func TestBatchNextStrictlyIncreasing(t *testing.T) {
 func TestClockBackwardSmallSpin(t *testing.T) {
 	generator := newTestGenerator(1)
 	generator.lastTimestamp = time.Now().UnixMilli() + 3 // 回拨 3ms（< 5ms 阈值）
-	if _, err := generator.next(); err != nil {
+	if _, err := generator.next(context.Background()); err != nil {
 		t.Fatalf("小回拨应自旋等待追平，got %v", err)
 	}
 }
@@ -66,7 +76,7 @@ func TestClockBackwardSmallSpin(t *testing.T) {
 func TestClockBackwardLargeReject(t *testing.T) {
 	generator := newTestGenerator(1)
 	generator.lastTimestamp = time.Now().UnixMilli() + 100 // 回拨 100ms（≥ 5ms 阈值）
-	if _, err := generator.next(); !errors.Is(err, ErrClockBackward) {
+	if _, err := generator.next(context.Background()); !errors.Is(err, ErrClockBackward) {
 		t.Fatalf("大回拨应拒绝发号，got %v", err)
 	}
 }
@@ -75,7 +85,7 @@ func TestLeaseLostReject(t *testing.T) {
 	// lease 失效（槽位可能被他实例抢占）后必须熔断发号
 	generator := newTestGenerator(1)
 	generator.leaseLost.Store(true)
-	if _, err := generator.next(); !errors.Is(err, ErrLeaseLost) {
+	if _, err := generator.next(context.Background()); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("lease 失效应拒绝发号，got %v", err)
 	}
 }

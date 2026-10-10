@@ -7,6 +7,11 @@ package idgen
 
 import (
 	"context"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	iddomain "devops-id/internal/domain/idgen"
 )
@@ -20,19 +25,48 @@ type Generator interface {
 // Service 发号用例服务。
 type Service struct {
 	mgr *iddomain.Manager
+
+	batchLatency metric.Float64Histogram
 }
 
 // NewService 创建应用服务。
 func NewService(mgr *iddomain.Manager) *Service {
-	return &Service{mgr: mgr}
+	s := &Service{mgr: mgr}
+	meter := otel.Meter("devops-id/idgen")
+	h, err := meter.Float64Histogram(
+		"idgen_batch_latency",
+		metric.WithUnit("s"),
+		metric.WithDescription("发号调用延迟（Next/BatchNext）"),
+	)
+	if err != nil {
+		otel.Handle(err)
+	}
+	s.batchLatency = h
+	return s
 }
 
 // Next 取单个 ID。
 func (s *Service) Next(ctx context.Context, bizTag string) (int64, error) {
-	return s.mgr.Next(ctx, bizTag)
+	startedAt := time.Now()
+	id, err := s.mgr.Next(ctx, bizTag)
+	s.recordLatency(ctx, bizTag, "next", time.Since(startedAt))
+	return id, err
 }
 
-// BatchNext 批量取 count 个严格递增 ID。
+// BatchNext 批量取 count 个严格递增 ID（单调独占批次）。
 func (s *Service) BatchNext(ctx context.Context, bizTag string, count int) ([]int64, error) {
-	return s.mgr.BatchNext(ctx, bizTag, count)
+	startedAt := time.Now()
+	ids, err := s.mgr.BatchNext(ctx, bizTag, count)
+	s.recordLatency(ctx, bizTag, "batch_next", time.Since(startedAt))
+	return ids, err
+}
+
+func (s *Service) recordLatency(ctx context.Context, bizTag, method string, d time.Duration) {
+	if s.batchLatency == nil {
+		return
+	}
+	s.batchLatency.Record(ctx, d.Seconds(), metric.WithAttributes(
+		attribute.String("biz_tag", bizTag),
+		attribute.String("method", method),
+	))
 }
