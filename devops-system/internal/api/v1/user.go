@@ -23,7 +23,7 @@ func NewUserHandler(svc *service.User) *UserHandler { return &UserHandler{svc: s
 
 // ---- Input / Output ----
 
-// UserListInput GET /api/v1/users 查询参数。
+// UserListInput GET /system/api/v1/users 查询参数。
 type UserListInput struct {
 	PageNum  int                          `query:"page_num"`
 	PageSize int                          `query:"page_size" maximum:"100"`
@@ -48,7 +48,7 @@ type UserGetOutput struct {
 	Body response.BaseResponse[types.UserDetailResp]
 }
 
-// UserCreateInput POST /api/v1/users（角色分配 g 行联动）。
+// UserCreateInput POST /system/api/v1/users（角色分配 g 行联动）。
 type UserCreateInput struct {
 	Body types.UserCreateReq
 }
@@ -58,13 +58,13 @@ type UserEmptyOutput struct {
 	Body response.BaseResponse[any]
 }
 
-// UserUpdateInput PUT /api/v1/users/{id}（密码走重置接口）。
+// UserUpdateInput PUT /system/api/v1/users/{id}（密码走重置接口）。
 type UserUpdateInput struct {
 	ID   types.ID `path:"id"`
 	Body types.UserUpdateReq
 }
 
-// UserResetPasswordInput PUT /api/v1/users/{id}/password（重置后踢下线）。
+// UserResetPasswordInput PUT /system/api/v1/users/{id}/password（重置后踢下线）。
 type UserResetPasswordInput struct {
 	ID   types.ID `path:"id"`
 	Body types.ResetPasswordReq
@@ -72,7 +72,7 @@ type UserResetPasswordInput struct {
 
 // ---- Handlers ----
 
-// List GET /api/v1/users。
+// List GET /system/api/v1/users。
 func (h *UserHandler) List(ctx context.Context, in *UserListInput) (*UserListOutput, error) {
 	list, total, err := h.svc.List(ctx, types.UserPageQuery{
 		PageNum:  in.PageNum,
@@ -88,7 +88,7 @@ func (h *UserHandler) List(ctx context.Context, in *UserListInput) (*UserListOut
 	return &UserListOutput{Body: response.PageBody(list, total)}, nil
 }
 
-// Get GET /api/v1/users/{id}。
+// Get GET /system/api/v1/users/{id}。
 func (h *UserHandler) Get(ctx context.Context, in *UserIDInput) (*UserGetOutput, error) {
 	resp, err := h.svc.Get(ctx, in.ID)
 	if err != nil {
@@ -97,7 +97,7 @@ func (h *UserHandler) Get(ctx context.Context, in *UserIDInput) (*UserGetOutput,
 	return &UserGetOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Create POST /api/v1/users。
+// Create POST /system/api/v1/users。
 func (h *UserHandler) Create(ctx context.Context, in *UserCreateInput) (*UserEmptyOutput, error) {
 	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -105,7 +105,7 @@ func (h *UserHandler) Create(ctx context.Context, in *UserCreateInput) (*UserEmp
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Update PUT /api/v1/users/{id}。
+// Update PUT /system/api/v1/users/{id}。
 func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmptyOutput, error) {
 	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -113,7 +113,7 @@ func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmp
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// ResetPassword PUT /api/v1/users/{id}/password（重置后踢下线）。
+// ResetPassword PUT /system/api/v1/users/{id}/password（重置后踢下线）。
 func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordInput) (*UserEmptyOutput, error) {
 	if err := h.svc.ResetPassword(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -121,7 +121,7 @@ func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordIn
 	return &UserEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Delete DELETE /api/v1/users/{id}。
+// Delete DELETE /system/api/v1/users/{id}。
 func (h *UserHandler) Delete(ctx context.Context, in *UserIDInput) (*UserEmptyOutput, error) {
 	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)

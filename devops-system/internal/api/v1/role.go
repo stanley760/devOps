@@ -21,7 +21,7 @@ type RoleHandler struct {
 // NewRoleHandler 创建 handler。
 func NewRoleHandler(svc *service.Role) *RoleHandler { return &RoleHandler{svc: svc} }
 
-// RoleListInput GET /api/v1/roles 查询参数。
+// RoleListInput GET /system/api/v1/roles 查询参数。
 type RoleListInput struct {
 	PageNum  int                      `query:"page_num"`
 	PageSize int                      `query:"page_size" maximum:"100"`
@@ -45,7 +45,7 @@ type RoleGetOutput struct {
 	Body response.BaseResponse[types.RoleDetailResp]
 }
 
-// RoleCreateInput POST /api/v1/roles。
+// RoleCreateInput POST /system/api/v1/roles。
 type RoleCreateInput struct {
 	Body types.RoleSaveReq
 }
@@ -55,19 +55,19 @@ type RoleEmptyOutput struct {
 	Body response.BaseResponse[any]
 }
 
-// RoleUpdateInput PUT /api/v1/roles/{id}。
+// RoleUpdateInput PUT /system/api/v1/roles/{id}。
 type RoleUpdateInput struct {
 	ID   types.ID `path:"id"`
 	Body types.RoleSaveReq
 }
 
-// RoleAssignMenusInput PUT /api/v1/roles/{id}/menus（重建 role_menu + p 行）。
+// RoleAssignMenusInput PUT /system/api/v1/roles/{id}/menus（重建 role_menu + p 行）。
 type RoleAssignMenusInput struct {
 	ID   types.ID `path:"id"`
 	Body types.RoleAssignMenusReq
 }
 
-// List GET /api/v1/roles。
+// List GET /system/api/v1/roles。
 func (h *RoleHandler) List(ctx context.Context, in *RoleListInput) (*RoleListOutput, error) {
 	list, total, err := h.svc.List(ctx, types.RolePageQuery{
 		PageNum:  in.PageNum,
@@ -82,7 +82,7 @@ func (h *RoleHandler) List(ctx context.Context, in *RoleListInput) (*RoleListOut
 	return &RoleListOutput{Body: response.PageBody(list, total)}, nil
 }
 
-// Get GET /api/v1/roles/{id}。
+// Get GET /system/api/v1/roles/{id}。
 func (h *RoleHandler) Get(ctx context.Context, in *RoleIDInput) (*RoleGetOutput, error) {
 	resp, err := h.svc.Get(ctx, in.ID)
 	if err != nil {
@@ -91,7 +91,7 @@ func (h *RoleHandler) Get(ctx context.Context, in *RoleIDInput) (*RoleGetOutput,
 	return &RoleGetOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Create POST /api/v1/roles。
+// Create POST /system/api/v1/roles。
 func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmptyOutput, error) {
 	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -99,7 +99,7 @@ func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmp
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Update PUT /api/v1/roles/{id}。
+// Update PUT /system/api/v1/roles/{id}。
 func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmptyOutput, error) {
 	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -107,7 +107,7 @@ func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmp
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// AssignMenus PUT /api/v1/roles/{id}/menus（role_menu 重建 + p 行快照重建）。
+// AssignMenus PUT /system/api/v1/roles/{id}/menus（role_menu 重建 + p 行快照重建）。
 func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput) (*RoleEmptyOutput, error) {
 	if err := h.svc.AssignMenus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -115,7 +115,7 @@ func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput)
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Delete DELETE /api/v1/roles/{id}。
+// Delete DELETE /system/api/v1/roles/{id}。
 func (h *RoleHandler) Delete(ctx context.Context, in *RoleIDInput) (*RoleEmptyOutput, error) {
 	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)

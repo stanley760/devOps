@@ -123,10 +123,10 @@ func TestRegisterAPIDoc(t *testing.T) {
 	if err := json.Unmarshal(docResponse.Body.Bytes(), &doc); err != nil {
 		t.Fatalf("openapi.json is not valid JSON: %v", err)
 	}
-	if _, ok := doc.Paths["/api/v1/auth/login"]; !ok {
+	if _, ok := doc.Paths["/system/api/v1/auth/login"]; !ok {
 		t.Fatalf("login operation missing: %+v", doc.Paths)
 	}
-	if _, ok := doc.Paths["/api/v1/auth/refresh"]; !ok {
+	if _, ok := doc.Paths["/system/api/v1/auth/refresh"]; !ok {
 		t.Fatalf("refresh operation missing: %+v", doc.Paths)
 	}
 	// 业务接口计数：apidoc 文档启用时自注册 export-openapi（tag "apidoc"），须排除
@@ -160,22 +160,28 @@ func TestRegisterAPIDocEnabledKeepsAuthRoutes(t *testing.T) {
 
 	// 无 token：JWT 中间件应返回 401 信封，而不是 nil handler panic
 	logout := httptest.NewRecorder()
-	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil))
+	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/system/api/v1/auth/logout", nil))
 	if logout.Code != http.StatusUnauthorized {
 		t.Fatalf("logout without token status = %d, want 401, body = %s", logout.Code, logout.Body.String())
 	}
 
 	info := httptest.NewRecorder()
-	r.ServeHTTP(info, httptest.NewRequest(http.MethodGet, "/api/v1/auth/info", nil))
+	r.ServeHTTP(info, httptest.NewRequest(http.MethodGet, "/system/api/v1/auth/info", nil))
 	if info.Code != http.StatusUnauthorized {
 		t.Fatalf("info without token status = %d, want 401, body = %s", info.Code, info.Body.String())
 	}
 
 	// huma 注册的 login 路由可达：请求应命中（参数校验/内容协商错误均可），而非 404
 	login := httptest.NewRecorder()
-	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader("{}")))
+	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/system/api/v1/auth/login", strings.NewReader("{}")))
 	if login.Code == http.StatusNotFound {
 		t.Fatalf("huma login route missing: %s", login.Body.String())
+	}
+
+	legacyLogin := httptest.NewRecorder()
+	r.ServeHTTP(legacyLogin, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader("{}")))
+	if legacyLogin.Code != http.StatusNotFound {
+		t.Fatalf("unprefixed login route unexpectedly available: status = %d", legacyLogin.Code)
 	}
 }
 
@@ -227,13 +233,13 @@ func TestRegisterAPIDocDisabled(t *testing.T) {
 
 	// D5：Enabled 只门控文档端点，业务路由恒注册（auth 已迁 huma，禁用文档时仍可达）
 	login := httptest.NewRecorder()
-	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil))
+	r.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/system/api/v1/auth/login", nil))
 	if login.Code == http.StatusNotFound {
 		t.Fatalf("auth route missing when apidoc disabled: %s", login.Body.String())
 	}
 
 	logout := httptest.NewRecorder()
-	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil))
+	r.ServeHTTP(logout, httptest.NewRequest(http.MethodPost, "/system/api/v1/auth/logout", nil))
 	if logout.Code != http.StatusUnauthorized {
 		t.Fatalf("logout without token status = %d, want 401, body = %s", logout.Code, logout.Body.String())
 	}

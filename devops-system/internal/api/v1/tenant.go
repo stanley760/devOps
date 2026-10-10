@@ -23,7 +23,7 @@ func NewTenantHandler(svc *service.Tenant) *TenantHandler { return &TenantHandle
 
 // ---- Input / Output ----
 
-// TenantListInput GET /api/v1/tenants 查询参数。
+// TenantListInput GET /system/api/v1/tenants 查询参数。
 type TenantListInput struct {
 	PageNum  int                      `query:"page_num"`
 	PageSize int                      `query:"page_size" maximum:"100"`
@@ -47,7 +47,7 @@ type TenantGetOutput struct {
 	Body response.BaseResponse[types.TenantDTO]
 }
 
-// TenantCreateInput POST /api/v1/tenants（含租户初始超管，创建后即可登录）。
+// TenantCreateInput POST /system/api/v1/tenants（含租户初始超管，创建后即可登录）。
 type TenantCreateInput struct {
 	Body types.TenantCreateReq
 }
@@ -62,13 +62,13 @@ type TenantEmptyOutput struct {
 	Body response.BaseResponse[any]
 }
 
-// TenantUpdateInput PUT /api/v1/tenants/{id}（名称/联系人/过期时间）。
+// TenantUpdateInput PUT /system/api/v1/tenants/{id}（名称/联系人/过期时间）。
 type TenantUpdateInput struct {
 	ID   types.ID `path:"id"`
 	Body types.TenantUpdateReq
 }
 
-// TenantStatusInput PUT /api/v1/tenants/{id}/status（停用即全员下线）。
+// TenantStatusInput PUT /system/api/v1/tenants/{id}/status（停用即全员下线）。
 type TenantStatusInput struct {
 	ID   types.ID `path:"id"`
 	Body types.TenantStatusReq
@@ -76,7 +76,7 @@ type TenantStatusInput struct {
 
 // ---- Handlers ----
 
-// List GET /api/v1/tenants。
+// List GET /system/api/v1/tenants。
 func (h *TenantHandler) List(ctx context.Context, in *TenantListInput) (*TenantListOutput, error) {
 	list, total, err := h.svc.List(ctx, types.TenantPageQuery{
 		PageNum:  in.PageNum,
@@ -91,7 +91,7 @@ func (h *TenantHandler) List(ctx context.Context, in *TenantListInput) (*TenantL
 	return &TenantListOutput{Body: response.PageBody(list, total)}, nil
 }
 
-// Get GET /api/v1/tenants/{id}。
+// Get GET /system/api/v1/tenants/{id}。
 func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetOutput, error) {
 	resp, err := h.svc.Get(ctx, in.ID)
 	if err != nil {
@@ -100,7 +100,7 @@ func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetO
 	return &TenantGetOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Create POST /api/v1/tenants（含租户初始超管）。
+// Create POST /system/api/v1/tenants（含租户初始超管）。
 func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*TenantCreateOutput, error) {
 	resp, err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body)
 	if err != nil {
@@ -109,7 +109,7 @@ func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*Ten
 	return &TenantCreateOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Update PUT /api/v1/tenants/{id}（名称/联系人/过期时间）。
+// Update PUT /system/api/v1/tenants/{id}（名称/联系人/过期时间）。
 func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*TenantEmptyOutput, error) {
 	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -117,7 +117,7 @@ func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*Ten
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// UpdateStatus PUT /api/v1/tenants/{id}/status（停用即全员下线）。
+// UpdateStatus PUT /system/api/v1/tenants/{id}/status（停用即全员下线）。
 func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput) (*TenantEmptyOutput, error) {
 	if err := h.svc.UpdateStatus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -125,7 +125,7 @@ func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput)
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Delete DELETE /api/v1/tenants/{id}（默认租户不可删；需先停用）。
+// Delete DELETE /system/api/v1/tenants/{id}（默认租户不可删；需先停用）。
 func (h *TenantHandler) Delete(ctx context.Context, in *TenantIDInput) (*TenantEmptyOutput, error) {
 	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)

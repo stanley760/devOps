@@ -25,7 +25,7 @@ func NewAuthHandler(svc *service.Auth) *AuthHandler {
 
 // ---- Input / Output（结构体即 OpenAPI schema）----
 
-// LoginInput POST /api/v1/auth/login。
+// LoginInput POST /system/api/v1/auth/login。
 type LoginInput struct {
 	Body types.LoginReq
 }
@@ -35,7 +35,7 @@ type LoginOutput struct {
 	Body response.BaseResponse[types.LoginResp]
 }
 
-// RefreshInput POST /api/v1/auth/refresh。
+// RefreshInput POST /system/api/v1/auth/refresh。
 type RefreshInput struct {
 	Body types.RefreshReq
 }
@@ -82,7 +82,7 @@ type UpdatePasswordOutput struct {
 
 // ---- Handlers ----
 
-// Login POST /api/v1/auth/login（客户端元数据经 withClientMeta 中间件注入）。
+// Login POST /system/api/v1/auth/login（客户端元数据经 withClientMeta 中间件注入）。
 func (h *AuthHandler) Login(ctx context.Context, in *LoginInput) (*LoginOutput, error) {
 	resp, err := h.svc.Login(ctx, in.Body, ClientMetaFrom(ctx))
 	if err != nil {
@@ -91,7 +91,7 @@ func (h *AuthHandler) Login(ctx context.Context, in *LoginInput) (*LoginOutput, 
 	return &LoginOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Refresh POST /api/v1/auth/refresh（轮换 refresh 会话）。
+// Refresh POST /system/api/v1/auth/refresh（轮换 refresh 会话）。
 func (h *AuthHandler) Refresh(ctx context.Context, in *RefreshInput) (*RefreshOutput, error) {
 	resp, err := h.svc.Refresh(ctx, in.Body)
 	if err != nil {
@@ -100,13 +100,13 @@ func (h *AuthHandler) Refresh(ctx context.Context, in *RefreshInput) (*RefreshOu
 	return &RefreshOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Logout POST /api/v1/auth/logout（需 JWT）。
+// Logout POST /system/api/v1/auth/logout（需 JWT）。
 func (h *AuthHandler) Logout(ctx context.Context, _ *struct{}) (*LogoutOutput, error) {
 	h.svc.Logout(ctx, auth.ClaimsFrom(ctx))
 	return &LogoutOutput{Body: response.EmptyBody()}, nil
 }
 
-// Info GET /api/v1/auth/info（需 JWT + Tenant）。
+// Info GET /system/api/v1/auth/info（需 JWT + Tenant）。
 func (h *AuthHandler) Info(ctx context.Context, _ *struct{}) (*InfoOutput, error) {
 	resp, err := h.svc.Info(ctx, auth.ClaimsFrom(ctx))
 	if err != nil {
@@ -115,7 +115,7 @@ func (h *AuthHandler) Info(ctx context.Context, _ *struct{}) (*InfoOutput, error
 	return &InfoOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Routers GET /api/v1/auth/routers（需 JWT + Tenant）。
+// Routers GET /system/api/v1/auth/routers（需 JWT + Tenant）。
 func (h *AuthHandler) Routers(ctx context.Context, _ *struct{}) (*RoutersOutput, error) {
 	routers, err := h.svc.Routers(ctx, auth.ClaimsFrom(ctx))
 	if err != nil {
@@ -124,7 +124,7 @@ func (h *AuthHandler) Routers(ctx context.Context, _ *struct{}) (*RoutersOutput,
 	return &RoutersOutput{Body: response.OKBody(routers)}, nil
 }
 
-// UpdateProfile PUT /api/v1/auth/profile（需 JWT + Tenant）。
+// UpdateProfile PUT /system/api/v1/auth/profile（需 JWT + Tenant）。
 func (h *AuthHandler) UpdateProfile(ctx context.Context, in *UpdateProfileInput) (*UpdateProfileOutput, error) {
 	if err := h.svc.UpdateProfile(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -132,7 +132,7 @@ func (h *AuthHandler) UpdateProfile(ctx context.Context, in *UpdateProfileInput)
 	return &UpdateProfileOutput{Body: response.EmptyBody()}, nil
 }
 
-// UpdatePassword PUT /api/v1/auth/profile/password（需 JWT + Tenant，改密踢下线）。
+// UpdatePassword PUT /system/api/v1/auth/profile/password（需 JWT + Tenant，改密踢下线）。
 func (h *AuthHandler) UpdatePassword(ctx context.Context, in *UpdatePasswordInput) (*UpdatePasswordOutput, error) {
 	if err := h.svc.UpdatePassword(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)

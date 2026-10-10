@@ -23,7 +23,7 @@ func NewPostHandler(svc *service.Post) *PostHandler { return &PostHandler{svc: s
 
 // ---- Input / Output ----
 
-// PostListInput GET /api/v1/posts 查询参数（分页零值走 dao 兜底，分页字段不加 minimum）。
+// PostListInput GET /system/api/v1/posts 查询参数（分页零值走 dao 兜底，分页字段不加 minimum）。
 type PostListInput struct {
 	PageNum  int                      `query:"page_num"`
 	PageSize int                      `query:"page_size" maximum:"100"`
@@ -47,7 +47,7 @@ type PostGetOutput struct {
 	Body response.BaseResponse[types.PostDTO]
 }
 
-// PostCreateInput POST /api/v1/posts。
+// PostCreateInput POST /system/api/v1/posts。
 type PostCreateInput struct {
 	Body types.PostSaveReq
 }
@@ -57,7 +57,7 @@ type PostEmptyOutput struct {
 	Body response.BaseResponse[any]
 }
 
-// PostUpdateInput PUT /api/v1/posts/{id}。
+// PostUpdateInput PUT /system/api/v1/posts/{id}。
 type PostUpdateInput struct {
 	ID   types.ID `path:"id"`
 	Body types.PostSaveReq
@@ -65,7 +65,7 @@ type PostUpdateInput struct {
 
 // ---- Handlers ----
 
-// List GET /api/v1/posts。
+// List GET /system/api/v1/posts。
 func (h *PostHandler) List(ctx context.Context, in *PostListInput) (*PostListOutput, error) {
 	list, total, err := h.svc.List(ctx, types.PostPageQuery{
 		PageNum:  in.PageNum,
@@ -80,7 +80,7 @@ func (h *PostHandler) List(ctx context.Context, in *PostListInput) (*PostListOut
 	return &PostListOutput{Body: response.PageBody(list, total)}, nil
 }
 
-// Get GET /api/v1/posts/{id}。
+// Get GET /system/api/v1/posts/{id}。
 func (h *PostHandler) Get(ctx context.Context, in *PostIDInput) (*PostGetOutput, error) {
 	resp, err := h.svc.Get(ctx, in.ID)
 	if err != nil {
@@ -89,7 +89,7 @@ func (h *PostHandler) Get(ctx context.Context, in *PostIDInput) (*PostGetOutput,
 	return &PostGetOutput{Body: response.OKBody(*resp)}, nil
 }
 
-// Create POST /api/v1/posts（code 创建后不可改）。
+// Create POST /system/api/v1/posts（code 创建后不可改）。
 func (h *PostHandler) Create(ctx context.Context, in *PostCreateInput) (*PostEmptyOutput, error) {
 	if err := h.svc.Create(ctx, auth.ClaimsFrom(ctx), in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -97,7 +97,7 @@ func (h *PostHandler) Create(ctx context.Context, in *PostCreateInput) (*PostEmp
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Update PUT /api/v1/posts/{id}。
+// Update PUT /system/api/v1/posts/{id}。
 func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmptyOutput, error) {
 	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -105,7 +105,7 @@ func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmp
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Delete DELETE /api/v1/posts/{id}。
+// Delete DELETE /system/api/v1/posts/{id}。
 func (h *PostHandler) Delete(ctx context.Context, in *PostIDInput) (*PostEmptyOutput, error) {
 	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
 		return nil, errs.ToHumaError(err)

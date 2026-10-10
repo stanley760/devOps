@@ -1,7 +1,7 @@
 // t_system_login_log 登录审计表（租户表）。每次登录尝试（成功与失败）各记一行，
 // 供审计追溯；由 service.Auth.login 的 defer 落库（尽力而为，不影响登录结果；
 // dao.CreateLoginLog 落库前按列宽截断，杜绝超长 UA/Geo 头整行被拒）。
-// 查询/删除/清空走管理端 /api/v1/login-logs（system:loginlog:* 权限门控）。
+// 查询/删除/清空走管理端 /system/api/v1/login-logs（system:loginlog:* 权限门控）。
 // 租户校验失败的尝试无租户 ctx（TenantPlugin fail-closed 拒绝落库），
 // 仅在访问日志与 auth_login 指标可见——审计表只覆盖租户已解析的路径。
 package model

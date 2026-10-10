@@ -16,8 +16,11 @@ import (
 	"devops-system/internal/service"
 )
 
-// with 合并公共 Operation 字段（Tags/Responses），保持各注册点简洁。
+const systemAPIPrefix = "/system"
+
+// with 合并公共 Operation 字段并添加 devops-system 的接口前缀。
 func with(common huma.Operation, op huma.Operation) huma.Operation {
+	op.Path = systemAPIPrefix + op.Path
 	if op.Tags == nil {
 		op.Tags = common.Tags
 	}

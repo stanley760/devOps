@@ -23,7 +23,7 @@ func NewLoginLogHandler(svc *service.LoginLog) *LoginLogHandler { return &LoginL
 
 // ---- Input / Output ----
 
-// LoginLogListInput GET /api/v1/login-logs 查询参数（分页零值走 dao 兜底；
+// LoginLogListInput GET /system/api/v1/login-logs 查询参数（分页零值走 dao 兜底；
 // 可选参数走 humaparam.Optional，huma 管线不支持裸指针 query 参数）。
 type LoginLogListInput struct {
 	PageNum   int                           `query:"page_num"`
@@ -40,7 +40,7 @@ type LoginLogListOutput struct {
 	Body response.BaseResponse[response.PageData[[]types.LoginLogDTO]]
 }
 
-// LoginLogDeleteInput DELETE /api/v1/login-logs（ids 逗号分隔，如 ?ids=12,34,56）。
+// LoginLogDeleteInput DELETE /system/api/v1/login-logs（ids 逗号分隔，如 ?ids=12,34,56）。
 type LoginLogDeleteInput struct {
 	IDs string `query:"ids" maxLength:"2000"`
 }
@@ -52,7 +52,7 @@ type LoginLogEmptyOutput struct {
 
 // ---- Handlers ----
 
-// List GET /api/v1/login-logs。
+// List GET /system/api/v1/login-logs。
 func (h *LoginLogHandler) List(ctx context.Context, in *LoginLogListInput) (*LoginLogListOutput, error) {
 	list, total, err := h.svc.List(ctx, types.LoginLogPageQuery{
 		PageNum:   in.PageNum,
@@ -69,7 +69,7 @@ func (h *LoginLogHandler) List(ctx context.Context, in *LoginLogListInput) (*Log
 	return &LoginLogListOutput{Body: response.PageBody(list, total)}, nil
 }
 
-// Delete DELETE /api/v1/login-logs（批量删除）。
+// Delete DELETE /system/api/v1/login-logs（批量删除）。
 func (h *LoginLogHandler) Delete(ctx context.Context, in *LoginLogDeleteInput) (*LoginLogEmptyOutput, error) {
 	if err := h.svc.Delete(ctx, in.IDs); err != nil {
 		return nil, errs.ToHumaError(err)
@@ -77,7 +77,7 @@ func (h *LoginLogHandler) Delete(ctx context.Context, in *LoginLogDeleteInput) (
 	return &LoginLogEmptyOutput{Body: response.EmptyBody()}, nil
 }
 
-// Clean DELETE /api/v1/login-logs/clean（清空本租户）。
+// Clean DELETE /system/api/v1/login-logs/clean（清空本租户）。
 func (h *LoginLogHandler) Clean(ctx context.Context, _ *struct{}) (*LoginLogEmptyOutput, error) {
 	if err := h.svc.Clean(ctx); err != nil {
 		return nil, errs.ToHumaError(err)

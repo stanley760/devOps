@@ -169,18 +169,18 @@ func main() {
 				)
 				switch *mode {
 				case "login":
-					path, body, withToken = "/api/v1/auth/login",
+					path, body, withToken = "/system/api/v1/auth/login",
 						fmt.Sprintf(`{"tenant_code":%q,"username":%q,"password":%q}`, *tenant, *username, *password), false
 				case "create":
-					path, body, withToken = "/api/v1/users",
+					path, body, withToken = "/system/api/v1/users",
 						fmt.Sprintf(`{"username":"%s%d_%d","password":"Bench@123456","nickname":"bench","deptId":%q}`,
 							*prefix, tsBase, n, *dept), true
 				default: // mixed：单双交替
 					if n%2 == 0 {
-						path, body, withToken = "/api/v1/auth/login",
+						path, body, withToken = "/system/api/v1/auth/login",
 							fmt.Sprintf(`{"tenant_code":%q,"username":%q,"password":%q}`, *tenant, *username, *password), false
 					} else {
-						path, body, withToken = "/api/v1/users",
+						path, body, withToken = "/system/api/v1/users",
 							fmt.Sprintf(`{"username":"%s%d_%d","password":"Bench@123456","nickname":"bench","deptId":%q}`,
 								*prefix, tsBase, n, *dept), true
 					}
@@ -262,7 +262,7 @@ func main() {
 // login 调用登录接口，返回 access_token。
 func login(client *http.Client, addr, host, tenant, username, password string) (string, error) {
 	body := fmt.Sprintf(`{"tenant_code":%q,"username":%q,"password":%q}`, tenant, username, password)
-	status, code, raw, err := doPostRaw(client, addr, host, "/api/v1/auth/login", body, "", false)
+	status, code, raw, err := doPostRaw(client, addr, host, "/system/api/v1/auth/login", body, "", false)
 	if err != nil {
 		return "", err
 	}
