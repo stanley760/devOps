@@ -1,6 +1,6 @@
 module devops-infra
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/DeRuina/timberjack v1.4.7
