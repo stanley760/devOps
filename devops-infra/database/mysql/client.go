@@ -42,7 +42,7 @@ func New(cfg Config) (*Client, error) {
 	pool.SetMaxIdleConns(cfg.MaxIdleConns)
 	pool.SetMaxOpenConns(cfg.MaxOpenConns)
 	pool.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-
+	pool.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
 	slog.Info("MySQL 连接成功",
 		"addr", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		"database", cfg.Database)

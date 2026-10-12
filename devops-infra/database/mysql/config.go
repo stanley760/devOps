@@ -36,6 +36,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.ConnMaxLifetime == 0 {
 		cfg.ConnMaxLifetime = time.Hour
 	}
+	if cfg.ConnMaxIdleTime == 0 {
+		cfg.ConnMaxIdleTime = time.Minute
+	}
 	return cfg, nil
 }
 

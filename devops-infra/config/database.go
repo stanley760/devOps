@@ -13,5 +13,6 @@ type MysqlConfig struct {
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idletime"`
 	LogLevel        string        `mapstructure:"log_level"` // silent|error|warn|info
 }
