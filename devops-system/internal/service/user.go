@@ -200,8 +200,8 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 	}
 	// 角色分配已变：清数据权限缓存（含部门调动改变可见范围）
 	s.invalidateScope()
-	// 状态 0→1：停用即踢下线（存量会话立即失效）
-	if u.Status == 0 && req.Status == 1 {
+	// 状态 1→0：停用即踢下线（存量会话立即失效）
+	if u.Status == 1 && req.Status == 0 {
 		s.authM.RevokeAllSessions(ctx, claims.TenantID, u.ID)
 	}
 	return nil

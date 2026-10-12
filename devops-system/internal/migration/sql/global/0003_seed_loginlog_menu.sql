@@ -8,7 +8,7 @@ INSERT INTO t_system_menu
      name, permission, type, sort, parent_id, path, icon, component,
      status, visible, always_show)
 VALUES
-    (8,  'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '登录日志', 'system:loginlog:list',   2, 7, 1, 'loginlog', 'ep:document', 'system/loginlog/index', 0, TRUE, TRUE),
-    (81, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '日志删除', 'system:loginlog:delete', 3, 1, 8, '', '', '', 0, TRUE, FALSE),
-    (82, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '日志清空', 'system:loginlog:clean',  3, 2, 8, '', '', '', 0, TRUE, FALSE)
+    (8,  'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '登录日志', 'system:loginlog:list',   2, 7, 1, 'loginlog', 'ep:document', 'system/loginlog/index', 1, TRUE, TRUE),
+    (81, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '日志删除', 'system:loginlog:delete', 3, 1, 8, '', '', '', 1, TRUE, FALSE),
+    (82, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '日志清空', 'system:loginlog:clean',  3, 2, 8, '', '', '', 1, TRUE, FALSE)
 ON DUPLICATE KEY UPDATE id = id;

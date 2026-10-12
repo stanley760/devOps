@@ -39,7 +39,7 @@ type TenantListOutput struct {
 
 // TenantIDInput path 参数。
 type TenantIDInput struct {
-	ID types.ID `path:"id"`
+	ID types.ParamID `path:"id"`
 }
 
 // TenantGetOutput 租户详情信封。
@@ -64,13 +64,13 @@ type TenantEmptyOutput struct {
 
 // TenantUpdateInput PUT /system/api/v1/tenants/{id}（名称/联系人/过期时间）。
 type TenantUpdateInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.TenantUpdateReq
 }
 
 // TenantStatusInput PUT /system/api/v1/tenants/{id}/status（停用即全员下线）。
 type TenantStatusInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.TenantStatusReq
 }
 
@@ -93,7 +93,11 @@ func (h *TenantHandler) List(ctx context.Context, in *TenantListInput) (*TenantL
 
 // Get GET /system/api/v1/tenants/{id}。
 func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetOutput, error) {
-	resp, err := h.svc.Get(ctx, in.ID)
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	resp, err := h.svc.Get(ctx, id)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -111,7 +115,11 @@ func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*Ten
 
 // Update PUT /system/api/v1/tenants/{id}（名称/联系人/过期时间）。
 func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
@@ -119,7 +127,11 @@ func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*Ten
 
 // UpdateStatus PUT /system/api/v1/tenants/{id}/status（停用即全员下线）。
 func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.UpdateStatus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.UpdateStatus(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil
@@ -127,7 +139,11 @@ func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput)
 
 // Delete DELETE /system/api/v1/tenants/{id}（默认租户不可删；需先停用）。
 func (h *TenantHandler) Delete(ctx context.Context, in *TenantIDInput) (*TenantEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), id); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &TenantEmptyOutput{Body: response.EmptyBody()}, nil

@@ -22,7 +22,7 @@ mysql:
   max_open_conns: 100
   conn_max_lifetime: 1h
   conn_max_idletime: 10m
-  log_level: warn
+  log_level: info
 
 redis:
   host: 127.0.0.1

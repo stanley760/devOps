@@ -266,7 +266,7 @@ func registerLoginLogs(api huma.API, h *apiv1.LoginLogHandler, kit *middleware.K
 	}), h.Clean)
 }
 
-// registerTenants tenants 模块 6 接口（P5，平台路由 kit.plat）。
+// registerTenants tenants 模块 
 func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"tenants"},
@@ -292,7 +292,7 @@ func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) 
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-update-status", Method: http.MethodPut, Path: "/api/v1/tenants/{id}/status",
-		Summary: "租户启停", Description: "停用即全员下线。",
+		Summary: "租户启停", Description: "停用即全员下线。status:0 - 停用; 1 - 启用",
 		Middlewares: kit.PlatChain("platform:tenant:update"),
 	}), h.UpdateStatus)
 	huma.Register(api, with(common, huma.Operation{

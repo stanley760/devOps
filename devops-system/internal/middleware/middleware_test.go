@@ -259,9 +259,9 @@ func seedTenants(t *testing.T, db *gorm.DB) {
 	}
 	expired := time.Now().Add(-time.Hour)
 	tenants := []model.Tenant{
-		{BaseModel: model.BaseModel{ID: 7}, Name: "正常租户", Code: "t7", Status: 0},
-		{BaseModel: model.BaseModel{ID: 8}, Name: "停用租户", Code: "t8", Status: 1},
-		{BaseModel: model.BaseModel{ID: 9}, Name: "过期租户", Code: "t9", Status: 0, ExpireTime: &expired},
+		{BaseModel: model.BaseModel{ID: 7}, Name: "正常租户", Code: "t7", Status: 1},
+		{BaseModel: model.BaseModel{ID: 8}, Name: "停用租户", Code: "t8", Status: 0},
+		{BaseModel: model.BaseModel{ID: 9}, Name: "过期租户", Code: "t9", Status: 1, ExpireTime: &expired},
 	}
 	if err := db.Create(&tenants).Error; err != nil {
 		t.Fatal(err)

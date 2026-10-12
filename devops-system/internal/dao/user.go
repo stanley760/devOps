@@ -82,7 +82,7 @@ func GetUserRoles(ctx context.Context, userID int64) ([]model.Role, error) {
 }
 
 // GetUserMenus 用户在租户内可见菜单（按角色聚合去重，原生 JOIN 显式过滤）。
-// menuTypes 过滤菜单类型（1目录 2菜单 3按钮），status=0 正常。
+// menuTypes 过滤菜单类型（1目录 2菜单 3按钮），status=1 正常。
 func GetUserMenus(ctx context.Context, userID int64, menuTypes []int8) ([]model.Menu, error) {
 	tid, err := tenantOf(ctx)
 	if err != nil {
@@ -93,7 +93,7 @@ func GetUserMenus(ctx context.Context, userID int64, menuTypes []int8) ([]model.
 		Table("t_system_menu AS m").
 		Joins("JOIN t_system_role_menu rm ON rm.menu_id = m.id").
 		Joins("JOIN t_system_user_role ur ON ur.role_id = rm.role_id AND ur.tenant_id = rm.tenant_id").
-		Where("ur.tenant_id = ? AND ur.user_id = ? AND m.status = 0 AND m.deleted_at IS NULL",
+		Where("ur.tenant_id = ? AND ur.user_id = ? AND m.status = 1 AND m.deleted_at IS NULL",
 			tid, userID).
 		Distinct()
 	if len(menuTypes) > 0 {

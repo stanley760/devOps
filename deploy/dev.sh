@@ -215,9 +215,8 @@ case "$COMMAND" in
     stop_service devops-id
     ;;
   migrate)
-    # 迁移用一次性容器执行（devops-system 服务在 app profile 下）
-    compose build devops-system
-    docker compose -f "$COMPOSE_FILE" --profile app run --rm devops-system migrate
+    # dev compose 只运行基础设施；业务服务在本地运行，因此迁移也用本地配置执行。
+    (cd "$ROOT/devops-system" && go run . migrate)
     ;;
   down) compose down ;;
   restart) compose restart mysql redis nacos etcd higress ;;

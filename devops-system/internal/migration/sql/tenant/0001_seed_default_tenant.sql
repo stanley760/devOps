@@ -7,27 +7,27 @@
 INSERT INTO t_system_dept
     (id, tenant_id, creator, create_time, updater, update_time, name, parent_id, sort, status)
 VALUES
-    (100, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'devOps', 0,   0, 0),
-    (101, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '技术部', 100,  1, 0),
-    (102, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '运维部', 100,  2, 0)
+    (100, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'devOps', 0,   0, 1),
+    (101, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '技术部', 100,  1, 1),
+    (102, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '运维部', 100,  2, 1)
 ON DUPLICATE KEY UPDATE id = id;
 
 -- 岗位：1=ceo、2=se、3=ops、4=user
 INSERT INTO t_system_post
     (id, tenant_id, creator, create_time, updater, update_time, code, name, sort, status)
 VALUES
-    (1, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'ceo',  '董事长',     1, 0),
-    (2, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'se',   '架构师',     2, 0),
-    (3, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'ops',  '运维工程师', 3, 0),
-    (4, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'user', '普通用户',   4, 0)
+    (1, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'ceo',  '董事长',     1, 1),
+    (2, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'se',   '架构师',     2, 1),
+    (3, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'ops',  '运维工程师', 3, 1),
+    (4, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, 'user', '普通用户',   4, 1)
 ON DUPLICATE KEY UPDATE id = id;
 
 -- 角色：1=超级管理员（内置）、2=普通角色
 INSERT INTO t_system_role
     (id, tenant_id, creator, create_time, updater, update_time, name, code, sort, data_scope, status, type)
 VALUES
-    (1, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '超级管理员', 'super_admin', 1, 1, 0, 1),
-    (2, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '普通角色',   'common',      2, 2, 0, 2)
+    (1, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '超级管理员', 'super_admin', 1, 1, 1, 1),
+    (2, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP, '普通角色',   'common',      2, 2, 1, 2)
 ON DUPLICATE KEY UPDATE id = id;
 
 -- 用户：1=admin / Admin@123（dept 101，post_ids [4]）
@@ -36,7 +36,7 @@ INSERT INTO t_system_users
      username, password, nickname, dept_id, post_ids, email, sex, status)
 VALUES
     (1, 1, 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP,
-     'admin', '$2a$10$r0/5Jgky6pc3mBLuC6.Xs.3Ysdo8mu04VWehEm15I/qIbGQ4IaBXq', 'admin', 101, '[4]', 'admin@devops.local', 0, 0)
+     'admin', '$2a$10$r0/5Jgky6pc3mBLuC6.Xs.3Ysdo8mu04VWehEm15I/qIbGQ4IaBXq', 'admin', 101, '[4]', 'admin@devops.local', 0, 1)
 ON DUPLICATE KEY UPDATE id = id;
 
 -- 授权：admin(1) → super_admin(1)

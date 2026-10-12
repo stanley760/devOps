@@ -35,7 +35,7 @@ type MenuListOutput struct {
 
 // MenuIDInput path 参数。
 type MenuIDInput struct {
-	ID types.ID `path:"id"`
+	ID types.ParamID `path:"id"`
 }
 
 // MenuGetOutput 菜单详情信封。
@@ -55,7 +55,7 @@ type MenuEmptyOutput struct {
 
 // MenuUpdateInput PUT /system/api/v1/menus/{id}（permission 变更联动重建引用角色 p 行）。
 type MenuUpdateInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.MenuSaveReq
 }
 
@@ -72,7 +72,11 @@ func (h *MenuHandler) List(ctx context.Context, in *MenuListInput) (*MenuListOut
 
 // Get GET /system/api/v1/menus/{id}。
 func (h *MenuHandler) Get(ctx context.Context, in *MenuIDInput) (*MenuGetOutput, error) {
-	resp, err := h.svc.Get(ctx, in.ID)
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	resp, err := h.svc.Get(ctx, id)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -89,7 +93,11 @@ func (h *MenuHandler) Create(ctx context.Context, in *MenuCreateInput) (*MenuEmp
 
 // Update PUT /system/api/v1/menus/{id}（permission 变更联动重建引用角色 p 行）。
 func (h *MenuHandler) Update(ctx context.Context, in *MenuUpdateInput) (*MenuEmptyOutput, error) {
-	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &MenuEmptyOutput{Body: response.EmptyBody()}, nil
@@ -97,7 +105,11 @@ func (h *MenuHandler) Update(ctx context.Context, in *MenuUpdateInput) (*MenuEmp
 
 // Delete DELETE /system/api/v1/menus/{id}。
 func (h *MenuHandler) Delete(ctx context.Context, in *MenuIDInput) (*MenuEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, in.ID); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Delete(ctx, id); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &MenuEmptyOutput{Body: response.EmptyBody()}, nil

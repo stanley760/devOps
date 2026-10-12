@@ -37,9 +37,9 @@ type PostListOutput struct {
 	Body response.BaseResponse[response.PageData[[]types.PostDTO]]
 }
 
-// PostIDInput path 参数（types.ID 实现 TextUnmarshaler，schema 自动为 string）。
+// PostIDInput path 参数。
 type PostIDInput struct {
-	ID types.ID `path:"id"`
+	ID types.ParamID `path:"id"`
 }
 
 // PostGetOutput 岗位详情信封。
@@ -59,7 +59,7 @@ type PostEmptyOutput struct {
 
 // PostUpdateInput PUT /system/api/v1/posts/{id}。
 type PostUpdateInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.PostSaveReq
 }
 
@@ -82,7 +82,11 @@ func (h *PostHandler) List(ctx context.Context, in *PostListInput) (*PostListOut
 
 // Get GET /system/api/v1/posts/{id}。
 func (h *PostHandler) Get(ctx context.Context, in *PostIDInput) (*PostGetOutput, error) {
-	resp, err := h.svc.Get(ctx, in.ID)
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	resp, err := h.svc.Get(ctx, id)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -99,7 +103,11 @@ func (h *PostHandler) Create(ctx context.Context, in *PostCreateInput) (*PostEmp
 
 // Update PUT /system/api/v1/posts/{id}。
 func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmptyOutput, error) {
-	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil
@@ -107,7 +115,11 @@ func (h *PostHandler) Update(ctx context.Context, in *PostUpdateInput) (*PostEmp
 
 // Delete DELETE /system/api/v1/posts/{id}。
 func (h *PostHandler) Delete(ctx context.Context, in *PostIDInput) (*PostEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), id); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &PostEmptyOutput{Body: response.EmptyBody()}, nil

@@ -38,7 +38,7 @@ func newTenantChecker(gdb *gorm.DB, c cache.Cache) func(ctx context.Context, ten
 		if err := gdb.WithContext(ctx).Where("id = ?", tenantID).First(&t).Error; err != nil {
 			return false
 		}
-		if t.Status != 0 { // 停用
+		if t.Status != 1 { // 停用
 			return false
 		}
 		if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) { // 过期

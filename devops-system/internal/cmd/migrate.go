@@ -67,6 +67,7 @@ func autoMigrate(gdb *gorm.DB) error {
 		&model.UserRole{},
 		&model.RoleMenu{},
 		&model.LoginLog{},
+		&model.OperationLog{},
 	)
 }
 

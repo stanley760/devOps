@@ -13,6 +13,13 @@ import (
 // ID int64 主键的 DTO 形态：JSON 序列化为字符串。
 type ID int64
 
+// ParamID keeps path and query IDs as strings until explicitly parsed,
+// preventing clients from treating snowflake IDs as imprecise JSON numbers.
+type ParamID string
+
+// Parse converts a path or query ID into the internal numeric ID type.
+func (i ParamID) Parse() (ID, error) { return ParseID(string(i)) }
+
 // String 实现 Stringer。
 func (i ID) String() string { return strconv.FormatInt(int64(i), 10) }
 

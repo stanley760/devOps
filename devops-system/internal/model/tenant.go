@@ -11,7 +11,7 @@ type Tenant struct {
 	Code          string     `gorm:"size:30;not null;uniqueIndex:uk_code"`
 	ContactName   string     `gorm:"size:30;column:contact_name"`
 	ContactMobile string     `gorm:"size:500;column:contact_mobile"`
-	Status        int8       `gorm:"not null;default:0"` // 0正常 1停用
+	Status        int8       `gorm:"not null;default:1"` // 0停用 1正常
 	ExpireTime    *time.Time // NULL 永不过期
 	Remark        string     `gorm:"size:500"`
 }

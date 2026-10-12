@@ -35,7 +35,7 @@ type TenantUpdateReq struct {
 
 // TenantStatusReq PUT /tenants/:id/status 入参。
 type TenantStatusReq struct {
-	Status int8 `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1"` // 0启用 1停用（required 会拒 0 值，故不用）
+	Status int8 `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1"` // 1启用 0停用（required 会拒 0 值，故不用）
 }
 
 // TenantDTO 租户信息。

@@ -37,7 +37,7 @@ type RoleListOutput struct {
 
 // RoleIDInput path 参数。
 type RoleIDInput struct {
-	ID types.ID `path:"id"`
+	ID types.ParamID `path:"id"`
 }
 
 // RoleGetOutput 角色详情信封（角色 + 已分配菜单 ID）。
@@ -57,13 +57,13 @@ type RoleEmptyOutput struct {
 
 // RoleUpdateInput PUT /system/api/v1/roles/{id}。
 type RoleUpdateInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.RoleSaveReq
 }
 
 // RoleAssignMenusInput PUT /system/api/v1/roles/{id}/menus（重建 role_menu + p 行）。
 type RoleAssignMenusInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.RoleAssignMenusReq
 }
 
@@ -84,7 +84,11 @@ func (h *RoleHandler) List(ctx context.Context, in *RoleListInput) (*RoleListOut
 
 // Get GET /system/api/v1/roles/{id}。
 func (h *RoleHandler) Get(ctx context.Context, in *RoleIDInput) (*RoleGetOutput, error) {
-	resp, err := h.svc.Get(ctx, in.ID)
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	resp, err := h.svc.Get(ctx, id)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -101,7 +105,11 @@ func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmp
 
 // Update PUT /system/api/v1/roles/{id}。
 func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
@@ -109,7 +117,11 @@ func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmp
 
 // AssignMenus PUT /system/api/v1/roles/{id}/menus（role_menu 重建 + p 行快照重建）。
 func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.AssignMenus(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.AssignMenus(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil
@@ -117,7 +129,11 @@ func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput)
 
 // Delete DELETE /system/api/v1/roles/{id}。
 func (h *RoleHandler) Delete(ctx context.Context, in *RoleIDInput) (*RoleEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), in.ID); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Delete(ctx, auth.ClaimsFrom(ctx), id); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &RoleEmptyOutput{Body: response.EmptyBody()}, nil

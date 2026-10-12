@@ -35,7 +35,7 @@ type DeptListOutput struct {
 
 // DeptIDInput path 参数。
 type DeptIDInput struct {
-	ID types.ID `path:"id"`
+	ID types.ParamID `path:"id"`
 }
 
 // DeptGetOutput 部门详情信封。
@@ -55,7 +55,7 @@ type DeptEmptyOutput struct {
 
 // DeptUpdateInput PUT /system/api/v1/depts/{id}。
 type DeptUpdateInput struct {
-	ID   types.ID `path:"id"`
+	ID   types.ParamID `path:"id"`
 	Body types.DeptSaveReq
 }
 
@@ -72,7 +72,11 @@ func (h *DeptHandler) List(ctx context.Context, in *DeptListInput) (*DeptListOut
 
 // Get GET /system/api/v1/depts/{id}。
 func (h *DeptHandler) Get(ctx context.Context, in *DeptIDInput) (*DeptGetOutput, error) {
-	resp, err := h.svc.Get(ctx, in.ID)
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	resp, err := h.svc.Get(ctx, id)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -89,7 +93,11 @@ func (h *DeptHandler) Create(ctx context.Context, in *DeptCreateInput) (*DeptEmp
 
 // Update PUT /system/api/v1/depts/{id}（父节点不得是自身或后代，防环）。
 func (h *DeptHandler) Update(ctx context.Context, in *DeptUpdateInput) (*DeptEmptyOutput, error) {
-	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), in.ID, in.Body); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Update(ctx, auth.ClaimsFrom(ctx), id, in.Body); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &DeptEmptyOutput{Body: response.EmptyBody()}, nil
@@ -97,7 +105,11 @@ func (h *DeptHandler) Update(ctx context.Context, in *DeptUpdateInput) (*DeptEmp
 
 // Delete DELETE /system/api/v1/depts/{id}。
 func (h *DeptHandler) Delete(ctx context.Context, in *DeptIDInput) (*DeptEmptyOutput, error) {
-	if err := h.svc.Delete(ctx, in.ID); err != nil {
+	id, err := in.ID.Parse()
+	if err != nil {
+		return nil, errs.ToHumaError(err)
+	}
+	if err := h.svc.Delete(ctx, id); err != nil {
 		return nil, errs.ToHumaError(err)
 	}
 	return &DeptEmptyOutput{Body: response.EmptyBody()}, nil

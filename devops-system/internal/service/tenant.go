@@ -10,6 +10,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -80,7 +81,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		ContactMobile: req.ContactMobile,
 		ExpireTime:    req.ExpireTime,
 		Remark:        req.Remark,
-		Status:        0,
+		Status:        1,
 	}
 	if err := dao.CreateTenant(ctx, t); err != nil {
 		return nil, err
@@ -95,13 +96,13 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		Username: req.AdminUsername,
 		Password: string(hash),
 		Nickname: req.AdminUsername,
-		Status:   0,
+		Status:   1,
 	}
 	role := &model.Role{
 		BaseTenantModel: model.BaseTenantModel{
 			BaseModel: model.BaseModel{Creator: claims.Username, Updater: claims.Username},
 		},
-		Name: "超级管理员", Code: authz.Roles().SuperAdmin, Type: 1, DataScope: 1, Status: 0,
+		Name: "超级管理员", Code: authz.Roles().SuperAdmin, Type: 1, DataScope: 1, Status: 1,
 	}
 	if err := dao.SeedTenantAdmin(tctx, role, admin); err != nil {
 		// 补偿：回滚租户行，避免「有租户无超管」的中间态。
@@ -131,6 +132,12 @@ func (s *Tenant) Update(ctx context.Context, claims *auth.AccessClaims, id types
 	}
 	if req.ExpireTime != nil {
 		updates["expire_time"] = *req.ExpireTime
+		var now = time.Now()
+		if req.ExpireTime.After(now) {
+			updates["status"] = 1
+		} else {
+			updates["status"] = 0
+		}
 	} else {
 		updates["expire_time"] = nil // 永不过期
 	}
@@ -143,7 +150,7 @@ func (s *Tenant) UpdateStatus(ctx context.Context, claims *auth.AccessClaims, id
 	if err != nil {
 		return err
 	}
-	if t.ID == 1 && req.Status != 0 {
+	if t.ID == 1 && req.Status != 1 {
 		return errs.New(errs.CodeParam, "默认租户不可停用")
 	}
 	if t.Status == req.Status {
@@ -161,7 +168,7 @@ func (s *Tenant) UpdateStatus(ctx context.Context, claims *auth.AccessClaims, id
 	if c := store.Cache(); c != nil {
 		_ = c.Delete(ctx, fmt.Sprintf("tenant:%d", t.ID))
 	}
-	if req.Status == 1 {
+	if req.Status == 0 {
 		s.authM.RevokeTenantSessions(ctx, t.ID)
 	}
 	return nil
@@ -176,7 +183,7 @@ func (s *Tenant) Delete(ctx context.Context, claims *auth.AccessClaims, id types
 	if t.ID == 1 {
 		return errs.New(errs.CodeParam, "默认租户不可删除")
 	}
-	if t.Status == 0 {
+	if t.Status == 1 {
 		return errs.New(errs.CodeParam, "租户未停用，请先停用再删除")
 	}
 

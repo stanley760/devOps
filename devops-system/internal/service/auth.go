@@ -126,7 +126,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (r
 	if err != nil {
 		return nil, err
 	}
-	if t.Status != 0 {
+	if t.Status != 1 {
 		return nil, errs.New(errs.CodeForbidden, "租户已停用")
 	}
 	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) {
@@ -144,7 +144,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (r
 	if bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)) != nil {
 		return nil, errs.New(errs.CodeUnauthorized, "用户名或密码错误")
 	}
-	if u.Status != 0 {
+	if u.Status != 1 {
 		return nil, errs.New(errs.CodeForbidden, "用户已停用")
 	}
 
@@ -171,7 +171,7 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 
 	// 公开路由：先校验租户可用，再注入租户 ctx。
 	t, err := dao.GetTenantByID(ctx, tid)
-	if err != nil || t.Status != 0 {
+	if err != nil || t.Status != 1 {
 		return nil, errs.New(errs.CodeForbidden, "租户不可用")
 	}
 	if t.ExpireTime != nil && t.ExpireTime.Before(time.Now()) {
@@ -183,7 +183,7 @@ func (s *Auth) Refresh(ctx context.Context, req types.RefreshReq) (*types.TokenR
 	if err != nil {
 		return nil, errs.New(errs.CodeUnauthorized, "用户不存在或已删除")
 	}
-	if u.Status != 0 {
+	if u.Status != 1 {
 		return nil, errs.New(errs.CodeForbidden, "用户已停用")
 	}
 
