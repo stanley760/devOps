@@ -132,3 +132,46 @@ func TestFailClosedWhenUninitialized(t *testing.T) {
 		t.Fatal("uninitialized seed must return error")
 	}
 }
+
+// TestCustomRoleConfigSeedsAndEnforces 自定义角色名：种子写入与判定必须同源，
+// 否则会出现「种子写自定义名、判定查 platform_admin」的脑裂。
+func TestCustomRoleConfigSeedsAndEnforces(t *testing.T) {
+	cfg := securityauthz.RoleConfig{PlatformAdmin: "ops_admin", SuperAdmin: "ops_super"}
+	a, err := securityauthz.New(testDB(t), securityauthz.WithRoles(cfg))
+	if err != nil {
+		t.Fatalf("new authorizer: %v", err)
+	}
+	SetAuthorizer(a)
+	t.Cleanup(func() { Close() })
+
+	if got := Roles(); got != cfg {
+		t.Fatalf("Roles() = %+v, want %+v", got, cfg)
+	}
+
+	if err := SeedPolicies(1, 1); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if !IsPlatformAdmin(1) {
+		t.Fatal("custom-role platform admin not recognized")
+	}
+	if !EnforcePlatform(1, "platform:tenant:query") {
+		t.Fatal("custom-role platform admin cannot enforce platform permission")
+	}
+	if !Enforce(1, 1, "system:user:query") {
+		t.Fatal("custom-role tenant super admin cannot enforce in-domain permission")
+	}
+	if IsPlatformAdmin(20) {
+		t.Fatal("unbound user recognized as platform admin")
+	}
+}
+
+// TestRolesDefaultsWhenUninitialized 未装配时 Roles() 回退默认配置（建租户角色行等取值不 panic）。
+func TestRolesDefaultsWhenUninitialized(t *testing.T) {
+	Close()
+
+	got := Roles()
+	if got.PlatformAdmin != "platform_admin" || got.SuperAdmin != "super_admin" {
+		t.Fatalf("Roles() = %+v, want default role names", got)
+	}
+}

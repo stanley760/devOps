@@ -258,11 +258,8 @@ var serverCmd = &cobra.Command{
 		})
 		model.SetIDGenerator(idc)
 
-		// 业务中间件套件（D7：Deps 注入 DB/缓存，鉴权器默认取 authz 门面）。
-		kit := middleware.NewKit(authM, middleware.Deps{
-			DB:    client.Get(),
-			Cache: store.Cache(),
-		})
+		// 业务中间件套件（D7：业务依赖经 Deps 注入，nil 项由 NewKit 补生产默认绑定）。
+		kit := middleware.NewKit(authM, middleware.Deps{})
 
 		serviceName := cfg.Nacos.Registry.ServiceName
 		if serviceName == "" {

@@ -101,7 +101,7 @@ func (s *Tenant) Create(ctx context.Context, claims *auth.AccessClaims, req type
 		BaseTenantModel: model.BaseTenantModel{
 			BaseModel: model.BaseModel{Creator: claims.Username, Updater: claims.Username},
 		},
-		Name: "超级管理员", Code: "super_admin", Type: 1, DataScope: 1, Status: 0,
+		Name: "超级管理员", Code: authz.Roles().SuperAdmin, Type: 1, DataScope: 1, Status: 0,
 	}
 	if err := dao.SeedTenantAdmin(tctx, role, admin); err != nil {
 		// 补偿：回滚租户行，避免「有租户无超管」的中间态。

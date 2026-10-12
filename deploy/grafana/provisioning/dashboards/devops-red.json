@@ -1214,7 +1214,7 @@
       }
     },
     {
-      "id": 27,
+      "id": 26,
       "type": "timeseries",
       "title": "发号服务：拒绝 & 降级事件",
       "description": "devops-id 服务端发号故障事件速率（正常应恒为 0）：拒绝/s（红，idgen_requests_rejected_total）是业务 500 的直接上游；本地降级/s（橙，idgen_fallback_total）= etcd 不可用降级本地槽位，有重复 ID 风险；lease 失效/s（紫，idgen_lease_lost_total）= 槽位可能被抢占、发号已熔断；时钟回拨/s（黄，idgen_clock_rollback_total）。任一条脱离 0 立即结合健康状态面板与 devops-id 日志定位",

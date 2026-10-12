@@ -12,7 +12,7 @@ import (
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
-	"devops-system/internal/datascope"
+	"devops-infra/datascope"
 	"devops-system/internal/model"
 	"devops-system/internal/types"
 )

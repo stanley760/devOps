@@ -11,7 +11,7 @@ import (
 
 	"devops-infra/errs"
 
-	"devops-system/internal/datascope"
+	"devops-infra/datascope"
 	"devops-system/internal/model"
 	"devops-system/internal/tenantdb"
 	"devops-system/internal/types"

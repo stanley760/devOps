@@ -1,7 +1,5 @@
-// huma 中间件装配胶水（D7）：infra 出决策，本包只做信封呈现与业务注入。
-//
-// 中间件套件统一经 Kit 装配（kit.go）；本文件的 securityXXX 为各中间件的
-// huma 装配函数，信封回调经下方工厂统一呈现。
+// huma 错误信封文案（业务呈现层）：决策与链组合在 devops-infra/security/humakit，
+// 本文件只保留本服务的中文文案与信封工厂，经 Envelope 注入套件。
 //
 // 文案与状态码逐条对齐历史 gin 版行为：
 //   - 认证失败：401「未登录或会话已过期」；会话失效：401「登录状态已失效，请重新登录」
@@ -19,59 +17,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"devops-infra/http/response"
-	securityauthz "devops-infra/security/authz"
 	securitymw "devops-infra/security/middleware"
-	tenantinfra "devops-infra/tenant"
-
-	"devops-system/internal/auditctx"
-	"devops-system/internal/auth"
 )
-
-// securityJWT huma 认证中间件：infra 决策 + 本服务信封呈现。
-func securityJWT(m *auth.Manager) humaMiddleware {
-	authenticate := securitymw.HumaAuthenticate(m, securitymw.HumaOptions{
-		OnUnauthorized:        writeHuma401,
-		OnInfrastructureError: writeHumaAuthInfraErr,
-	})
-	return func(hctx huma.Context, next func(huma.Context)) {
-		authenticate(hctx, func(authenticated huma.Context) {
-			claims := auth.ClaimsFrom(authenticated.Context())
-			if claims != nil && claims.Username != "" {
-				ctx := auditctx.WithActor(authenticated.Context(), auditctx.Actor{
-					Username: claims.Username,
-				})
-				authenticated = huma.WithContext(authenticated, ctx)
-			}
-			next(authenticated)
-		})
-	}
-}
-
-// securityTenant 租户校验 + 上下文注入（可用性判定经 Deps 注入 DB 与缓存）。
-func securityTenant(deps Deps) humaMiddleware {
-	check := newTenantChecker(deps.DB, deps.Cache)
-	return tenantinfra.HumaTenantContext(check, writeHuma401, writeHuma403Tenant)
-}
-
-// securityPerm 域内鉴权（uid × tid × perm）。
-func securityPerm(authorizer securityauthz.Authorizer, perm string) humaMiddleware {
-	return securitymw.HumaRequirePermission(authorizer, perm, securitymw.HumaOptions{
-		OnUnauthorized:        writeHuma401,
-		OnForbidden:           writeHuma403Perm,
-		OnInfrastructureError: writeHumaAuthzInfraErr,
-	})
-}
-
-// securityPlat 平台鉴权（g2 + dom="*"）。
-func securityPlat(authorizer securityauthz.Authorizer, perm string) humaMiddleware {
-	return securitymw.HumaRequirePlatformPermission(authorizer, perm, securitymw.HumaOptions{
-		OnUnauthorized:        writeHuma401,
-		OnForbidden:           writeHuma403Platform,
-		OnInfrastructureError: writeHumaAuthzInfraErr,
-	})
-}
-
-// ---- 信封回调工厂 ----
 
 // errMsg 按 errors.Is 匹配错误值并给出对应文案。
 type errMsg struct {

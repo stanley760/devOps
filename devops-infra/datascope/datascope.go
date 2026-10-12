@@ -59,6 +59,12 @@ type RoleScope struct {
 	DataScopeDeptIDs string
 }
 
+// UserRef 解析数据权限所需的用户最小视图（解析层由 model.User 转换，本包不依赖 model）。
+type UserRef struct {
+	ID     int64
+	DeptID int64
+}
+
 // ParseDeptIDs 解析 data_scope_dept_ids（JSON 数组字符串，形如 "[1,2,3]"，
 // 与 post_ids 存储格式一致）。非法/空输入返回空集，不报错——校验归属 Role 保存路径。
 func ParseDeptIDs(s string) []int64 {

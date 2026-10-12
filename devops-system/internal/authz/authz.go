@@ -10,7 +10,7 @@
 // 防越权边界（6.3）：platform:tenant:* 权限标识只出现在平台路由；
 // 租户超管的 p, super_admin, {tid}, * 因 dom 不匹配 "*" 无法触达平台接口。
 //
-// 本包仅保留管理面语义：platform_admin/super_admin 角色名、种子 ID 与
+// 本包仅保留管理面语义：角色名配置（RoleConfig）、种子 ID 与
 // 数字主键/域转换在系统侧完成；通用持久化与鉴权决策在共享包。
 package authz
 
@@ -31,14 +31,24 @@ import (
 var holder atomic.Pointer[securityauthz.CasbinAuthorizer]
 
 // Init 装配共享 authorizer：gorm-adapter 持久化（casbin_rule 表）+ 加载存量策略。
-func Init(gdb *gorm.DB) error {
-	a, err := securityauthz.New(gdb)
+// opts 可注入角色名配置（如 securityauthz.WithRoles(...)）；不传走默认 yudao 口径。
+func Init(gdb *gorm.DB, opts ...securityauthz.Option) error {
+	a, err := securityauthz.New(gdb, opts...)
 	if err != nil {
 		return fmt.Errorf("初始化 casbin 失败: %w", err)
 	}
 	holder.Store(a)
 	slog.Info("Casbin enforcer 初始化完成", "table", "casbin_rule")
 	return nil
+}
+
+// Roles 当前生效的角色名配置（种子、判定、建租户角色行同源取值）。
+// 未装配时返回默认配置。
+func Roles() securityauthz.RoleConfig {
+	if a := loaded(); a != nil {
+		return a.Roles()
+	}
+	return securityauthz.DefaultRoleConfig()
 }
 
 // SetAuthorizer 显式注入实例（测试或替代装配路径使用）。
@@ -150,51 +160,29 @@ func RemoveRoleGrouping(roleCode string, tenantID int64) error {
 	return a.RemoveRoleGrouping(roleCode, strconv.FormatInt(tenantID, 10))
 }
 
-// SeedPolicies 初始策略（幂等，migrate/租户创建复用）：
+// SeedPolicies 初始策略（幂等，migrate/租户创建复用）：委托共享包 SeedBootstrap，
+// 角色名取自 RoleConfig（默认 platform_admin / super_admin）。
 //
-//	p, platform_admin, *, *   平台管理员跨租户全通（g2 路径）
-//	g2, {adminUID}, platform_admin
-//	p, super_admin, {tid}, *  租户超管域内全通
-//	g, {adminUID}, super_admin, {tid}
+//	p, {pa}, *, *             平台管理员跨租户全通（g2 路径）
+//	g2, {adminUID}, {pa}
+//	p, {sa}, {tid}, *         租户超管域内全通
+//	g, {adminUID}, {sa}, {tid}
 func SeedPolicies(tenantID, adminUID int64) error {
 	a := loaded()
 	if a == nil {
 		return fmt.Errorf("authz 未初始化")
 	}
-	tid := strconv.FormatInt(tenantID, 10)
-	uid := strconv.FormatInt(adminUID, 10)
-	for _, rule := range []struct {
-		ptype string
-		vals  []string
-	}{
-		{"p", []string{"platform_admin", "*", "*"}},
-		{"g2", []string{uid, "platform_admin"}},
-		{"p", []string{"super_admin", tid, "*"}},
-		{"g", []string{uid, "super_admin", tid}},
-	} {
-		if err := a.AddPolicyIfAbsent(rule.ptype, rule.vals...); err != nil {
-			return fmt.Errorf("写入种子 %s 行失败: %w", rule.ptype, err)
-		}
-	}
-	return nil
+	return a.SeedBootstrap(strconv.FormatInt(adminUID, 10), strconv.FormatInt(tenantID, 10))
 }
 
 // SeedTenantAdmin 租户初始超管策略（创建租户时调用，幂等）：
 //
-//	p, super_admin, {tid}, *   租户超管域内全通
-//	g, {adminUID}, super_admin, {tid}
+//	p, {sa}, {tid}, *         租户超管域内全通
+//	g, {adminUID}, {sa}, {tid}
 func SeedTenantAdmin(tenantID, adminUID int64) error {
 	a := loaded()
 	if a == nil {
 		return fmt.Errorf("authz 未初始化")
 	}
-	tid := strconv.FormatInt(tenantID, 10)
-	uid := strconv.FormatInt(adminUID, 10)
-	if err := a.AddPolicyIfAbsent("p", "super_admin", tid, "*"); err != nil {
-		return fmt.Errorf("写入租户超管策略失败: %w", err)
-	}
-	if err := a.AddPolicyIfAbsent("g", uid, "super_admin", tid); err != nil {
-		return fmt.Errorf("写入租户超管绑定失败: %w", err)
-	}
-	return nil
+	return a.SeedTenantAdmin(strconv.FormatInt(adminUID, 10), strconv.FormatInt(tenantID, 10))
 }

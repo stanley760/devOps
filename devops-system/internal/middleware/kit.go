@@ -1,130 +1,78 @@
-// Package middleware 的中间件套件（Kit）：装配一次、各路由模块复用。
+// Package middleware 的业务装配层：把 devops-infra/security/humakit 的中间件链
+// 与本服务的文案、数据源、审计、租户语义接线。
 //
-// 设计：infra 出决策（securitymw/tenantinfra），本包做信封呈现与业务注入（huma.go），
-// 业务依赖（DB/缓存/鉴权器/数据源）经 Deps 显式注入——生产装配在 cmd/root.go，
-// 测试注入假实现，不再依赖全局单例的直接调用。
+// 分层：决策与链组合在 humakit（infra），本包只做业务默认绑定——
+// 中文信封文案（huma.go）、租户可用性判定（tenant.go）、
+// dao 适配层（dao/scope_source.go）、auditctx 注入。装配点在 cmd/root.go。
 package middleware
 
 import (
 	"context"
 
-	"github.com/danielgtaylor/huma/v2"
-	"gorm.io/gorm"
-
-	"devops-infra/cache"
-	securityauthz "devops-infra/security/authz"
+	"devops-infra/security/humakit"
+	securityjwt "devops-infra/security/jwt"
 
 	client "devops-infra/database/mysql"
+	"devops-system/internal/auditctx"
 	"devops-system/internal/auth"
 	"devops-system/internal/authz"
 	"devops-system/internal/dao"
-	"devops-system/internal/model"
 	"devops-system/internal/store"
 )
 
-// humaMiddleware huma 中间件类型别名（huma 无独立命名类型）。
-type humaMiddleware = func(huma.Context, func(huma.Context))
+// 类型别名：router/app/wire 的 *middleware.Kit 签名零改动，wire 无需重新生成。
+type (
+	Kit  = humakit.Kit
+	Deps = humakit.Deps
+)
 
-// Deps 业务中间件的依赖集合；nil 字段由 withDefaults 补生产默认绑定。
-type Deps struct {
-	DB         *gorm.DB                 // 租户可用性查询（全局连接）
-	Cache      cache.Cache              // 租户状态缓存；nil 退化为直查
-	Authorizer securityauthz.Authorizer // 域内/平台鉴权
-	// 数据权限解析数据源（默认绑定 dao；测试可注入假实现）。
-	IsPlatformAdmin func(userID int64) bool
-	UserRoles        func(ctx context.Context, userID int64) ([]model.Role, error)
-	UserByID         func(ctx context.Context, userID int64) (*model.User, error)
-	Depts            func(ctx context.Context) ([]model.Dept, error)
-}
-
-// withDefaults nil 字段补生产默认绑定（全局单例/门面）。
-func (d Deps) withDefaults() Deps {
-	if d.DB == nil {
-		d.DB = client.Get()
-	}
-	if d.Cache == nil {
-		d.Cache = store.Cache()
-	}
-	if d.Authorizer == nil {
-		d.Authorizer = authz.Authorizer()
-	}
-	if d.IsPlatformAdmin == nil {
-		d.IsPlatformAdmin = authz.IsPlatformAdmin
-	}
-	if d.UserRoles == nil {
-		d.UserRoles = dao.GetUserRoles
-	}
-	if d.UserByID == nil {
-		d.UserByID = dao.GetUserByID
-	}
-	if d.Depts == nil {
-		d.Depts = func(ctx context.Context) ([]model.Dept, error) { return dao.ListDepts(ctx, nil) }
-	}
-	return d
-}
-
-// Kit 业务中间件套件：JWT/租户/鉴权/数据权限中间件的装配与链组合。
-type Kit struct {
-	jwtM    humaMiddleware
-	tenantM humaMiddleware
-	scopeM  humaMiddleware
-	permM   func(string) humaMiddleware
-	platM   func(string) humaMiddleware
-	scopes  *scopeCache
-}
-
-// NewKit 装配中间件套件；deps 显式注入业务依赖（nil 字段补默认绑定）。
+// NewKit 装配业务中间件套件：nil/零值项补生产默认绑定（业务语义），
+// 信封文案与数据源适配均留在本层，决策与链组合在 devops-infra/security/humakit。
 func NewKit(authn *auth.Manager, deps Deps) *Kit {
-	deps = deps.withDefaults()
-	k := &Kit{
-		scopes: newScopeCache(),
+	if deps.Authorizer == nil {
+		deps.Authorizer = authz.Authorizer()
 	}
-	k.jwtM = securityJWT(authn)
-	k.tenantM = securityTenant(deps)
-	k.scopeM = securityScope(deps, k.scopes)
-	k.permM = func(perm string) humaMiddleware { return securityPerm(deps.Authorizer, perm) }
-	k.platM = func(perm string) humaMiddleware { return securityPlat(deps.Authorizer, perm) }
-	return k
+	if deps.SuperAdminRole == "" {
+		deps.SuperAdminRole = authz.Roles().SuperAdmin
+	}
+	if deps.TenantUsable == nil {
+		deps.TenantUsable = newTenantChecker(client.Get(), store.Cache())
+	}
+	if deps.IsPlatformAdmin == nil {
+		deps.IsPlatformAdmin = func(_ context.Context, userID int64) bool { return authz.IsPlatformAdmin(userID) }
+	}
+	if deps.UserRoles == nil {
+		deps.UserRoles = dao.UserScopes
+	}
+	if deps.User == nil {
+		deps.User = dao.UserRef
+	}
+	if deps.Depts == nil {
+		deps.Depts = dao.DeptNodes
+	}
+	if deps.WithClaims == nil {
+		deps.WithClaims = injectAuditActor
+	}
+	deps.Envelope = systemEnvelope()
+	return humakit.NewKit(authn, deps)
 }
 
-// JWT 认证中间件（Bearer → token 解析 → 会话态 → claims 注入 ctx）。
-func (k *Kit) JWT() humaMiddleware { return k.jwtM }
-
-// Tenant 租户校验 + 上下文注入（可用性判定带 Redis 缓存）。
-func (k *Kit) Tenant() humaMiddleware { return k.tenantM }
-
-// Scope 行级数据权限解析中间件（受控资源路由用）。
-func (k *Kit) Scope() humaMiddleware { return k.scopeM }
-
-// Perm 域内鉴权中间件（uid × tid × perm）。
-func (k *Kit) Perm(perm string) humaMiddleware { return k.permM(perm) }
-
-// Plat 平台鉴权中间件（平台管理员）。
-func (k *Kit) Plat(perm string) humaMiddleware { return k.platM(perm) }
-
-// Logged 仅认证链（登出等无租户语义的接口）。
-func (k *Kit) Logged() huma.Middlewares { return huma.Middlewares{k.jwtM} }
-
-// TenantBiz 认证 + 租户链（auth 模块个人信息类接口）。
-func (k *Kit) TenantBiz() huma.Middlewares { return huma.Middlewares{k.jwtM, k.tenantM} }
-
-// Biz 业务路由中间件链：JWT → Tenant → Perm(域内)。
-func (k *Kit) Biz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm)}
+// injectAuditActor 认证成功后把用户名注入审计上下文（model.BeforeCreate/BeforeUpdate 消费）。
+func injectAuditActor(ctx context.Context, claims *securityjwt.Claims) context.Context {
+	if claims == nil || claims.Username == "" {
+		return ctx
+	}
+	return auditctx.WithActor(ctx, auditctx.Actor{Username: claims.Username})
 }
 
-// ScopedBiz 受控资源路由链：JWT → Tenant → Perm → DataScope（行级数据权限解析）。
-// 只挂在需要行级过滤的资源（users）；非受控资源不加，保持解析开销与语义边界显式。
-func (k *Kit) ScopedBiz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.scopeM}
-}
-
-// PlatChain 平台路由中间件链：JWT → PlatformPerm（不挂 Tenant，操作全局表）。
-func (k *Kit) PlatChain(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.platM(perm)}
-}
-
-// InvalidateDataScope 清空数据权限缓存（角色保存/删除、用户角色变更时调用）。
-func (k *Kit) InvalidateDataScope() {
-	k.scopes.invalidate()
+// systemEnvelope 本服务的中文信封文案（六个槽位与历史 gin 版逐字对齐）。
+func systemEnvelope() humakit.Envelope {
+	return humakit.Envelope{
+		Unauthorized:      writeHuma401,
+		AuthnInfra:        writeHumaAuthInfraErr,
+		TenantForbidden:   writeHuma403Tenant,
+		PermForbidden:     writeHuma403Perm,
+		PlatformForbidden: writeHuma403Platform,
+		AuthzInfra:        writeHumaAuthzInfraErr,
+	}
 }

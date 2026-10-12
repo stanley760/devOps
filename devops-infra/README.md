@@ -30,7 +30,8 @@
 9. [多租户中间件与数据隔离](#9-多租户中间件与数据隔离)
 10. [中间件编排最佳实践](#10-中间件编排最佳实践)
 11. [单元测试支持](#11-单元测试支持)
-12. [附录：API 速查表](#12-附录api-速查表)
+12. [数据权限与中间件套件](#12-数据权限与中间件套件)
+13. [附录：API 速查表](#13-附录api-速查表)
 
 ---
 
@@ -778,7 +779,68 @@ func (s *stubAuthorizer) IsPlatformAdmin(ctx context.Context, sub string) (bool,
 
 ---
 
-## 12. 附录：API 速查表
+## 12. 数据权限与中间件套件
+
+两个可直接复用的业务级基建：行级数据权限计算（`datascope`）与 huma 中间件链装配（`security/humakit`）。
+devops-system 已在用；**新模块（如 devops-user）落地时 `require devops-infra` 即可直接复用，无需复制**。
+
+### 12.1 `datascope`：行级数据权限纯计算
+
+三层分工：Casbin 管「能不能调这个接口」，`tenant` 管「租户内还是租户外」，`datascope` 管租户之内「能看到/操作哪些行」。本包**纯计算、不访问 DB**——角色/用户/部门由调用方查询注入值对象。
+
+口径（对齐 yudao `t_system_role.data_scope`）：`1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人`。多角色取最宽松；同为自定义取并集。
+
+```go
+// 解析：把业务查询结果转成值对象后合并
+scope := datascope.Merge(roleScopes, user.DeptID, user.ID, datascope.ChildrenMap(deptNodes))
+
+// 消费：列表查询收口（fail-closed——ctx 未注入时挂错，不放大为全量可见）
+db = datascope.Apply(ctx, db, datascope.Columns{Dept: "dept_id", Owner: "id"})
+
+// 消费：单点可见性（越权按 404，避免存在性探测）
+if !scope.Visible(row.DeptID, row.ID) { return errs.NotFound(...) }
+```
+
+### 12.2 `security/humakit`：中间件链套件
+
+`JWT → Tenant → Perm → Scope` 的链组合与数据权限解析。决策在 `security/middleware` 与 `tenant`，本包只做装配；**文案与业务数据源一律经 `Deps`/`Envelope` 注入**，不做默认业务绑定（nil 一律 fail-closed）。
+
+```go
+kit := humakit.NewKit(authn, humakit.Deps{
+    Authorizer:      authorizer,
+    TenantUsable:    myTenantChecker,                    // 停用/过期语义由业务决定
+    UserRoles:       myRoleScopes,                       // → []datascope.RoleScope
+    User:            myUserRef,                          // → datascope.UserRef
+    Depts:           myDeptNodes,                        // → datascope.DeptNode
+    SuperAdminRole:  "super_admin",                      // 与 Casbin 种子同源
+    WithClaims:      injectAuditActor,                   // 认证后 ctx 增强（可选）
+    Envelope:        myChineseEnvelope,                  // 401/403 中文文案（可选）
+})
+
+huma.Register(api, huma.Operation{
+    Middlewares: kit.ScopedBiz("system:user:list"),      // JWT→Tenant→Perm→DataScope
+}, handler)
+```
+
+链组合：`Logged()`（仅认证）/ `TenantBiz()`（认证+租户）/ `Biz(perm)` / `ScopedBiz(perm)`（多挂数据权限）/ `PlatChain(perm)`（平台，不挂租户）。角色/数据变更后调 `kit.InvalidateDataScope()` 清缓存。
+
+### 12.3 `security/authz`：角色名配置与种子
+
+角色名不再是硬编码：`RoleConfig{PlatformAdmin, SuperAdmin}` 经 `New(gdb, WithRoles(cfg))` 注入，**种子写入与 `IsPlatformAdmin` 判定同源**（否则会「种子写自定义名、判定查 platform_admin」脑裂）。不传走默认 `platform_admin` / `super_admin`。
+
+```go
+a, _ := authz.New(gdb, authz.WithRoles(authz.RoleConfig{
+    PlatformAdmin: "ops_admin", SuperAdmin: "ops_super",
+}))
+_ = a.SeedBootstrap(adminUID, tenantID)   // 平台 + 租户超管初始策略（幂等）
+_ = a.SeedTenantAdmin(adminUID, tenantID) // 建租户时的超管策略（幂等）
+```
+
+> 改角色名需同步考虑存量 `casbin_rule` 数据的迁移。
+
+---
+
+## 13. 附录：API 速查表
 
 ### HTTP（`devops-infra/http`）
 
@@ -868,6 +930,38 @@ func (s *stubAuthorizer) IsPlatformAdmin(ctx context.Context, sub string) (bool,
 | `errs.New(code, msg) / Wrap(err, code, msg)` | 业务错误构造（保留底层原因） |
 | `errs.ErrParam / ErrUnauthorized / ErrForbidden / ...` | 预定义错误 |
 
+### 数据权限（`devops-infra/datascope`）
+
+| API | 说明 |
+| --- | --- |
+| `ScopeAll/Custom/Dept/DeptBelow/Self` | 数据范围口径常量（对齐 yudao） |
+| `Merge(roles, ownDeptID, selfID, children) Scope` | 多角色合并（最宽松生效） |
+| `Apply(ctx, db, Columns)` | 列表查询注入过滤（fail-closed） |
+| `(Scope).Visible(deptID, rowID)` | 单点可见性（越权按 404） |
+| `ParseDeptIDs / NormalizeDeptIDs` | 自定义部门集合的存储形态 |
+| `ChildrenMap / ExpandSubtree` | 部门树展开 |
+| `WithScope / From / CtxKey` | 上下文注入与读取 |
+
+### 中间件套件（`devops-infra/security/humakit`）
+
+| API | 说明 |
+| --- | --- |
+| `NewKit(authn, Deps) *Kit` | 装配中间件套件（业务依赖经 Deps 注入） |
+| `JWT() / Tenant() / Scope() / Perm(p) / Plat(p)` | 单中间件 |
+| `Logged() / TenantBiz() / Biz(p) / ScopedBiz(p) / PlatChain(p)` | 链组合 |
+| `InvalidateDataScope()` | 清数据权限解析缓存 |
+| `Deps{Envelope, TenantUsable, UserRoles, ...}` | 文案与业务数据源注入（nil 一律 fail-closed） |
+
+### 角色名配置（`devops-infra/security/authz`）
+
+| API | 说明 |
+| --- | --- |
+| `RoleConfig{PlatformAdmin, SuperAdmin}` | 角色名配置（零值回填默认） |
+| `New(gdb, WithRoles(cfg))` | 带角色名的初始化 |
+| `SeedBootstrap(subject, domain)` | 平台 + 租户超管初始策略（幂等） |
+| `SeedTenantAdmin(subject, domain)` | 租户超管策略（幂等） |
+| `(CasbinAuthorizer).Roles()` | 当前生效的角色名配置 |
+
 ---
 
-*本文对应 devops-infra 当前实现，代码示例以包内实际导出 API 为准；参考实现见 `devops-system/internal/{auth,authz,middleware,router,tenantdb}`。*
+*本文对应 devops-infra 当前实现，代码示例以包内实际导出 API 为准；参考实现见 `devops-system/internal/{auth,authz,middleware,router,tenantdb,dao/scope_source.go}`。*

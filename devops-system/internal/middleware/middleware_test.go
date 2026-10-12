@@ -276,7 +276,7 @@ func TestHumaTenantMiddlewareStates(t *testing.T) {
 	seedTenants(t, db)
 
 	c := memcache.New()
-	kit := NewKit(m, Deps{DB: db, Cache: c, Authorizer: authorizer})
+	kit := NewKit(m, Deps{TenantUsable: newTenantChecker(db, c), Authorizer: authorizer})
 	api := newMWAPI(t, kit.JWT(), kit.Tenant())
 
 	// 正常租户 → 204（首次回源查库并写缓存）
