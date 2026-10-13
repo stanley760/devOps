@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// Envelope 错误信封（与 response.BaseResponse[any] 的失败形态字节一致）。
+// Envelope 错误信封（与 common/response.BaseResponse[any] 的失败形态字节一致）。
 type Envelope struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`

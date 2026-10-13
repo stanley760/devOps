@@ -4,6 +4,8 @@ package api
 import (
 	"context"
 
+	"github.com/stanley760/devOps/devops-common/domain"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/humaparam"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -25,27 +27,26 @@ func NewUserHandler(svc *service.User) *UserHandler { return &UserHandler{svc: s
 
 // UserListInput GET /system/api/v1/users 查询参数。
 type UserListInput struct {
-	PageNum  int                               `query:"page_num"`
-	PageSize int                               `query:"page_size" maximum:"100"`
-	Username string                            `query:"username" maxLength:"30"`
-	Mobile   string                            `query:"mobile" maxLength:"20"`
-	Status   humaparam.Optional[int8]          `query:"status" minimum:"0" maximum:"1"`
-	DeptID   humaparam.Optional[types.ParamID] `query:"dept_id"`
+	domain.PageParam
+	Username string                            `query:"username" maxLength:"30" doc:"用户姓名"`
+	Mobile   string                            `query:"mobile" maxLength:"20" doc:"手机号码"`
+	Status   humaparam.Optional[int8]          `query:"status" minimum:"0" maximum:"1" doc:"账号状态 0:禁用；1:启用"`
+	DeptID   humaparam.Optional[types.ParamID] `query:"dept_id" doc:"关联部门id"`
 }
 
 // UserListOutput 用户分页列表信封。
 type UserListOutput struct {
-	Body response.BaseResponse[response.PageData[[]types.UserDTO]]
+	Body commonResp.BaseResponse[domain.PageResult[types.UserDTO]]
 }
 
 // UserIDInput path 参数。
 type UserIDInput struct {
-	ID types.ParamID `path:"id"`
+	ID types.ParamID `path:"id" doc:"用户id"`
 }
 
 // UserGetOutput 用户详情信封（基本信息 + 角色/岗位 ID）。
 type UserGetOutput struct {
-	Body response.BaseResponse[types.UserDetailResp]
+	Body commonResp.BaseResponse[types.UserDetailResp]
 }
 
 // UserCreateInput POST /system/api/v1/users（角色分配 g 行联动）。
@@ -55,18 +56,18 @@ type UserCreateInput struct {
 
 // UserEmptyOutput 无数据信封。
 type UserEmptyOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // UserUpdateInput PUT /system/api/v1/users/{id}（密码走重置接口）。
 type UserUpdateInput struct {
-	ID   types.ParamID `path:"id"`
+	ID   types.ParamID `path:"id" doc:"用户id"`
 	Body types.UserUpdateReq
 }
 
 // UserResetPasswordInput PUT /system/api/v1/users/{id}/password（重置后踢下线）。
 type UserResetPasswordInput struct {
-	ID   types.ParamID `path:"id"`
+	ID   types.ParamID `path:"id" doc:"用户id"`
 	Body types.ResetPasswordReq
 }
 
@@ -82,18 +83,17 @@ func (h *UserHandler) List(ctx context.Context, in *UserListInput) (*UserListOut
 		}
 		deptID = &id
 	}
-	list, total, err := h.svc.List(ctx, types.UserPageQuery{
-		PageNum:  in.PageNum,
-		PageSize: in.PageSize,
-		Username: in.Username,
-		Mobile:   in.Mobile,
-		Status:   in.Status.Ptr(),
-		DeptID:   deptID,
+	page, err := h.svc.List(ctx, types.UserPageQuery{
+		PageParam: in.PageParam,
+		Username:  in.Username,
+		Mobile:    in.Mobile,
+		Status:    in.Status.Ptr(),
+		DeptID:    deptID,
 	})
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
-	return &UserListOutput{Body: response.PageBody(list, total)}, nil
+	return &UserListOutput{Body: response.OKBody(page)}, nil
 }
 
 // Get GET /system/api/v1/users/{id}。

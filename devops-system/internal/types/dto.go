@@ -39,50 +39,50 @@ type UserDTO struct {
 	Username  string    `json:"username" doc:"用户名称"`
 	Nickname  string    `json:"nickname" doc:"用户昵称"`
 	Email     string    `json:"email" doc:"电子邮箱"`
-	Mobile    string    `json:"mobile"`
-	Sex       int8      `json:"sex"`
-	Avatar    string    `json:"avatar"`
-	DeptID    ID        `json:"deptId"`
-	PostIDs   []ID      `json:"postIds"`
-	Remark    string    `json:"remark"`
-	LoginIP   string    `json:"loginIp"`
-	LoginDate time.Time `json:"loginDate"`
+	Mobile    string    `json:"mobile" doc:"手机号码"`
+	Gender    int8      `json:"gender" doc:"性别 0未知 1男 2女"`
+	Avatar    string    `json:"avatar" doc:"头像"`
+	DeptID    ID        `json:"deptId" doc:"部门id"`
+	PostIDs   []ID      `json:"postIds" doc:"关联岗位id列表"`
+	Remark    string    `json:"remark" doc:"备注"`
+	LoginIP   string    `json:"loginIp" doc:"登录ip地址"`
+	LoginDate time.Time `json:"loginDate" doc:"登录时间"`
 }
 
 // UserInfoResp GET /auth/info 响应。
 type UserInfoResp struct {
-	User        UserDTO     `json:"user"`
-	Tenant      TenantBrief `json:"tenant"`
-	Roles       []string    `json:"roles"`       // 角色编码
-	Permissions []string    `json:"permissions"` // 权限标识
+	User        UserDTO     `json:"user" doc:"用户信息"`
+	Tenant      TenantBrief `json:"tenant" doc:"租户"`
+	Roles       []string    `json:"roles" doc:"角色列表"`       // 角色编码
+	Permissions []string    `json:"permissions" doc:"权限列表"` // 权限标识
 }
 
-// RouterNode 前端路由节点（菜单树 type 1/2 转换）。
+// RouterNode 前端路由节点（菜单树）。
 type RouterNode struct {
-	ID            ID           `json:"id"`
-	Name          string       `json:"name"`
-	Path          string       `json:"path"`
-	Component     string       `json:"component"`
-	ComponentName string       `json:"componentName"`
-	Icon          string       `json:"icon"`
-	Sort          int          `json:"sort"`
-	Visible       bool         `json:"visible"`
-	KeepAlive     bool         `json:"keepAlive"`
-	AlwaysShow    bool         `json:"alwaysShow"`
-	Children      []RouterNode `json:"children"`
+	ID            ID           `json:"id" doc:"菜单id"`
+	Name          string       `json:"name" doc:"菜单名称"`
+	Path          string       `json:"path" doc:"菜单路径"`
+	Component     string       `json:"component" doc:"组件路径"`
+	ComponentName string       `json:"componentName" doc:"组件名称"`
+	Icon          string       `json:"icon" doc:"图标"`
+	Sort          int          `json:"sort" doc:"排序"`
+	Visible       bool         `json:"visible" doc:"是否可见"`
+	KeepAlive     bool         `json:"keepAlive" doc:"是否缓存"`
+	AlwaysShow    bool         `json:"alwaysShow" doc:"是否总是显示"`
+	Children      []RouterNode `json:"children" doc:"子路由"`
 }
 
 // UpdateProfileReq PUT /auth/profile 入参。
 type UpdateProfileReq struct {
-	Nickname string `json:"nickname" binding:"required,min=1,max=30" minLength:"1" maxLength:"30"`
-	Email    string `json:"email,omitempty" binding:"omitempty,email,max=50" format:"email" maxLength:"50"`
-	Mobile   string `json:"mobile,omitempty" binding:"omitempty,max=20" maxLength:"20"`
-	Sex      int8   `json:"sex,omitempty" binding:"omitempty,min=0,max=2" minimum:"0" maximum:"2"`
-	Avatar   string `json:"avatar,omitempty" binding:"omitempty,max=512" maxLength:"512"`
+	Nickname string `json:"nickname" binding:"required,min=1,max=30" minLength:"1" maxLength:"30" doc:"昵称"`
+	Email    string `json:"email,omitempty" binding:"omitempty,email,max=50" format:"email" maxLength:"50" doc:"邮箱账号"`
+	Mobile   string `json:"mobile,omitempty" binding:"omitempty,max=20" maxLength:"20" doc:"手机号码"`
+	Gender   int8   `json:"gender,omitempty" binding:"omitempty,min=0,max=2" minimum:"0" maximum:"2" doc:"性别 0未知 1男 2女"`
+	Avatar   string `json:"avatar,omitempty" binding:"omitempty,max=512" maxLength:"512" doc:"图片链接"`
 }
 
 // UpdatePasswordReq PUT /auth/profile/password 入参。
 type UpdatePasswordReq struct {
-	OldPassword string `json:"old_password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
-	NewPassword string `json:"new_password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
+	OldPassword string `json:"old_password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64" doc:"旧密码"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64" doc:"新密码"`
 }

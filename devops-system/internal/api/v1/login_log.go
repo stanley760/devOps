@@ -5,6 +5,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/stanley760/devOps/devops-common/domain"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/humaparam"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -26,37 +28,35 @@ func NewLoginLogHandler(svc *service.LoginLog) *LoginLogHandler { return &LoginL
 // LoginLogListInput GET /system/api/v1/login-logs 查询参数（分页零值走 dao 兜底；
 // 可选参数走 humaparam.Optional，huma 管线不支持裸指针 query 参数）。
 type LoginLogListInput struct {
-	PageNum   int                           `query:"page_num"`
-	PageSize  int                           `query:"page_size" maximum:"100"`
-	Username  string                        `query:"username" maxLength:"30"`
-	IP        string                        `query:"ip" maxLength:"50"`
-	Result    humaparam.Optional[int8]      `query:"result" minimum:"0" maximum:"1"`
-	BeginTime humaparam.Optional[time.Time] `query:"begin_time"` // RFC3339（OpenAPI 标准格式）
-	EndTime   humaparam.Optional[time.Time] `query:"end_time"`
+	domain.PageParam
+	Username  string                        `query:"username" maxLength:"30" doc:"用户名，模糊匹配"`
+	IP        string                        `query:"ip" maxLength:"50" doc:"客户端 IP，模糊匹配（支持网段前缀，如 \"192.168.\"）"`
+	Result    humaparam.Optional[int8]      `query:"result" minimum:"0" maximum:"1" doc:"登录结果 0:成功；1:失败，不传为不过滤"`
+	BeginTime humaparam.Optional[time.Time] `query:"begin_time" doc:"开始时间（含），RFC3339 格式"` // RFC3339（OpenAPI 标准格式）
+	EndTime   humaparam.Optional[time.Time] `query:"end_time" doc:"结束时间（含），RFC3339 格式"`
 }
 
 // LoginLogListOutput 登录审计分页列表信封。
 type LoginLogListOutput struct {
-	Body response.BaseResponse[response.PageData[[]types.LoginLogDTO]]
+	Body commonResp.BaseResponse[domain.PageResult[types.LoginLogDTO]]
 }
 
 // LoginLogDeleteInput DELETE /system/api/v1/login-logs（ids 逗号分隔，如 ?ids=12,34,56）。
 type LoginLogDeleteInput struct {
-	IDs string `query:"ids" maxLength:"2000"`
+	IDs string `query:"ids" maxLength:"2000" doc:"待删除的记录 ID 列表，逗号分隔，如 12,34,56"`
 }
 
 // LoginLogEmptyOutput 无数据信封（删除/清空）。
 type LoginLogEmptyOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // ---- Handlers ----
 
 // List GET /system/api/v1/login-logs。
 func (h *LoginLogHandler) List(ctx context.Context, in *LoginLogListInput) (*LoginLogListOutput, error) {
-	list, total, err := h.svc.List(ctx, types.LoginLogPageQuery{
-		PageNum:   in.PageNum,
-		PageSize:  in.PageSize,
+	page, err := h.svc.List(ctx, types.LoginLogPageQuery{
+		PageParam: in.PageParam,
 		Username:  in.Username,
 		IP:        in.IP,
 		Result:    in.Result.Ptr(),
@@ -66,7 +66,7 @@ func (h *LoginLogHandler) List(ctx context.Context, in *LoginLogListInput) (*Log
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
-	return &LoginLogListOutput{Body: response.PageBody(list, total)}, nil
+	return &LoginLogListOutput{Body: response.OKBody(page)}, nil
 }
 
 // Delete DELETE /system/api/v1/login-logs（批量删除）。

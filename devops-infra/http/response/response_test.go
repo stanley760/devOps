@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/response"
 )
@@ -55,20 +56,30 @@ func TestOK(t *testing.T) {
 
 func TestOKPage(t *testing.T) {
 	w := run(t, func(c *gin.Context) {
-		response.OKPage(c, []int{1, 2}, 2)
+		response.OKPage(c, domain.PageResult[int]{
+			List:     []int{1, 2},
+			Total:    21,
+			PageNum:  2,
+			PageSize: 10,
+			Pages:    3,
+		})
 	})
 
 	var e struct {
 		Code int `json:"code"`
 		Data struct {
-			List  []int `json:"list"`
-			Total int64 `json:"total"`
+			List     []int `json:"list"`
+			Total    int64 `json:"total"`
+			PageNum  int   `json:"page_num"`
+			PageSize int   `json:"page_size"`
+			Pages    int64 `json:"pages"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
 		t.Fatalf("响应不是统一信封: %v", err)
 	}
-	if e.Code != errs.CodeOK || len(e.Data.List) != 2 || e.Data.Total != 2 {
+	if e.Code != errs.CodeOK || len(e.Data.List) != 2 || e.Data.Total != 21 ||
+		e.Data.PageNum != 2 || e.Data.PageSize != 10 || e.Data.Pages != 3 {
 		t.Fatalf("分页信封不符合: %s", w.Body.String())
 	}
 }

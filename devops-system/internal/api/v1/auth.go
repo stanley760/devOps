@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/response"
 
@@ -32,7 +33,7 @@ type LoginInput struct {
 
 // LoginOutput 登录响应信封。
 type LoginOutput struct {
-	Body response.BaseResponse[types.LoginResp]
+	Body commonResp.BaseResponse[types.LoginResp]
 }
 
 // RefreshInput POST /system/api/v1/auth/refresh。
@@ -42,22 +43,22 @@ type RefreshInput struct {
 
 // RefreshOutput 刷新响应信封。
 type RefreshOutput struct {
-	Body response.BaseResponse[types.TokenResp]
+	Body commonResp.BaseResponse[types.TokenResp]
 }
 
 // LogoutOutput 登出响应信封（无数据）。
 type LogoutOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // InfoOutput GET /auth/info 响应信封。
 type InfoOutput struct {
-	Body response.BaseResponse[types.UserInfoResp]
+	Body commonResp.BaseResponse[types.UserInfoResp]
 }
 
 // RoutersOutput GET /auth/routers 响应信封。
 type RoutersOutput struct {
-	Body response.BaseResponse[[]types.RouterNode]
+	Body commonResp.BaseResponse[[]types.RouterNode]
 }
 
 // UpdateProfileInput PUT /auth/profile。
@@ -67,7 +68,7 @@ type UpdateProfileInput struct {
 
 // UpdateProfileOutput 更新个人信息响应信封（无数据）。
 type UpdateProfileOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // UpdatePasswordInput PUT /auth/profile/password。
@@ -77,7 +78,7 @@ type UpdatePasswordInput struct {
 
 // UpdatePasswordOutput 修改密码响应信封（无数据，改密踢下线）。
 type UpdatePasswordOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // ---- Handlers ----

@@ -1340,7 +1340,7 @@
       }
     },
     {
-      "id": 28,
+      "id": 27,
       "type": "timeseries",
       "title": "发号服务：健康状态",
       "description": "idgen_health_state（biz_tag 维度）：0=serving（正常发号）、1=degraded（降级：本地 fallback 或水位持久化连续失败）、2=not_serving（lease 失效/已关闭，发号被拒）。跳到 1/2 时用户写路径开始受影响。曲线在首次取号（懒初始化）后出现",
@@ -1402,7 +1402,7 @@
       }
     },
     {
-      "id": 29,
+      "id": 28,
       "type": "timeseries",
       "title": "发号服务端：延迟分位 P95 / P99",
       "description": "idgen_batch_latency_seconds（devops-id 进程内 Next/BatchNext 端到端耗时，按 method 维度）：P95=黄、P99=红。与「发号补充延迟」（调用方视角）对照可分离网络开销；与领域层基准对照（单号热路径 ~427ns、批量摊销后 ~2.4M ids/s 天花板）可判断是发号本身变慢还是被 gRPC/批量大小拖慢",

@@ -1,4 +1,4 @@
-// 部门/岗位管理 dao（P6）。
+// 部门/岗位管理 dao。
 package dao
 
 import (
@@ -8,8 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
-
 	"github.com/stanley760/devOps/devops-system/internal/model"
 	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
 	"github.com/stanley760/devOps/devops-system/internal/types"
@@ -101,7 +101,7 @@ func DeleteDept(ctx context.Context, deptID int64) error {
 // ---- 岗位 ----
 
 // ListPosts 分页查询岗位（筛选 code/name/status）。
-func ListPosts(ctx context.Context, q types.PostPageQuery) ([]model.Post, int64, error) {
+func ListPosts(ctx context.Context, q types.PostPageQuery) (domain.PageResult[model.Post], error) {
 	db := tenantdb.DB(ctx).Model(&model.Post{})
 	if q.Code != "" {
 		db = db.Where("code = ?", q.Code)
@@ -113,18 +113,14 @@ func ListPosts(ctx context.Context, q types.PostPageQuery) ([]model.Post, int64,
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询岗位总数失败")
+	page, err := domain.FindPage[model.Post](
+		db.Order("sort ASC, id ASC"),
+		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
+	)
+	if err != nil {
+		return domain.PageResult[model.Post]{}, errs.Wrap(err, errs.CodeInternal, "查询岗位列表失败")
 	}
-	pageNum, pageSize := pageOf(q.PageNum, q.PageSize)
-	var posts []model.Post
-	if err := db.Order("sort ASC, id ASC").
-		Offset((pageNum - 1) * pageSize).Limit(pageSize).
-		Find(&posts).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询岗位列表失败")
-	}
-	return posts, total, nil
+	return page, nil
 }
 
 // GetPostByID 按 ID 取岗位（租户内）。

@@ -6,6 +6,8 @@ package service
 
 import (
 	"context"
+
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/datascope"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
@@ -42,16 +44,14 @@ func NewUser(authM *auth.Manager, invalidateScope func()) *User {
 }
 
 // List 分页查询（tenant_id 由插件注入，天然限本租户）。
-func (s *User) List(ctx context.Context, q types.UserPageQuery) ([]types.UserDTO, int64, error) {
-	users, total, err := dao.ListUsers(ctx, q)
+func (s *User) List(ctx context.Context, q types.UserPageQuery) (domain.PageResult[types.UserDTO], error) {
+	page, err := dao.ListUsers(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return domain.PageResult[types.UserDTO]{}, err
 	}
-	out := make([]types.UserDTO, 0, len(users))
-	for i := range users {
-		out = append(out, toUserDTO(&users[i]))
-	}
-	return out, total, nil
+	return domain.MapPage(page, func(user model.User) types.UserDTO {
+		return toUserDTO(&user)
+	}), nil
 }
 
 // Get 用户详情（基本信息 + 角色/岗位 ID；数据权限单点收口）。
@@ -117,7 +117,7 @@ func (s *User) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 		PostIDs:  dao.PostIDsJSON(req.PostIDs),
 		Email:    req.Email,
 		Mobile:   req.Mobile,
-		Sex:      req.Sex,
+		Gender:   req.Gender,
 		Avatar:   req.Avatar,
 		Remark:   req.Remark,
 		Status:   req.Status,
@@ -171,7 +171,7 @@ func (s *User) Update(ctx context.Context, claims *auth.AccessClaims, id types.I
 		"nickname": req.Nickname,
 		"dept_id":  req.DeptID.Int64(),
 		"email":    req.Email,
-		"sex":      req.Sex,
+		"gender":   req.Gender,
 		"avatar":   req.Avatar,
 		"remark":   req.Remark,
 		"status":   req.Status,
@@ -261,7 +261,7 @@ func toUserDTO(u *model.User) types.UserDTO {
 		Username: u.Username,
 		Nickname: u.Nickname,
 		Email:    u.Email,
-		Sex:      u.Sex,
+		Gender:   u.Gender,
 		Avatar:   u.Avatar,
 		DeptID:   types.ID(u.DeptID),
 		PostIDs:  dao.PostIDsOf(u.PostIDs),

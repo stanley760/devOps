@@ -10,24 +10,26 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/stanley760/devOps/devops-common/domain"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 )
 
 // OKBody 成功响应体（huma handler Output.Body 用）。
-func OKBody[T any](data T) BaseResponse[T] {
-	return BaseResponse[T]{Code: errs.CodeOK, Msg: "ok", Data: data}
+func OKBody[T any](data T) commonResp.BaseResponse[T] {
+	return commonResp.BaseResponse[T]{Code: errs.CodeOK, Msg: "ok", Data: data}
 }
 
 // EmptyBody 无数据成功响应体：Data 为 nil any，序列化为 "data":null（与 OK(c, nil) 字节一致）。
-func EmptyBody() BaseResponse[any] {
-	return BaseResponse[any]{Code: errs.CodeOK, Msg: "ok", Data: nil}
+func EmptyBody() commonResp.BaseResponse[any] {
+	return commonResp.BaseResponse[any]{Code: errs.CodeOK, Msg: "ok", Data: nil}
 }
 
 // PageBody 分页成功响应体（与 OKPage 字节一致）。
-func PageBody[T any](list T, total int64) BaseResponse[PageData[T]] {
-	return BaseResponse[PageData[T]]{
+func PageBody[T any](page domain.PageResult[T]) commonResp.BaseResponse[domain.PageResult[T]] {
+	return commonResp.BaseResponse[domain.PageResult[T]]{
 		Code: errs.CodeOK, Msg: "ok",
-		Data: PageData[T]{List: list, Total: total},
+		Data: page,
 	}
 }
 
@@ -40,7 +42,7 @@ func WriteHumaEnvelope(hctx huma.Context, status int, msg string) {
 	if msg == "" {
 		msg = http.StatusText(status)
 	}
-	body, _ := json.Marshal(BaseResponse[any]{Code: status, Msg: msg})
+	body, _ := json.Marshal(commonResp.BaseResponse[any]{Code: status, Msg: msg})
 	hctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	hctx.SetStatus(status)
 	_, _ = hctx.BodyWriter().Write(body)

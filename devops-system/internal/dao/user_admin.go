@@ -5,19 +5,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
+	"gorm.io/gorm"
+
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/datascope"
 	"github.com/stanley760/devOps/devops-infra/errs"
+
 	"github.com/stanley760/devOps/devops-system/internal/model"
 	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
 	"github.com/stanley760/devOps/devops-system/internal/types"
-	"gorm.io/gorm"
-	"time"
 )
 
 // ListUsers 分页查询用户（筛选 username 模糊/mobile/状态/部门；行级数据权限收敛）。
 // datascope.Apply 注入 ctx 中的可见范围（users 路由挂 HumaDataScope 解析中间件）；
 // 未注入时 fail-closed 查询报错，防漏配退化为全量可见。
-func ListUsers(ctx context.Context, q types.UserPageQuery) ([]model.User, int64, error) {
+func ListUsers(ctx context.Context, q types.UserPageQuery) (domain.PageResult[model.User], error) {
 	db := datascope.Apply(ctx, tenantdb.DB(ctx).Model(&model.User{}),
 		datascope.Columns{Dept: "dept_id", Owner: "id"})
 	if q.Username != "" {
@@ -33,25 +37,14 @@ func ListUsers(ctx context.Context, q types.UserPageQuery) ([]model.User, int64,
 		db = db.Where("dept_id = ?", q.DeptID.Int64())
 	}
 
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询用户总数失败")
+	page, err := domain.FindPage[model.User](
+		db.Order("id DESC"),
+		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
+	)
+	if err != nil {
+		return domain.PageResult[model.User]{}, errs.Wrap(err, errs.CodeInternal, "查询用户列表失败")
 	}
-
-	pageNum, pageSize := q.PageNum, q.PageSize
-	if pageNum < 1 {
-		pageNum = 1
-	}
-	if pageSize < 1 {
-		pageSize = 10
-	}
-	var users []model.User
-	if err := db.Order("id DESC").
-		Offset((pageNum - 1) * pageSize).Limit(pageSize).
-		Find(&users).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询用户列表失败")
-	}
-	return users, total, nil
+	return page, nil
 }
 
 // UsernameExists 租户内用户名是否已占用（excludeID 排除自身，更新场景）。

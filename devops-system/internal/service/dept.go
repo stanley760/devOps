@@ -6,6 +6,8 @@ package service
 
 import (
 	"context"
+
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/dao"
@@ -185,16 +187,14 @@ type Post struct{}
 func NewPost() *Post { return &Post{} }
 
 // List 分页查询。
-func (s *Post) List(ctx context.Context, q types.PostPageQuery) ([]types.PostDTO, int64, error) {
-	posts, total, err := dao.ListPosts(ctx, q)
+func (s *Post) List(ctx context.Context, q types.PostPageQuery) (domain.PageResult[types.PostDTO], error) {
+	page, err := dao.ListPosts(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return domain.PageResult[types.PostDTO]{}, err
 	}
-	out := make([]types.PostDTO, 0, len(posts))
-	for i := range posts {
-		out = append(out, toPostDTO(&posts[i]))
-	}
-	return out, total, nil
+	return domain.MapPage(page, func(post model.Post) types.PostDTO {
+		return toPostDTO(&post)
+	}), nil
 }
 
 // Get 岗位详情。

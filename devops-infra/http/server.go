@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/stanley760/devOps/devops-infra/config"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/middleware"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -106,7 +107,7 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 			response.OK(c, gin.H{"status": "ready", "ready": ready})
 			return
 		}
-		c.JSON(http.StatusServiceUnavailable, response.BaseResponse[any]{
+		c.JSON(http.StatusServiceUnavailable, commonResp.BaseResponse[any]{
 			Code: http.StatusServiceUnavailable,
 			Msg:  "服务未就绪",
 			Data: gin.H{"status": "unready", "ready": ready, "unready": unready},

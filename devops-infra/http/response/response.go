@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/stanley760/devOps/devops-common/domain"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"io"
 	"log/slog"
@@ -26,20 +28,7 @@ import (
 	"time"
 )
 
-// BaseResponse 统一响应结构。
-// T 为 data 的实际类型；通用出口使用 BaseResponse[any]，
-// 强类型场景（如代码生成）可自行实例化。
-type BaseResponse[T any] struct {
-	Code int    `json:"code"` // 业务码，与 HTTP 状态码一致
-	Msg  string `json:"msg"`  // 提示信息
-	Data T      `json:"data"` // 业务数据，无数据时为 null
-}
-
-// PageData 分页数据信封。
-type PageData[T any] struct {
-	List  T     `json:"list"`  // 当前页数据
-	Total int64 `json:"total"` // 总条数
-}
+type BaseResponse[T any] = commonResp.BaseResponse[T]
 
 // Handler 业务 handler 签名：以返回 error 报告失败，
 // 成功时自行调用 OK / OKPage 写响应。
@@ -55,11 +44,11 @@ func OK(c *gin.Context, data any) {
 }
 
 // OKPage 分页成功响应。
-func OKPage(c *gin.Context, list any, total int64) {
-	c.JSON(http.StatusOK, BaseResponse[PageData[any]]{
+func OKPage[T any](c *gin.Context, page domain.PageResult[T]) {
+	c.JSON(http.StatusOK, BaseResponse[domain.PageResult[T]]{
 		Code: errs.CodeOK,
 		Msg:  "ok",
-		Data: PageData[any]{List: list, Total: total},
+		Data: page,
 	})
 }
 

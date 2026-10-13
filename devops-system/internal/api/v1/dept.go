@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/humaparam"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -25,22 +26,22 @@ func NewDeptHandler(svc *service.Dept) *DeptHandler { return &DeptHandler{svc: s
 
 // DeptListInput GET /system/api/v1/depts 查询参数（返回树；status 可选）。
 type DeptListInput struct {
-	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1"`
+	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1" doc:"部门状态 0:禁用；1:启用"`
 }
 
 // DeptListOutput 部门树信封。
 type DeptListOutput struct {
-	Body response.BaseResponse[[]types.DeptTreeResp]
+	Body commonResp.BaseResponse[[]types.DeptTreeResp]
 }
 
 // DeptIDInput path 参数。
 type DeptIDInput struct {
-	ID types.ParamID `path:"id"`
+	ID types.ParamID `path:"id" doc:"部门id"`
 }
 
 // DeptGetOutput 部门详情信封。
 type DeptGetOutput struct {
-	Body response.BaseResponse[types.DeptDTO]
+	Body commonResp.BaseResponse[types.DeptDTO]
 }
 
 // DeptCreateInput POST /system/api/v1/depts。
@@ -50,12 +51,12 @@ type DeptCreateInput struct {
 
 // DeptEmptyOutput 无数据信封。
 type DeptEmptyOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // DeptUpdateInput PUT /system/api/v1/depts/{id}。
 type DeptUpdateInput struct {
-	ID   types.ParamID `path:"id"`
+	ID   types.ParamID `path:"id" doc:"部门id"`
 	Body types.DeptSaveReq
 }
 

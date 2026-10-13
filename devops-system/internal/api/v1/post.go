@@ -4,6 +4,8 @@ package api
 import (
 	"context"
 
+	"github.com/stanley760/devOps/devops-common/domain"
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/humaparam"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -25,26 +27,25 @@ func NewPostHandler(svc *service.Post) *PostHandler { return &PostHandler{svc: s
 
 // PostListInput GET /system/api/v1/posts 查询参数（分页零值走 dao 兜底，分页字段不加 minimum）。
 type PostListInput struct {
-	PageNum  int                      `query:"page_num"`
-	PageSize int                      `query:"page_size" maximum:"100"`
-	Code     string                   `query:"code" maxLength:"64"`
-	Name     string                   `query:"name" maxLength:"50"`
-	Status   humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1"`
+	domain.PageParam
+	Code   string                   `query:"code" maxLength:"64" doc:"岗位编码"`
+	Name   string                   `query:"name" maxLength:"50" doc:"岗位名称"`
+	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1" doc:"岗位状态 0:禁用；1:启用"`
 }
 
 // PostListOutput 岗位分页列表信封。
 type PostListOutput struct {
-	Body response.BaseResponse[response.PageData[[]types.PostDTO]]
+	Body commonResp.BaseResponse[domain.PageResult[types.PostDTO]]
 }
 
 // PostIDInput path 参数。
 type PostIDInput struct {
-	ID types.ParamID `path:"id"`
+	ID types.ParamID `path:"id" doc:"岗位id"`
 }
 
 // PostGetOutput 岗位详情信封。
 type PostGetOutput struct {
-	Body response.BaseResponse[types.PostDTO]
+	Body commonResp.BaseResponse[types.PostDTO]
 }
 
 // PostCreateInput POST /system/api/v1/posts。
@@ -54,12 +55,12 @@ type PostCreateInput struct {
 
 // PostEmptyOutput 无数据信封（创建/更新/删除）。
 type PostEmptyOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // PostUpdateInput PUT /system/api/v1/posts/{id}。
 type PostUpdateInput struct {
-	ID   types.ParamID `path:"id"`
+	ID   types.ParamID `path:"id" doc:"岗位id"`
 	Body types.PostSaveReq
 }
 
@@ -67,17 +68,16 @@ type PostUpdateInput struct {
 
 // List GET /system/api/v1/posts。
 func (h *PostHandler) List(ctx context.Context, in *PostListInput) (*PostListOutput, error) {
-	list, total, err := h.svc.List(ctx, types.PostPageQuery{
-		PageNum:  in.PageNum,
-		PageSize: in.PageSize,
-		Code:     in.Code,
-		Name:     in.Name,
-		Status:   in.Status.Ptr(),
+	page, err := h.svc.List(ctx, types.PostPageQuery{
+		PageParam: in.PageParam,
+		Code:      in.Code,
+		Name:      in.Name,
+		Status:    in.Status.Ptr(),
 	})
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
-	return &PostListOutput{Body: response.PageBody(list, total)}, nil
+	return &PostListOutput{Body: response.OKBody(page)}, nil
 }
 
 // Get GET /system/api/v1/posts/{id}。

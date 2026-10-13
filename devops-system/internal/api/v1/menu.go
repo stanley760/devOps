@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-infra/http/humaparam"
 	"github.com/stanley760/devOps/devops-infra/http/response"
@@ -25,22 +26,22 @@ func NewMenuHandler(svc *service.Menu) *MenuHandler { return &MenuHandler{svc: s
 
 // MenuListInput GET /system/api/v1/menus 查询参数（返回树；status 可选）。
 type MenuListInput struct {
-	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1"`
+	Status humaparam.Optional[int8] `query:"status" minimum:"0" maximum:"1" doc:"菜单状态 0:禁用；1:启用"`
 }
 
 // MenuListOutput 菜单树信封。
 type MenuListOutput struct {
-	Body response.BaseResponse[[]types.MenuTreeResp]
+	Body commonResp.BaseResponse[[]types.MenuTreeResp]
 }
 
 // MenuIDInput path 参数。
 type MenuIDInput struct {
-	ID types.ParamID `path:"id"`
+	ID types.ParamID `path:"id" doc:"菜单id"`
 }
 
 // MenuGetOutput 菜单详情信封。
 type MenuGetOutput struct {
-	Body response.BaseResponse[types.MenuDTO]
+	Body commonResp.BaseResponse[types.MenuDTO]
 }
 
 // MenuCreateInput POST /system/api/v1/menus。
@@ -50,12 +51,12 @@ type MenuCreateInput struct {
 
 // MenuEmptyOutput 无数据信封。
 type MenuEmptyOutput struct {
-	Body response.BaseResponse[any]
+	Body commonResp.BaseResponse[any]
 }
 
 // MenuUpdateInput PUT /system/api/v1/menus/{id}（permission 变更联动重建引用角色 p 行）。
 type MenuUpdateInput struct {
-	ID   types.ParamID `path:"id"`
+	ID   types.ParamID `path:"id" doc:"菜单id"`
 	Body types.MenuSaveReq
 }
 

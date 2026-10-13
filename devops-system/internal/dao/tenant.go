@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -18,7 +19,7 @@ import (
 )
 
 // ListTenants 分页查询租户（筛选 name/code/status）。
-func ListTenants(ctx context.Context, q types.TenantPageQuery) ([]model.Tenant, int64, error) {
+func ListTenants(ctx context.Context, q types.TenantPageQuery) (domain.PageResult[model.Tenant], error) {
 	db := tenantdb.DB(ctx).Model(&model.Tenant{})
 	if q.Name != "" {
 		db = db.Where("name LIKE ?", "%"+q.Name+"%")
@@ -30,18 +31,14 @@ func ListTenants(ctx context.Context, q types.TenantPageQuery) ([]model.Tenant, 
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询租户总数失败")
+	page, err := domain.FindPage[model.Tenant](
+		db.Order("id ASC"),
+		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
+	)
+	if err != nil {
+		return domain.PageResult[model.Tenant]{}, errs.Wrap(err, errs.CodeInternal, "查询租户列表失败")
 	}
-	pageNum, pageSize := pageOf(q.PageNum, q.PageSize)
-	var tenants []model.Tenant
-	if err := db.Order("id ASC").
-		Offset((pageNum - 1) * pageSize).Limit(pageSize).
-		Find(&tenants).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询租户列表失败")
-	}
-	return tenants, total, nil
+	return page, nil
 }
 
 // GetTenantByCode 按编码取租户（登录用：未命中按 401「租户不存在」语义）。

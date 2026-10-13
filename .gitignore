@@ -17,7 +17,7 @@ coverage.txt
 
 # 日志
 logs/
-
+tmp/
 # 本地开发脚本运行产物（dev.sh 后台服务 pid/日志、watch 状态文件）
 deploy/.dev-logs/
 

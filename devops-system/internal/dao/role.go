@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -17,7 +18,7 @@ import (
 )
 
 // ListRoles 分页查询角色（筛选 name/code/status）。
-func ListRoles(ctx context.Context, q types.RolePageQuery) ([]model.Role, int64, error) {
+func ListRoles(ctx context.Context, q types.RolePageQuery) (domain.PageResult[model.Role], error) {
 	db := tenantdb.DB(ctx).Model(&model.Role{})
 	if q.Name != "" {
 		db = db.Where("name LIKE ?", "%"+q.Name+"%")
@@ -29,29 +30,14 @@ func ListRoles(ctx context.Context, q types.RolePageQuery) ([]model.Role, int64,
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询角色总数失败")
+	page, err := domain.FindPage[model.Role](
+		db.Order("sort ASC, id ASC"),
+		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
+	)
+	if err != nil {
+		return domain.PageResult[model.Role]{}, errs.Wrap(err, errs.CodeInternal, "查询角色列表失败")
 	}
-	pageNum, pageSize := pageOf(q.PageNum, q.PageSize)
-	var roles []model.Role
-	if err := db.Order("sort ASC, id ASC").
-		Offset((pageNum - 1) * pageSize).Limit(pageSize).
-		Find(&roles).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询角色列表失败")
-	}
-	return roles, total, nil
-}
-
-// pageOf 分页参数默认值。
-func pageOf(pageNum, pageSize int) (int, int) {
-	if pageNum < 1 {
-		pageNum = 1
-	}
-	if pageSize < 1 {
-		pageSize = 10
-	}
-	return pageNum, pageSize
+	return page, nil
 }
 
 // UpdateRole 更新角色字段（map 形式，仅非零字段）。

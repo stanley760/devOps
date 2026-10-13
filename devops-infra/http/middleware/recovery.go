@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	commonResp "github.com/stanley760/devOps/devops-common/response"
 	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-infra/http/response"
 )
 
 // Recovery panic 统一处理：记录堆栈后返回 500 错误信封。
@@ -29,7 +29,7 @@ func Recovery() gin.HandlerFunc {
 					c.AbortWithStatus(http.StatusInternalServerError)
 					return
 				}
-				c.AbortWithStatusJSON(http.StatusInternalServerError, response.BaseResponse[any]{
+				c.AbortWithStatusJSON(http.StatusInternalServerError, commonResp.BaseResponse[any]{
 					Code: errs.CodeInternal,
 					Msg:  errs.ErrInternal.Msg,
 				})

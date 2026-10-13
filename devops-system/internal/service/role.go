@@ -7,6 +7,7 @@ package service
 import (
 	"context"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-infra/datascope"
@@ -39,16 +40,14 @@ type Role struct {
 func NewRole(invalidateScope func()) *Role { return &Role{invalidateScope: invalidateScope} }
 
 // List 分页查询。
-func (s *Role) List(ctx context.Context, q types.RolePageQuery) ([]types.RoleDTO, int64, error) {
-	roles, total, err := dao.ListRoles(ctx, q)
+func (s *Role) List(ctx context.Context, q types.RolePageQuery) (domain.PageResult[types.RoleDTO], error) {
+	page, err := dao.ListRoles(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return domain.PageResult[types.RoleDTO]{}, err
 	}
-	out := make([]types.RoleDTO, 0, len(roles))
-	for i := range roles {
-		out = append(out, toRoleDTO(&roles[i]))
-	}
-	return out, total, nil
+	return domain.MapPage(page, func(role model.Role) types.RoleDTO {
+		return toRoleDTO(&role)
+	}), nil
 }
 
 // Get 角色详情（含已分配菜单 ID）。

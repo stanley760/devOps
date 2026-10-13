@@ -10,6 +10,8 @@ package service
 import (
 	"context"
 	"fmt"
+
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
@@ -33,16 +35,14 @@ func NewTenant(authM *auth.Manager) *Tenant {
 }
 
 // List 分页查询。
-func (s *Tenant) List(ctx context.Context, q types.TenantPageQuery) ([]types.TenantDTO, int64, error) {
-	tenants, total, err := dao.ListTenants(ctx, q)
+func (s *Tenant) List(ctx context.Context, q types.TenantPageQuery) (domain.PageResult[types.TenantDTO], error) {
+	page, err := dao.ListTenants(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return domain.PageResult[types.TenantDTO]{}, err
 	}
-	out := make([]types.TenantDTO, 0, len(tenants))
-	for i := range tenants {
-		out = append(out, toTenantDTO(&tenants[i]))
-	}
-	return out, total, nil
+	return domain.MapPage(page, func(tenant model.Tenant) types.TenantDTO {
+		return toTenantDTO(&tenant)
+	}), nil
 }
 
 // Get 租户详情。

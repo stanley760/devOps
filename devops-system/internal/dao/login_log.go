@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -43,7 +44,7 @@ func CreateLoginLog(ctx context.Context, log *model.LoginLog) {
 }
 
 // ListLoginLogs 分页查询登录审计（筛选 username/ip/result/时间范围，新行在前）。
-func ListLoginLogs(ctx context.Context, q types.LoginLogPageQuery) ([]model.LoginLog, int64, error) {
+func ListLoginLogs(ctx context.Context, q types.LoginLogPageQuery) (domain.PageResult[model.LoginLog], error) {
 	db := tenantdb.DB(ctx).Model(&model.LoginLog{})
 	if q.Username != "" {
 		db = db.Where("username LIKE ?", "%"+q.Username+"%")
@@ -61,18 +62,14 @@ func ListLoginLogs(ctx context.Context, q types.LoginLogPageQuery) ([]model.Logi
 		db = db.Where("create_time <= ?", *q.EndTime)
 	}
 
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询登录审计总数失败")
+	page, err := domain.FindPage[model.LoginLog](
+		db.Order("id DESC"),
+		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
+	)
+	if err != nil {
+		return domain.PageResult[model.LoginLog]{}, errs.Wrap(err, errs.CodeInternal, "查询登录审计列表失败")
 	}
-	pageNum, pageSize := pageOf(q.PageNum, q.PageSize)
-	var logs []model.LoginLog
-	if err := db.Order("id DESC").
-		Offset((pageNum - 1) * pageSize).Limit(pageSize).
-		Find(&logs).Error; err != nil {
-		return nil, 0, errs.Wrap(err, errs.CodeInternal, "查询登录审计列表失败")
-	}
-	return logs, total, nil
+	return page, nil
 }
 
 // DeleteLoginLogs 批量物理删除审计行（tenant_id 由 TenantPlugin 注入，跨租户 ID 不可达）。

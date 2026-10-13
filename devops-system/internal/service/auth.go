@@ -238,7 +238,7 @@ func (s *Auth) Info(ctx context.Context, claims *auth.AccessClaims) (*types.User
 		Nickname: u.Nickname,
 		Email:    u.Email,
 		Mobile:   derefString(u.Mobile),
-		Sex:      u.Sex,
+		Gender:   u.Gender,
 		Avatar:   u.Avatar,
 		DeptID:   types.ID(u.DeptID),
 		PostIDs:  parsePostIDs(u.PostIDs),
@@ -307,8 +307,8 @@ func (s *Auth) UpdateProfile(ctx context.Context, claims *auth.AccessClaims, req
 	} else {
 		updates["mobile"] = nil // 清空走 NULL，保 uk_tenant_mobile 多空值不冲突
 	}
-	if req.Sex != 0 {
-		updates["sex"] = req.Sex
+	if req.Gender != 0 {
+		updates["gender"] = req.Gender
 	}
 	if req.Avatar != "" {
 		updates["avatar"] = req.Avatar

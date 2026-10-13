@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stanley760/devOps/devops-common/domain"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
 	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
@@ -19,30 +21,27 @@ type LoginLog struct{}
 func NewLoginLog() *LoginLog { return &LoginLog{} }
 
 // List 分页查询登录审计。
-func (s *LoginLog) List(ctx context.Context, q types.LoginLogPageQuery) ([]types.LoginLogDTO, int64, error) {
-	logs, total, err := dao.ListLoginLogs(ctx, q)
+func (s *LoginLog) List(ctx context.Context, q types.LoginLogPageQuery) (domain.PageResult[types.LoginLogDTO], error) {
+	page, err := dao.ListLoginLogs(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return domain.PageResult[types.LoginLogDTO]{}, err
 	}
-	out := make([]types.LoginLogDTO, 0, len(logs))
-	for i := range logs {
-		l := &logs[i]
-		out = append(out, types.LoginLogDTO{
-			ID:          types.ID(l.ID),
-			Username:    l.Username,
-			UserID:      types.ID(l.UserID),
-			IP:          l.IP,
-			UserAgent:   l.UserAgent,
-			GeoCountry:  l.GeoCountry,
-			GeoProvince: l.GeoProvince,
-			GeoCity:     l.GeoCity,
-			GeoIsp:      l.GeoIsp,
-			Result:      l.Result,
-			Code:        l.Code,
-			CreateTime:  l.CreateTime,
-		})
-	}
-	return out, total, nil
+	return domain.MapPage(page, func(log model.LoginLog) types.LoginLogDTO {
+		return types.LoginLogDTO{
+			ID:          types.ID(log.ID),
+			Username:    log.Username,
+			UserID:      types.ID(log.UserID),
+			IP:          log.IP,
+			UserAgent:   log.UserAgent,
+			GeoCountry:  log.GeoCountry,
+			GeoProvince: log.GeoProvince,
+			GeoCity:     log.GeoCity,
+			GeoIsp:      log.GeoIsp,
+			Result:      log.Result,
+			Code:        log.Code,
+			CreateTime:  log.CreateTime,
+		}
+	}), nil
 }
 
 // Delete 批量删除审计行（ids 逗号分隔，如 "12,34,56"）。

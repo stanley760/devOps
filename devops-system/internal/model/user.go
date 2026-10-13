@@ -16,7 +16,7 @@ type User struct {
 	PostIDs   string     `gorm:"type:json;default:null"` // 岗位 ID JSON 数组，如 [4]；空值存 NULL（json_valid 约束拒绝 ''）
 	Email     string     `gorm:"size:50"`
 	Mobile    *string    `gorm:"size:20"`            // 指针：未设置存 NULL，保证 uk_tenant_mobile 多空值不冲突
-	Sex       int8       `gorm:"not null;default:0"` // 0未知 1男 2女
+	Gender    int8       `gorm:"not null;default:0"` // 0未知 1男 2女
 	Avatar    string     `gorm:"size:512"`
 	Status    int8       `gorm:"not null;default:1"` // 0停用 1正常
 	LoginIP   string     `gorm:"size:50;column:login_ip"`
