@@ -5,16 +5,14 @@ package model_test
 import (
 	"context"
 	"fmt"
+	"github.com/stanley760/devOps/devops-id/pkg/idclient"
+	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	client "github.com/stanley760/devOps/devops-infra/database/mysql"
+	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/model"
 	"testing"
 	"time"
-
-	infracfg "devops-infra/config"
-	grpcinfra "devops-infra/grpc"
-
-	"devops-id/pkg/idclient"
-	client "devops-infra/database/mysql"
-	"devops-system/internal/config"
-	"devops-system/internal/model"
 )
 
 // setup 加载配置 → 连接 MySQL → 装配发号客户端；任一依赖不可达则 Skip。

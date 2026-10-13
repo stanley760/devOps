@@ -1,17 +1,21 @@
 // Package auth 认证门面：JWT 双 token 与 Redis 会话管理。
 //
 // 签发/校验与会话状态分别委托共享实现（本包不再持有安全算法细节）：
+//
 //   - devops-infra/security/jwt：RS256 + kid 签发/解析，claims 携带
 //     uid/username/sid/tid/tcode，短期（access_expire）。存量 HS256 token
 //     升级时整体失效，refresh 会话不受影响。
+//
 //   - devops-infra/security/session：Redis 会话态（键空间租户分段，键形不变）：
 //     t{tid}:auth:refresh:{sid} = user_id，TTL = refresh_expire
 //     t{tid}:auth:sids:{uid}    = SET<sid>（RevokeAllSessions 用）
 //     auth:sid2uid:{sid}        = "tid:uid"（refresh 端点由 sid 定位会话归属）
+//
 //   - devops-infra/security/middleware：框架无关认证决策（Bearer 解析 →
 //     token 解析 → 会话态），Authenticate 供 Gin 中间件消费。
 //
 //   - 每个请求校验会话存在 —— 踢下线（logout/改密/停用）后旧 access 立即 401
+//
 //   - refresh 端点轮换 sid（先建新会话再撤销旧 sid），对齐 rotation 最佳实践
 package auth
 
@@ -22,12 +26,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"devops-infra/errs"
-	securityjwt "devops-infra/security/jwt"
-	securitymiddleware "devops-infra/security/middleware"
-	securitysession "devops-infra/security/session"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	securitymiddleware "github.com/stanley760/devOps/devops-infra/security/middleware"
+	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
 
-	"devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/config"
 )
 
 // AccessClaims access token 载荷（字段名与 JSON 标签保持兼容，调用方无感）。

@@ -13,12 +13,12 @@
 package response
 
 import (
-	"devops-infra/errs"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/stanley760/devOps/devops-infra/errs"
 	"io"
 	"log/slog"
 	"net/http"

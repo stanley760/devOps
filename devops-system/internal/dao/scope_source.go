@@ -3,7 +3,7 @@ package dao
 import (
 	"context"
 
-	"devops-infra/datascope"
+	"github.com/stanley760/devOps/devops-infra/datascope"
 )
 
 // 数据权限解析的数据源适配：把 model.X 转成 infra 值对象（datascope.RoleScope /

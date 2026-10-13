@@ -19,13 +19,11 @@ package datascope
 import (
 	"context"
 	"encoding/json"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"gorm.io/gorm"
 	"slices"
 	"sort"
 	"strings"
-
-	"gorm.io/gorm"
-
-	"devops-infra/errs"
 )
 
 // 数据权限口径常量（t_system_role.data_scope 取值）。

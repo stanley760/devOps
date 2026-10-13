@@ -22,7 +22,7 @@ func New(root, leafName, bizTag string) *Cache {
 	return &Cache{dir: filepath.Join(root, leafName, bizTag)}
 }
 
-func (c *Cache) workerPath() string   { return filepath.Join(c.dir, "worker_id") }
+func (c *Cache) workerPath() string    { return filepath.Join(c.dir, "worker_id") }
 func (c *Cache) watermarkPath() string { return filepath.Join(c.dir, "watermark") }
 
 // Ensure 创建缓存所在的目录树。

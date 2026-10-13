@@ -7,14 +7,15 @@ package service
 import (
 	"context"
 
-	"devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/errs"
 
-	"devops-system/internal/auth"
-	"devops-system/internal/authz"
-	"devops-system/internal/dao"
-	"devops-infra/datascope"
-	"devops-system/internal/model"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-infra/datascope"
+
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // validateDataScope 数据权限口径校验：自定义部门必须携带可解析的非空部门集合
@@ -99,7 +100,7 @@ func (s *Role) Create(ctx context.Context, claims *auth.AccessClaims, req types.
 	if r.DataScope == 0 {
 		r.DataScope = 1
 	}
-	
+
 	return dao.CreateRole(ctx, r)
 }
 

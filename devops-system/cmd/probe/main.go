@@ -7,15 +7,15 @@ import (
 	"os"
 	"time"
 
-	infracfg "devops-infra/config"
+	infracfg "github.com/stanley760/devOps/devops-infra/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	grpcinfra "devops-infra/grpc"
-	"devops-infra/nacos"
+	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
+	"github.com/stanley760/devOps/devops-infra/nacos"
 
-	"devops-id/pkg/idclient"
+	"github.com/stanley760/devOps/devops-id/pkg/idclient"
 )
 
 func main() {
@@ -99,11 +99,18 @@ func main() {
 	// 直连测试(绕过 nacos resolver,排除 TCP 层问题)
 	for _, addr := range []string{"127.0.0.1:9990", "172.16.60.150:9990"} {
 		rawConn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil { fmt.Printf("    直连 %s NewClient err: %v\n", addr, err); continue }
+		if err != nil {
+			fmt.Printf("    直连 %s NewClient err: %v\n", addr, err)
+			continue
+		}
 		pctx, pcancel := context.WithTimeout(context.Background(), 3*time.Second)
 		_, err = healthpb.NewHealthClient(rawConn).Check(pctx, &healthpb.HealthCheckRequest{})
 		pcancel()
-		if err != nil { fmt.Printf("    直连 %s Ping FAILED: %v\n", addr, err) } else { fmt.Printf("    直连 %s Ping OK\n", addr) }
+		if err != nil {
+			fmt.Printf("    直连 %s Ping FAILED: %v\n", addr, err)
+		} else {
+			fmt.Printf("    直连 %s Ping OK\n", addr)
+		}
 		_ = rawConn.Close()
 	}
 

@@ -20,8 +20,8 @@
 // SLO 判定（与 deploy/prometheus/alerts.yml 告警阈值同源，可按需调整）：
 //   - 业务写路径 P99 延迟 ≤ 1s（DevOpsHTTPP99High）
 //   - 失败率（HTTP 非 200 或业务 code 非 200）≤ 1%（DevOpsHTTP5xxRateHigh 口径）
-//   压测期间另在 Grafana 交叉观察：idgen_buffer_remaining 不触零、
-//   idgen_refill_failures_total 为零、SQL 连接池无等待（DevOpsSQLPoolWaiting）。
+//     压测期间另在 Grafana 交叉观察：idgen_buffer_remaining 不触零、
+//     idgen_refill_failures_total 为零、SQL 连接池无等待（DevOpsSQLPoolWaiting）。
 package main
 
 import (

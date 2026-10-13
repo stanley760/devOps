@@ -18,10 +18,10 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 
-	securityjwt "devops-infra/security/jwt"
-	securitysession "devops-infra/security/session"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
 
-	"devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/config"
 )
 
 // testManager 构建 miniredis + RS256 共享实现的门面。

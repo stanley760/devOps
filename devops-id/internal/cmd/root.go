@@ -7,17 +7,14 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/spf13/cobra"
+	"github.com/stanley760/devOps/devops-id/internal/config"
+	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/logging"
+	"github.com/stanley760/devOps/devops-infra/nacos"
+	"github.com/stanley760/devOps/devops-infra/observability"
 	"log/slog"
 	"time"
-
-	"github.com/spf13/cobra"
-
-	infracfg "devops-infra/config"
-	"devops-infra/logging"
-	"devops-infra/nacos"
-	"devops-infra/observability"
-
-	"devops-id/internal/config"
 )
 
 var confFile string

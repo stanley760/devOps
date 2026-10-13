@@ -8,16 +8,14 @@ package middleware
 
 import (
 	"context"
-
-	"devops-infra/security/humakit"
-	securityjwt "devops-infra/security/jwt"
-
-	client "devops-infra/database/mysql"
-	"devops-system/internal/auditctx"
-	"devops-system/internal/auth"
-	"devops-system/internal/authz"
-	"devops-system/internal/dao"
-	"devops-system/internal/store"
+	client "github.com/stanley760/devOps/devops-infra/database/mysql"
+	"github.com/stanley760/devOps/devops-infra/security/humakit"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/store"
 )
 
 // 类型别名：router/app/wire 的 *middleware.Kit 签名零改动，wire 无需重新生成。

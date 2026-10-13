@@ -7,13 +7,11 @@ package idgen
 
 import (
 	"context"
-	"time"
-
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
-
-	iddomain "devops-id/internal/domain/idgen"
+	"time"
 )
 
 // Generator 发号器统一接口（应用层视角）。

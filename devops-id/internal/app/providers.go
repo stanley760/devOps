@@ -7,8 +7,8 @@ package app
 import (
 	"github.com/google/wire"
 
-	idapp "devops-id/internal/application/idgen"
-	idgrpc "devops-id/internal/interfaces/grpc"
+	idapp "github.com/stanley760/devOps/devops-id/internal/application/idgen"
+	idgrpc "github.com/stanley760/devOps/devops-id/internal/interfaces/grpc"
 )
 
 var infraSet = wire.NewSet(

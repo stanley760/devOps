@@ -5,8 +5,6 @@ import (
 	"runtime/debug"
 )
 
-
-
 // resolveVersion 按优先级获取服务版本：
 //  1. .env 文件 APP_VERSION（本地 go run 开发，显式指定版本号）
 //  2. 模块版本（go install 从模块代理安装时）
@@ -17,7 +15,7 @@ func ResolveVersion() string {
 	if v := os.Getenv("APP_VERSION"); v != "" {
 		return v
 	}
-	
+
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if v := info.Main.Version; v != "" && v != "(devel)" {
 			return v

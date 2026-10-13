@@ -10,6 +10,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/gin-gonic/gin"
+	goredis "github.com/redis/go-redis/v9"
+	httpinfra "github.com/stanley760/devOps/devops-infra/http"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/middleware"
+	"github.com/stanley760/devOps/devops-system/internal/service"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -17,19 +27,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/alicebob/miniredis/v2"
-	"github.com/gin-gonic/gin"
-	goredis "github.com/redis/go-redis/v9"
-
-	httpinfra "devops-infra/http"
-	securityjwt "devops-infra/security/jwt"
-	securitysession "devops-infra/security/session"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/config"
-	"devops-system/internal/middleware"
-	"devops-system/internal/service"
 )
 
 // newTestKit 构造测试中间件套件（无 DB/缓存环境；测试路径只到 JWT 层）。

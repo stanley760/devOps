@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	cacheRedis "devops-infra/cache/redis"
 	goredis "github.com/redis/go-redis/v9"
+	cacheRedis "github.com/stanley760/devOps/devops-infra/cache/redis"
 )
 
 type RedisStore struct {

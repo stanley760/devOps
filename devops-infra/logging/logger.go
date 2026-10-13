@@ -19,7 +19,7 @@ import (
 
 	"github.com/DeRuina/timberjack"
 
-	"devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/config"
 )
 
 const defaultBufferSize = 4096

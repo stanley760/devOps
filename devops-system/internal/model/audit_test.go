@@ -7,8 +7,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"devops-system/internal/auditctx"
-	"devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-system/internal/model"
 )
 
 func TestBaseModelAuditHooks(t *testing.T) {

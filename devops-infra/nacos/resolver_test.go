@@ -15,10 +15,10 @@ func TestServiceNameFromTarget(t *testing.T) {
 		target string
 		want   string
 	}{
-		{"nacos:///devops-id", "devops-id"},  // 标准三斜杠：服务名在 path 位
-		{"nacos://devops-id", "devops-id"},   // 两斜杠误写：服务名在 authority 位，Host 兜底
+		{"nacos:///devops-id", "devops-id"},            // 标准三斜杠：服务名在 path 位
+		{"nacos://devops-id", "devops-id"},             // 两斜杠误写：服务名在 authority 位，Host 兜底
 		{"nacos:///devops-id?timeout=5s", "devops-id"}, // 带查询参数
-		{"nacos:///", ""},                    // 无服务名 → Build 应报错
+		{"nacos:///", ""},                              // 无服务名 → Build 应报错
 	}
 
 	for _, c := range cases {

@@ -9,9 +9,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"devops-infra/datascope"
-	securityjwt "devops-infra/security/jwt"
-	securitymw "devops-infra/security/middleware"
+	"github.com/stanley760/devOps/devops-infra/datascope"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
 )
 
 // fakeAuthn 返回固定 claims 的认证器（免去 JWT/会话装配）。
@@ -79,7 +79,9 @@ func TestScopeSuperAdmin(t *testing.T) {
 		UserRoles: func(context.Context, int64) ([]datascope.RoleScope, error) {
 			return []datascope.RoleScope{{Code: "super_admin", DataScope: datascope.ScopeSelf}}, nil
 		},
-		User:  func(context.Context, int64) (datascope.UserRef, error) { return datascope.UserRef{ID: 20, DeptID: 9}, nil },
+		User: func(context.Context, int64) (datascope.UserRef, error) {
+			return datascope.UserRef{ID: 20, DeptID: 9}, nil
+		},
 		Depts: func(context.Context) ([]datascope.DeptNode, error) { return nil, nil },
 	})
 	if code != http.StatusNoContent {

@@ -8,20 +8,17 @@ import (
 	"net"
 	"net/http"
 	// 挂载 /debug/pprof/* 到 DefaultServeMux（见 startMetricsServer）
+	"github.com/spf13/cobra"
+	"github.com/stanley760/devOps/devops-id/internal/app"
+	"github.com/stanley760/devOps/devops-id/internal/config"
+	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
+	"github.com/stanley760/devOps/devops-infra/nacos"
+	"github.com/stanley760/devOps/devops-infra/observability"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	_ "net/http/pprof"
 	"strconv"
 	"time"
-
-	"github.com/spf13/cobra"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-
-	infracfg "devops-infra/config"
-	grpcinfra "devops-infra/grpc"
-	"devops-infra/nacos"
-	"devops-infra/observability"
-
-	"devops-id/internal/app"
-	"devops-id/internal/config"
 )
 
 var serverCmd = &cobra.Command{

@@ -10,7 +10,7 @@
 package tenantdb
 
 import (
-	"devops-infra/tenant"
+	"github.com/stanley760/devOps/devops-infra/tenant"
 	"gorm.io/gorm"
 )
 

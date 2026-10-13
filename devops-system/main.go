@@ -2,12 +2,12 @@ package main
 
 import (
 	_ "embed"
-	"log"
-	"devops-infra/http/humaerr"
-	"devops-infra/utils"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
-	"devops-system/internal/cmd"
+	"github.com/stanley760/devOps/devops-infra/http/humaerr"
+	"github.com/stanley760/devOps/devops-infra/utils"
+	"github.com/stanley760/devOps/devops-system/internal/cmd"
+	"log"
 )
 
 // banner 在编译期由 //go:embed 从 banner.txt 嵌入，运行时无需读文件；
@@ -41,5 +41,3 @@ func main() {
 
 	cmd.Execute(ver)
 }
-
-

@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"devops-infra/http/middleware"
+	"github.com/stanley760/devOps/devops-infra/http/middleware"
 )
 
 func TestRecovery(t *testing.T) {

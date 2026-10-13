@@ -1,9 +1,9 @@
 package app
 
 import (
-	"devops-system/internal/auth"
-	"devops-system/internal/middleware"
-	"devops-system/internal/service"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/middleware"
+	"github.com/stanley760/devOps/devops-system/internal/service"
 )
 
 func newUserService(authM *auth.Manager, kit *middleware.Kit) *service.User {

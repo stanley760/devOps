@@ -2,12 +2,13 @@ package main
 
 import (
 	_ "embed"
-	"log"
-	"devops-infra/utils"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
-	"devops-id/internal/cmd"
+	"github.com/stanley760/devOps/devops-id/internal/cmd"
+	"github.com/stanley760/devOps/devops-infra/utils"
+	"log"
 )
+
 //go:embed banner.txt
 var banner string
 

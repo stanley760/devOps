@@ -4,14 +4,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 
-	etcdinfra "devops-infra/etcd"
+	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
 
-	idapp "devops-id/internal/application/idgen"
-	"devops-id/internal/config"
-	iddomain "devops-id/internal/domain/idgen"
-	"devops-id/internal/infrastructure/etcdcoord"
-	idgrpc "devops-id/internal/interfaces/grpc"
-	"devops-id/pkg/idgenpb"
+	idapp "github.com/stanley760/devOps/devops-id/internal/application/idgen"
+	"github.com/stanley760/devOps/devops-id/internal/config"
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	"github.com/stanley760/devOps/devops-id/internal/infrastructure/etcdcoord"
+	idgrpc "github.com/stanley760/devOps/devops-id/internal/interfaces/grpc"
+	"github.com/stanley760/devOps/devops-id/pkg/idgenpb"
 )
 
 // provideEtcdClient 构造 etcd client；cleanup 负责关闭连接。

@@ -1,12 +1,10 @@
 package mysql
 
 import (
+	"github.com/stanley760/devOps/devops-infra/config"
+	"gorm.io/gorm/logger"
 	"testing"
 	"time"
-
-	"gorm.io/gorm/logger"
-
-	"devops-infra/config"
 )
 
 func TestNormalizeConfig(t *testing.T) {

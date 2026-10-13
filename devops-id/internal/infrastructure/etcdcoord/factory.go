@@ -4,12 +4,10 @@
 package etcdcoord
 
 import (
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	"github.com/stanley760/devOps/devops-id/internal/infrastructure/workerfile"
+	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
 	"time"
-
-	etcdinfra "devops-infra/etcd"
-
-	iddomain "devops-id/internal/domain/idgen"
-	"devops-id/internal/infrastructure/workerfile"
 )
 
 // NewInfraFactory 返回按 biz_tag 构造领域 TagInfra 的工厂。

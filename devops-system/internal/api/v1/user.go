@@ -4,13 +4,13 @@ package api
 import (
 	"context"
 
-	"devops-infra/errs"
-	"devops-infra/http/humaparam"
-	"devops-infra/http/response"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/http/humaparam"
+	"github.com/stanley760/devOps/devops-infra/http/response"
 
-	"devops-system/internal/auth"
-	"devops-system/internal/service"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/service"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // UserHandler 用户管理接口。
@@ -25,9 +25,9 @@ func NewUserHandler(svc *service.User) *UserHandler { return &UserHandler{svc: s
 
 // UserListInput GET /system/api/v1/users 查询参数。
 type UserListInput struct {
-	PageNum  int                              `query:"page_num"`
-	PageSize int                              `query:"page_size" maximum:"100"`
-	Username string                           `query:"username" maxLength:"30"`
+	PageNum  int                               `query:"page_num"`
+	PageSize int                               `query:"page_size" maximum:"100"`
+	Username string                            `query:"username" maxLength:"30"`
 	Mobile   string                            `query:"mobile" maxLength:"20"`
 	Status   humaparam.Optional[int8]          `query:"status" minimum:"0" maximum:"1"`
 	DeptID   humaparam.Optional[types.ParamID] `query:"dept_id"`

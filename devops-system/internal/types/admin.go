@@ -130,29 +130,29 @@ type DeptTreeResp struct {
 
 // PostPageQuery GET /posts 查询参数。
 type PostPageQuery struct {
-	PageNum  int    `form:"page_num" binding:"omitempty,min=1"`
-	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
-	Code     string `form:"code" binding:"omitempty,max=64"`
-	Name     string `form:"name" binding:"omitempty,max=50"`
-	Status   *int8  `form:"status" binding:"omitempty,min=0,max=1"`
+	PageNum  int    `form:"page_num" binding:"omitempty,min=1" default:"1" doc:"页码"`
+	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=999" default:"10" doc:"页数"`
+	Code     string `form:"code" binding:"omitempty,max=64" doc:"岗位编码"`
+	Name     string `form:"name" binding:"omitempty,max=50" doc:"岗位名称"`
+	Status   *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"岗位状态" default:"1"`
 }
 
 // PostSaveReq POST/PUT /posts 入参（code 创建后不可改）。
 type PostSaveReq struct {
-	Code   string `json:"code" binding:"required,min=1,max=64" minLength:"1" maxLength:"64"`
-	Name   string `json:"name" binding:"required,min=1,max=50" minLength:"1" maxLength:"50"`
-	Sort   int    `json:"sort,omitempty"`
-	Status int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1"`
-	Remark string `json:"remark,omitempty" binding:"omitempty,max=500" maxLength:"500"`
+	Code   string `json:"code" binding:"required,min=1,max=64" minLength:"1" maxLength:"64" doc:"岗位编号"`
+	Name   string `json:"name" binding:"required,min=1,max=50" minLength:"1" maxLength:"50" doc:"岗位名称"`
+	Sort   int    `json:"sort,omitempty" doc:"排序"`
+	Status int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" doc:"岗位状态 0:禁用；1:启用"`
+	Remark string `json:"remark,omitempty" binding:"omitempty,max=500" maxLength:"500" doc:"备注"`
 }
 
 // PostDTO 岗位信息。
 type PostDTO struct {
-	ID         ID        `json:"id"`
-	Code       string    `json:"code"`
-	Name       string    `json:"name"`
-	Sort       int       `json:"sort"`
-	Status     int8      `json:"status"`
-	Remark     string    `json:"remark"`
-	CreateTime time.Time `json:"createTime"`
+	ID         ID        `json:"id" doc:"岗位id"`
+	Code       string    `json:"code" doc:"岗位编号"`
+	Name       string    `json:"name" doc:"岗位名称"`
+	Sort       int       `json:"sort" doc:"排序"`
+	Status     int8      `json:"status" doc:"岗位状态 0:禁用；1:启用"`
+	Remark     string    `json:"remark" doc:"备注"`
+	CreateTime time.Time `json:"createTime" doc:"创建日期"`
 }

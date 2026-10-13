@@ -4,13 +4,13 @@ package api
 import (
 	"context"
 
-	"devops-infra/errs"
-	"devops-infra/http/humaparam"
-	"devops-infra/http/response"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/http/humaparam"
+	"github.com/stanley760/devOps/devops-infra/http/response"
 
-	"devops-system/internal/auth"
-	"devops-system/internal/service"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/service"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // MenuHandler 菜单管理接口。

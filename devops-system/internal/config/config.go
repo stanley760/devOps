@@ -7,8 +7,8 @@ package config
 import (
 	"time"
 
-	"devops-infra/config"
-	securityjwt "devops-infra/security/jwt"
+	"github.com/stanley760/devOps/devops-infra/config"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
 )
 
 // DefaultJWTKeyID key_id 未配置时的默认 kid（token 头与 JWKS 一致）。

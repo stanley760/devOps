@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	iddomain "devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 )
 
 func TestMapErr(t *testing.T) {

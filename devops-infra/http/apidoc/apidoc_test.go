@@ -3,15 +3,13 @@ package apidoc_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/gin-gonic/gin"
+	apidoc "github.com/stanley760/devOps/devops-infra/http/apidoc"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/gin-gonic/gin"
-
-	apidoc "devops-infra/http/apidoc"
 )
 
 func newEngine() *gin.Engine {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"devops-infra/http/response"
-	securitymw "devops-infra/security/middleware"
+	"github.com/stanley760/devOps/devops-infra/http/response"
+	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
 )
 
 // HumaTenantContext claims → check 回调 → 租户上下文注入。

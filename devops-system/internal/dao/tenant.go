@@ -10,11 +10,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/errs"
 
-	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // ListTenants 分页查询租户（筛选 name/code/status）。

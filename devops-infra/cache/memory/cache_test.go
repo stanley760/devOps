@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	cacheinf "devops-infra/cache"
+	cacheinf "github.com/stanley760/devOps/devops-infra/cache"
 )
 
 func TestCacheLifecycle(t *testing.T) {

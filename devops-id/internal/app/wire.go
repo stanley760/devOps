@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 
-	"devops-id/internal/config"
+	"github.com/stanley760/devOps/devops-id/internal/config"
 )
 
 // InitializeGRPC 装配发号服务依赖图：etcd client → per-tag 基础设施工厂 →

@@ -1,9 +1,9 @@
-module devops-system
+module github.com/stanley760/devOps/devops-system
 
 go 1.27.1
 
 require (
-	devops-infra v0.0.0
+	github.com/stanley760/devOps/devops-infra v0.0.0
 	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/fatih/color v1.19.0
 	github.com/gin-gonic/gin v1.12.0
@@ -97,7 +97,7 @@ require (
 )
 
 require (
-	devops-id v0.0.0
+	github.com/stanley760/devOps/devops-id v0.0.0
 	github.com/DeRuina/timberjack v1.4.7 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
@@ -143,6 +143,6 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace devops-infra => ../devops-infra
+replace github.com/stanley760/devOps/devops-infra => ../devops-infra
 
-replace devops-id => ../devops-id
+replace github.com/stanley760/devOps/devops-id => ../devops-id

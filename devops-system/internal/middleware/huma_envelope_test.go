@@ -3,13 +3,11 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"github.com/danielgtaylor/huma/v2"
+	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/danielgtaylor/huma/v2"
-
-	securitymw "devops-infra/security/middleware"
 )
 
 // TestHumaEnvelopeWriters 信封回调工厂表驱动金标准：断言每个场景的完整 JSON body 与状态码。

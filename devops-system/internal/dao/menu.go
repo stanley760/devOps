@@ -7,10 +7,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/errs"
 
-	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
 )
 
 // ListMenus 全量菜单（树由 service 内存组装；status 可筛选）。

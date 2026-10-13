@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	database "devops-infra/database"
-	client "devops-infra/database/mysql"
+	database "github.com/stanley760/devOps/devops-infra/database"
+	client "github.com/stanley760/devOps/devops-infra/database/mysql"
 )
 
 // DB dao 层统一入口：

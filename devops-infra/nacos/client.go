@@ -3,19 +3,17 @@ package nacos
 import (
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"devops-infra/config"
-
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
+	"github.com/stanley760/devOps/devops-infra/config"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type clientState struct {

@@ -2,11 +2,9 @@ package mysql
 
 import (
 	"fmt"
-	"time"
-
+	"github.com/stanley760/devOps/devops-infra/config"
 	"gorm.io/gorm/logger"
-
-	"devops-infra/config"
+	"time"
 )
 
 // Config MySQL 连接配置。这里保留类型别名，

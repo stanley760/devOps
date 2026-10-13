@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	etcdinfra "devops-infra/etcd"
+	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
 
-	iddomain "devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 )
 
 func TestMapInfraErr(t *testing.T) {
@@ -70,8 +70,8 @@ type fakeLeaseOps struct {
 	lost     chan struct{}
 }
 
-func (f *fakeLeaseOps) Grant(context.Context) error { return f.grantErr }
-func (f *fakeLeaseOps) Lost() <-chan struct{}        { return f.lost }
+func (f *fakeLeaseOps) Grant(context.Context) error   { return f.grantErr }
+func (f *fakeLeaseOps) Lost() <-chan struct{}         { return f.lost }
 func (f *fakeLeaseOps) Release(context.Context) error { return nil }
 
 func TestSlotAdapterAcquireMapsErrors(t *testing.T) {

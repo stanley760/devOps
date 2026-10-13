@@ -4,14 +4,13 @@ package service
 import (
 	"context"
 
-	"devops-infra/errs"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/authz"
-	"devops-system/internal/dao"
-	"devops-system/internal/model"
-	"devops-system/internal/types"
-	infratenant "devops-infra/tenant"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // Menu 菜单管理服务。

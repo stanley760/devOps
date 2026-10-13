@@ -10,19 +10,16 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
-
+	"github.com/stanley760/devOps/devops-infra/errs"
+	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/store"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 	"golang.org/x/crypto/bcrypt"
-
-	"devops-infra/errs"
-	infratenant "devops-infra/tenant"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/authz"
-	"devops-system/internal/dao"
-	"devops-system/internal/model"
-	"devops-system/internal/store"
-	"devops-system/internal/types"
+	"time"
 )
 
 // Tenant 租户管理服务。

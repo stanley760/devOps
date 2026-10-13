@@ -1,12 +1,10 @@
 package app
 
 import (
-	"sync"
-
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-
-	iddomain "devops-id/internal/domain/idgen"
+	"sync"
 )
 
 // HealthBridge 将领域健康状态同步到 gRPC health server。

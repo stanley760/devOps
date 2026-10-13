@@ -14,11 +14,11 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"devops-infra/datascope"
-	"devops-infra/http/response"
-	securityauthz "devops-infra/security/authz"
-	securityjwt "devops-infra/security/jwt"
-	securitymw "devops-infra/security/middleware"
+	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devOps/devops-infra/http/response"
+	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
+	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
 )
 
 // Middleware huma 中间件类型别名（huma 无独立命名类型）。
@@ -112,14 +112,14 @@ func statusPhrase(status int) func(huma.Context, error) {
 
 // Kit 业务中间件套件：JWT/租户/鉴权/数据权限中间件的装配与链组合。
 type Kit struct {
-	authn    securitymw.BearerAuthenticator
-	deps     Deps
-	jwtM     Middleware
-	tenantM  Middleware
-	scopeM   Middleware
-	permM    func(string) Middleware
-	platM    func(string) Middleware
-	scopes   *scopeCache
+	authn   securitymw.BearerAuthenticator
+	deps    Deps
+	jwtM    Middleware
+	tenantM Middleware
+	scopeM  Middleware
+	permM   func(string) Middleware
+	platM   func(string) Middleware
+	scopes  *scopeCache
 }
 
 // NewKit 装配中间件套件；deps 的 nil/零值项按 fail-closed 语义回填安全默认。

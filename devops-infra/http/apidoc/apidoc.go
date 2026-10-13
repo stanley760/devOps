@@ -20,11 +20,10 @@ package apidoc
 
 import (
 	"context"
-	"net/http"
-
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 // Options 文档装配配置。

@@ -6,9 +6,9 @@ package app
 import (
 	"github.com/google/wire"
 
-	"devops-system/internal/config"
-	"devops-system/internal/router"
-	"devops-system/internal/service"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/router"
+	"github.com/stanley760/devOps/devops-system/internal/service"
 )
 
 var serviceSet = wire.NewSet(

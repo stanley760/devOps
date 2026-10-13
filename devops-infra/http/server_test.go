@@ -11,8 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"devops-infra/config"
-	"devops-infra/observability"
+	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/observability"
 )
 
 func TestReadyZReportsCheckStatus(t *testing.T) {

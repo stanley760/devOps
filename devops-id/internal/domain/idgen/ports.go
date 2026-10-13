@@ -96,19 +96,19 @@ type TagInfraFactory func(bizTag string) TagInfra
 // provided (nil-factory managers, tests): nothing is persisted.
 type noopCache struct{}
 
-func (noopCache) Ensure() error                   { return nil }
-func (noopCache) Load() (int64, bool)             { return 0, false }
-func (noopCache) Save(int64) error                { return nil }
-func (noopCache) LoadWatermark() (int64, bool)    { return 0, false }
-func (noopCache) SaveWatermark(int64) error       { return nil }
+func (noopCache) Ensure() error                { return nil }
+func (noopCache) Load() (int64, bool)          { return 0, false }
+func (noopCache) Save(int64) error             { return nil }
+func (noopCache) LoadWatermark() (int64, bool) { return 0, false }
+func (noopCache) SaveWatermark(int64) error    { return nil }
 
 // noopObserver discards all domain events.
 type noopObserver struct{}
 
-func (noopObserver) OnFallbackActive(string)              {}
-func (noopObserver) OnLeaseLost(string)                   {}
-func (noopObserver) OnClockRollback(string, int64)        {}
-func (noopObserver) OnState(string, HealthState)          {}
+func (noopObserver) OnFallbackActive(string)       {}
+func (noopObserver) OnLeaseLost(string)            {}
+func (noopObserver) OnClockRollback(string, int64) {}
+func (noopObserver) OnState(string, HealthState)   {}
 
 // ensure noop types satisfy the ports at compile time.
 var (

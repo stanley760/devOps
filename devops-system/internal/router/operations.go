@@ -9,11 +9,11 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 
-	"devops-infra/http/humaerr"
+	"github.com/stanley760/devOps/devops-infra/http/humaerr"
 
-	apiv1 "devops-system/internal/api/v1"
-	"devops-system/internal/middleware"
-	"devops-system/internal/service"
+	apiv1 "github.com/stanley760/devOps/devops-system/internal/api/v1"
+	"github.com/stanley760/devOps/devops-system/internal/middleware"
+	"github.com/stanley760/devOps/devops-system/internal/service"
 )
 
 const systemAPIPrefix = "/system"
@@ -266,7 +266,7 @@ func registerLoginLogs(api huma.API, h *apiv1.LoginLogHandler, kit *middleware.K
 	}), h.Clean)
 }
 
-// registerTenants tenants 模块 
+// registerTenants tenants 模块
 func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) {
 	common := huma.Operation{
 		Tags:      []string{"tenants"},
@@ -292,7 +292,7 @@ func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) 
 	}), h.Update)
 	huma.Register(api, with(common, huma.Operation{
 		OperationID: "tenant-update-status", Method: http.MethodPut, Path: "/api/v1/tenants/{id}/status",
-		Summary: "租户启停", Description: "停用即全员下线。status:0 - 停用; 1 - 启用",
+		Summary: "租户启停", Description: "停用即全员下线。",
 		Middlewares: kit.PlatChain("platform:tenant:update"),
 	}), h.UpdateStatus)
 	huma.Register(api, with(common, huma.Operation{

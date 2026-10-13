@@ -3,7 +3,7 @@ package redis
 import (
 	"testing"
 
-	"devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/config"
 )
 
 func TestNormalizeConfigDefaultsHost(t *testing.T) {

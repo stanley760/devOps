@@ -6,17 +6,14 @@ package service
 
 import (
 	"context"
-
+	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 	"golang.org/x/crypto/bcrypt"
-
-	"devops-infra/errs"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/authz"
-	"devops-system/internal/dao"
-	"devops-infra/datascope"
-	"devops-system/internal/model"
-	"devops-system/internal/types"
 )
 
 // ensureUserVisible 单点数据权限收口（Get/Update/ResetPassword/Delete 按 ID 直查后判定）：

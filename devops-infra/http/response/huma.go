@@ -10,7 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/errs"
 )
 
 // OKBody 成功响应体（huma handler Output.Body 用）。

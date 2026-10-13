@@ -7,9 +7,9 @@
 package app
 
 import (
-	"devops-id/internal/application/idgen"
-	"devops-id/internal/config"
-	grpc2 "devops-id/internal/interfaces/grpc"
+	"github.com/stanley760/devOps/devops-id/internal/application/idgen"
+	"github.com/stanley760/devOps/devops-id/internal/config"
+	grpc2 "github.com/stanley760/devOps/devops-id/internal/interfaces/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 )

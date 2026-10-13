@@ -9,9 +9,9 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"devops-infra/cache"
-	rediscache "devops-infra/cache/redis"
-	"devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/cache"
+	rediscache "github.com/stanley760/devOps/devops-infra/cache/redis"
+	"github.com/stanley760/devOps/devops-infra/config"
 )
 
 // Init 建立 Redis 连接。

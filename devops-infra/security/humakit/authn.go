@@ -3,7 +3,7 @@ package humakit
 import (
 	"github.com/danielgtaylor/huma/v2"
 
-	securitymw "devops-infra/security/middleware"
+	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
 )
 
 // securityJWT huma 认证中间件：infra 决策 + 本套件信封呈现 + 可选 ctx 增强。

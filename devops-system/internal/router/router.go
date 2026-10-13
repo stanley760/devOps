@@ -6,15 +6,12 @@
 package router
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
-
-	httpinfra "devops-infra/http"
-	"devops-infra/http/apidoc"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/config"
+	httpinfra "github.com/stanley760/devOps/devops-infra/http"
+	"github.com/stanley760/devOps/devops-infra/http/apidoc"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"net/http"
 )
 
 // NewRegister 组合应用层提供的业务模块路由，返回交给 httpinfra.Run 的注册回调。

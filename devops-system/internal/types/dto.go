@@ -5,29 +5,29 @@ import "time"
 
 // LoginReq 登录入参。tenant_code 为空取 tenant.default_code。
 type LoginReq struct {
-	TenantCode string `json:"tenant_code,omitempty" binding:"omitempty,max=30" maxLength:"30"`
-	Username   string `json:"username" binding:"required,min=2,max=30" minLength:"2" maxLength:"30"`
-	Password   string `json:"password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64"`
+	TenantCode string `json:"tenant_code,omitempty" binding:"omitempty,max=30" maxLength:"30" doc:"租户编号"`
+	Username   string `json:"username" binding:"required,min=2,max=30" minLength:"2" maxLength:"30" doc:"用户姓名"`
+	Password   string `json:"password" binding:"required,min=6,max=64" minLength:"6" maxLength:"64" doc:"用户密码"`
 }
 
 // TenantBrief 租户摘要。
 type TenantBrief struct {
-	ID   ID     `json:"id"`
-	Name string `json:"name"`
-	Code string `json:"code"`
+	ID   ID     `json:"id" doc:"租户id"`
+	Name string `json:"name" doc:"租户名字"`
+	Code string `json:"code" doc:"租户编码"`
 }
 
 // LoginResp 登录响应：双 token + 租户。
 type LoginResp struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	ExpiresIn    int64       `json:"expires_in"` // access token 有效期（秒）
-	Tenant       TenantBrief `json:"tenant"`
+	AccessToken  string      `json:"access_token" doc:"当前token"`
+	RefreshToken string      `json:"refresh_token" doc:"刷新token"`
+	ExpiresIn    int64       `json:"expires_in" doc:"当前token有效期"` // access token 有效期（秒）
+	Tenant       TenantBrief `json:"tenant" doc:"租户信息"`
 }
 
 // RefreshReq 刷新入参。
 type RefreshReq struct {
-	RefreshToken string `json:"refresh_token" binding:"required,uuid" format:"uuid"`
+	RefreshToken string `json:"refresh_token" binding:"required,uuid" format:"uuid" doc:"刷新token"`
 }
 
 // TokenResp 刷新响应（结构同 LoginResp）。
@@ -35,10 +35,10 @@ type TokenResp = LoginResp
 
 // UserDTO 用户信息。
 type UserDTO struct {
-	ID        ID        `json:"id"`
-	Username  string    `json:"username"`
-	Nickname  string    `json:"nickname"`
-	Email     string    `json:"email"`
+	ID        ID        `json:"id" doc:"用户id"`
+	Username  string    `json:"username" doc:"用户名称"`
+	Nickname  string    `json:"nickname" doc:"用户昵称"`
+	Email     string    `json:"email" doc:"电子邮箱"`
 	Mobile    string    `json:"mobile"`
 	Sex       int8      `json:"sex"`
 	Avatar    string    `json:"avatar"`

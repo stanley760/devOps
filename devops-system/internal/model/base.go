@@ -14,8 +14,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"devops-id/pkg/idgorm"
-	"devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-id/pkg/idgorm"
+	"github.com/stanley760/devOps/devops-system/internal/auditctx"
 )
 
 // idHook 进程级发号钩子，由 cmd 装配期注入生成器。
@@ -48,34 +48,34 @@ type BaseTenantModel struct {
 // 无操作者时保留显式审计字段，供迁移/种子等系统写入使用。
 func (m *BaseModel) BeforeCreate(tx *gorm.DB) error {
 	actor, ok := auditctx.From(tx.Statement.Context)
-    username := strings.TrimSpace(actor.Username)
+	username := strings.TrimSpace(actor.Username)
 
-    if ok && username != "" {
-        // 可信认证用户覆盖调用方传入的值。
-        m.Creator = username
-        m.Updater = username
-    } else {
-        // 无认证操作者时，保留显式系统值，只补空字段。
-        if m.Creator == "" {
-            m.Creator = "system"
-        }
-        if m.Updater == "" {
-            m.Updater = "system"
-        }
-    }
+	if ok && username != "" {
+		// 可信认证用户覆盖调用方传入的值。
+		m.Creator = username
+		m.Updater = username
+	} else {
+		// 无认证操作者时，保留显式系统值，只补空字段。
+		if m.Creator == "" {
+			m.Creator = "system"
+		}
+		if m.Updater == "" {
+			m.Updater = "system"
+		}
+	}
 	return idHook.Assign(tx, &m.ID)
 }
 
 // BeforeUpdate overwrites updater from the authenticated request context.
 func (m *BaseModel) BeforeUpdate(tx *gorm.DB) error {
 	actor, ok := auditctx.From(tx.Statement.Context)
-    username := strings.TrimSpace(actor.Username)
-    if !ok || username == "" {
-        username = "system"
-    }
+	username := strings.TrimSpace(actor.Username)
+	if !ok || username == "" {
+		username = "system"
+	}
 
-    tx.Statement.SetColumn("updater", username)
-    return nil
+	tx.Statement.SetColumn("updater", username)
+	return nil
 }
 
 // BizTagOf 模型 → biz_tag（独立 snowflake worker 空间标识）。

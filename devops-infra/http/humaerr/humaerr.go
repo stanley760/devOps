@@ -11,10 +11,9 @@
 package humaerr
 
 import (
+	"github.com/danielgtaylor/huma/v2"
 	"net/http"
 	"strings"
-
-	"github.com/danielgtaylor/huma/v2"
 )
 
 // Envelope 错误信封（与 response.BaseResponse[any] 的失败形态字节一致）。

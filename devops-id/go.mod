@@ -1,9 +1,9 @@
-module devops-id
+module github.com/stanley760/devOps/devops-id
 
 go 1.27.1
 
 require (
-	devops-infra v0.0.0
+	github.com/stanley760/devOps/devops-infra v0.0.0
 	github.com/fatih/color v1.19.0
 	github.com/google/wire v0.7.0
 	github.com/joho/godotenv v1.5.1
@@ -155,4 +155,4 @@ require (
 	gorm.io/plugin/opentelemetry v0.1.16 // indirect
 )
 
-replace devops-infra => ../devops-infra
+replace github.com/stanley760/devOps/devops-infra => ../devops-infra

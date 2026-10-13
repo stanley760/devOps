@@ -5,22 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
-	"time"
-
+	"github.com/stanley760/devOps/devops-infra/errs"
+	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	"github.com/stanley760/devOps/devops-system/internal/auth"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/bcrypt"
-
-	"devops-infra/errs"
-	infratenant "devops-infra/tenant"
-
-	"devops-system/internal/auth"
-	"devops-system/internal/config"
-	"devops-system/internal/dao"
-	"devops-system/internal/model"
-	"devops-system/internal/types"
+	"sync"
+	"time"
 )
 
 // loginCounter 业务指标：登录尝试计数（auth_login_total）。
@@ -28,7 +25,7 @@ import (
 // 惰性创建：首次登录时全局 MeterProvider 已由 observability.Init 装配完毕；
 // 未初始化（单测/探针）自动落到 noop 仪表。
 var loginCounter = sync.OnceValue(func() metric.Int64Counter {
-	c, err := otel.Meter("devops-system/service").Int64Counter(
+	c, err := otel.Meter("github.com/stanley760/devOps/devops-system/service").Int64Counter(
 		"auth_login",
 		metric.WithDescription("登录尝试计数；result=success|failure，code 为失败业务码（成功=200）"),
 	)
@@ -113,7 +110,7 @@ func (s *Auth) login(ctx context.Context, req types.LoginReq, meta LoginMeta) (r
 			audit.Result = 1
 		}
 		audit.Code = loginErrCode(err)
-		dao.CreateLoginLog(ctx, audit) 
+		dao.CreateLoginLog(ctx, audit)
 	}()
 
 	code := req.TenantCode

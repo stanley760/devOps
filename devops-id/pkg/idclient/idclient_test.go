@@ -5,12 +5,10 @@ package idclient_test
 
 import (
 	"context"
+	"github.com/stanley760/devOps/devops-id/pkg/idclient"
+	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
 	"testing"
 	"time"
-
-	grpcinfra "devops-infra/grpc"
-
-	"devops-id/pkg/idclient"
 )
 
 // dial 建立客户端连接并探活：gRPC 懒连接，dial 不触发真实连接，

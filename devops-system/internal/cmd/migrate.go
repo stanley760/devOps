@@ -12,13 +12,14 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 
-	infracfg "devops-infra/config"
-	"devops-infra/database/mysql"
-	"devops-system/internal/authz"
-	"devops-system/internal/config"
-	"devops-system/internal/db"
-	"devops-system/internal/migration"
-	"devops-system/internal/model"
+	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devOps/devops-infra/database/mysql"
+
+	"github.com/stanley760/devOps/devops-system/internal/authz"
+	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devOps/devops-system/internal/db"
+	"github.com/stanley760/devOps/devops-system/internal/migration"
+	"github.com/stanley760/devOps/devops-system/internal/model"
 )
 
 var migrateCmd = &cobra.Command{

@@ -5,16 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
-
+	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 	"gorm.io/gorm"
-
-	"devops-infra/errs"
-
-	"devops-infra/datascope"
-	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
-	"devops-system/internal/types"
+	"time"
 )
 
 // ListUsers 分页查询用户（筛选 username 模糊/mobile/状态/部门；行级数据权限收敛）。

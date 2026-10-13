@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	etcdinfra "devops-infra/etcd"
+	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
 
-	iddomain "devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 )
 
 // mapInfraErr converts infrastructure errors to domain errors.

@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	ErrSlotOccupied      = errors.New("etcd slot occupied")
-	ErrSlotsExhausted    = errors.New("etcd slots exhausted")
-	ErrEtcdUnavailable   = errors.New("etcd unavailable")
+	ErrSlotOccupied       = errors.New("etcd slot occupied")
+	ErrSlotsExhausted     = errors.New("etcd slots exhausted")
+	ErrEtcdUnavailable    = errors.New("etcd unavailable")
 	ErrSlotMappingInvalid = errors.New("etcd slot mapping invalid")
 )
 

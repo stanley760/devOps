@@ -5,11 +5,11 @@ import (
 	"context"
 	"log/slog"
 
-	"devops-infra/errs"
+	"github.com/stanley760/devOps/devops-infra/errs"
 
-	"devops-system/internal/model"
-	"devops-system/internal/tenantdb"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // 审计行列宽（与 model.LoginLog gorm tag 对齐；超长截断保行不丢）。

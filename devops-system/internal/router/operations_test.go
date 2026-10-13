@@ -12,8 +12,8 @@ import (
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
-	apiv1 "devops-system/internal/api/v1"
-	"devops-system/internal/service"
+	apiv1 "github.com/stanley760/devOps/devops-system/internal/api/v1"
+	"github.com/stanley760/devOps/devops-system/internal/service"
 )
 
 // TestWithClientMeta 经真实 gin+humagin 适配层跑通 withClientMeta：

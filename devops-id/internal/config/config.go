@@ -5,9 +5,8 @@
 package config
 
 import (
+	"github.com/stanley760/devOps/devops-infra/config"
 	"time"
-
-	"devops-infra/config"
 )
 
 // Config devops-id 服务根配置，对应 config/config.yaml 顶层结构

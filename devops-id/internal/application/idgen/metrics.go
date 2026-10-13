@@ -8,16 +8,16 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	iddomain "devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
 )
 
 // MetricsObserver 实现 iddomain.Observer，将领域事件记录为 OTel 指标。
 type MetricsObserver struct {
-	fallbackTotal   metric.Int64Counter
-	leaseLostTotal  metric.Int64Counter
-	rollbackTotal   metric.Int64Counter
-	rejectedTotal   metric.Int64Counter
-	healthState     metric.Int64ObservableGauge
+	fallbackTotal  metric.Int64Counter
+	leaseLostTotal metric.Int64Counter
+	rollbackTotal  metric.Int64Counter
+	rejectedTotal  metric.Int64Counter
+	healthState    metric.Int64ObservableGauge
 
 	mu     sync.Mutex
 	states map[string]iddomain.HealthState

@@ -10,15 +10,15 @@ package model
 type LoginLog struct {
 	BaseTenantModel
 	Username    string `gorm:"size:30;not null;index"`   // 尝试登录的用户名（失败也记录）
-	UserID      int64  `gorm:"not null;default:0;index"`  // 用户命中后填；未知用户为 0
-	IP          string `gorm:"size:50;not null;index"`    // 客户端真实 IP（XFF 链 + trusted_proxies 解析）
-	UserAgent   string `gorm:"size:512"`                  // 登录端 UA
-	GeoCountry  string `gorm:"size:64"`                   // 以下四项来自 geo-ip 插件注入的 X-Higress-Geo-* 头
+	UserID      int64  `gorm:"not null;default:0;index"` // 用户命中后填；未知用户为 0
+	IP          string `gorm:"size:50;not null;index"`   // 客户端真实 IP（XFF 链 + trusted_proxies 解析）
+	UserAgent   string `gorm:"size:512"`                 // 登录端 UA
+	GeoCountry  string `gorm:"size:64"`                  // 以下四项来自 geo-ip 插件注入的 X-Higress-Geo-* 头
 	GeoProvince string `gorm:"size:64"`
 	GeoCity     string `gorm:"size:64"`
 	GeoIsp      string `gorm:"size:64"`
-	Result      int8   `gorm:"not null;default:0"`        // 0成功 1失败
-	Code        int    `gorm:"not null;default:200"`      // 业务码（同 auth_login 指标的 code 标签）
+	Result      int8   `gorm:"not null;default:0"`   // 0成功 1失败
+	Code        int    `gorm:"not null;default:200"` // 业务码（同 auth_login 指标的 code 标签）
 }
 
 // TableName 表名。

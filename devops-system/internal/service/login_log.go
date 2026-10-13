@@ -7,10 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"devops-infra/errs"
-
-	"devops-system/internal/dao"
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devOps/devops-system/internal/dao"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 // LoginLog 登录审计服务。

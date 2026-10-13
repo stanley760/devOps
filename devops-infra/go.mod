@@ -1,4 +1,4 @@
-module devops-infra
+module github.com/stanley760/devOps/devops-infra
 
 go 1.27.1
 

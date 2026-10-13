@@ -10,7 +10,7 @@ import (
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
-	"devops-system/internal/types"
+	"github.com/stanley760/devOps/devops-system/internal/types"
 )
 
 func TestParamIDPath(t *testing.T) {
