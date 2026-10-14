@@ -7,7 +7,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
-	github.com/stanley760/devOps/devops-infra v0.0.0
+	github.com/stanley760/devOps/devops-infra v0.1.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.71.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
@@ -164,7 +164,5 @@ require (
 	gorm.io/driver/postgres v1.6.0 // indirect
 	gorm.io/plugin/opentelemetry v0.1.16 // indirect
 )
-
-replace github.com/stanley760/devOps/devops-infra => ../devops-infra
 
 tool github.com/air-verse/air

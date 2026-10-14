@@ -3,7 +3,6 @@ module github.com/stanley760/devOps/devops-infra
 go 1.27.1
 
 require (
-	github.com/stanley760/devOps/devops-common v0.0.0
 	github.com/DeRuina/timberjack v1.4.7
 	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/casbin/casbin/v3 v3.11.0
@@ -19,6 +18,7 @@ require (
 	github.com/redis/go-redis/extra/redisotel/v9 v9.22.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/spf13/viper v1.21.0
+	github.com/stanley760/devOps/devops-common v0.1.1
 	go.etcd.io/etcd/api/v3 v3.7.1
 	go.etcd.io/etcd/client/v3 v3.7.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.71.0
@@ -35,8 +35,6 @@ require (
 	gorm.io/gorm v1.31.2
 	gorm.io/plugin/opentelemetry v0.1.16
 )
-
-replace github.com/stanley760/devOps/devops-common => ../devops-common
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect

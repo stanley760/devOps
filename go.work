@@ -7,3 +7,12 @@ use (
 	./devops-system
 	./devops-user
 )
+
+// 本地开发用：让 MVS 依赖图命中本地模块，离线可构建。
+// 仅作用于本仓库（消费者不读 go.work），对外发布只认 go.mod 里的 require 版本。
+// 发版升版本号时同步更新这里的版本。
+replace (
+	github.com/stanley760/devOps/devops-common v0.1.1 => ./devops-common
+	github.com/stanley760/devOps/devops-infra v0.1.1 => ./devops-infra
+	github.com/stanley760/devOps/devops-id v0.1.1 => ./devops-id
+)
