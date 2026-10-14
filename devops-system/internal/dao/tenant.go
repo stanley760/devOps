@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devOps/devops-common/domain/gormx"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -31,7 +32,7 @@ func ListTenants(ctx context.Context, q types.TenantPageQuery) (domain.PageResul
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	page, err := domain.FindPage[model.Tenant](
+	page, err := gormx.FindPage[model.Tenant](
 		db.Order("id ASC"),
 		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
 	)

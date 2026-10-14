@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devOps/devops-common/domain/gormx"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -62,7 +63,7 @@ func ListLoginLogs(ctx context.Context, q types.LoginLogPageQuery) (domain.PageR
 		db = db.Where("create_time <= ?", *q.EndTime)
 	}
 
-	page, err := domain.FindPage[model.LoginLog](
+	page, err := gormx.FindPage[model.LoginLog](
 		db.Order("id DESC"),
 		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
 	)

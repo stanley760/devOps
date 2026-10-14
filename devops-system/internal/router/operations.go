@@ -266,6 +266,43 @@ func registerLoginLogs(api huma.API, h *apiv1.LoginLogHandler, kit *middleware.K
 	}), h.Clean)
 }
 
+// registerOperationLogs 操作审计模块 3 接口（查询侧；写入侧由审计采集中间件
+// 经 audit.Sink 自动落库，无对应写入接口）。
+// 删除/清空为留存量管控入口，独立权限；行按租户隔离（TenantPlugin 注入 tenant_id）。
+func registerOperationLogs(api huma.API, h *apiv1.OperationLogHandler, kit *middleware.Kit) {
+	common := huma.Operation{
+		Tags:      []string{"operation-logs"},
+		Responses: humaerr.CommonErrResponses(),
+	}
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "operationlog-list",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/operation-logs",
+		Summary:     "操作日志列表",
+		Description: "操作审计分页查询（B 端管理写操作），支持模块/操作者/IP/结果/时间范围筛选。",
+		Middlewares: kit.Biz("system:operationlog:list"),
+	}), h.List)
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "operationlog-delete",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/operation-logs",
+		Summary:     "删除操作日志",
+		Description: "按 ID 批量物理删除（ids 逗号分隔，如 ?ids=12,34,56）。",
+		Middlewares: kit.Biz("system:operationlog:delete"),
+	}), h.Delete)
+
+	huma.Register(api, with(common, huma.Operation{
+		OperationID: "operationlog-clean",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/operation-logs/clean",
+		Summary:     "清空操作日志",
+		Description: "清空本租户全部操作审计行（留存量管控，独立权限门控）。",
+		Middlewares: kit.Biz("system:operationlog:clean"),
+	}), h.Clean)
+}
+
 // registerTenants tenants 模块
 func registerTenants(api huma.API, h *apiv1.TenantHandler, kit *middleware.Kit) {
 	common := huma.Operation{

@@ -98,7 +98,7 @@ func (h *UserHandler) List(ctx context.Context, in *UserListInput) (*UserListOut
 
 // Get GET /system/api/v1/users/{id}。
 func (h *UserHandler) Get(ctx context.Context, in *UserIDInput) (*UserGetOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -119,7 +119,7 @@ func (h *UserHandler) Create(ctx context.Context, in *UserCreateInput) (*UserEmp
 
 // Update PUT /system/api/v1/users/{id}。
 func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -131,7 +131,7 @@ func (h *UserHandler) Update(ctx context.Context, in *UserUpdateInput) (*UserEmp
 
 // ResetPassword PUT /system/api/v1/users/{id}/password（重置后踢下线）。
 func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordInput) (*UserEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -143,7 +143,7 @@ func (h *UserHandler) ResetPassword(ctx context.Context, in *UserResetPasswordIn
 
 // Delete DELETE /system/api/v1/users/{id}。
 func (h *UserHandler) Delete(ctx context.Context, in *UserIDInput) (*UserEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}

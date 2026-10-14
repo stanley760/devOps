@@ -20,6 +20,7 @@ import (
 	"github.com/stanley760/devOps/devops-infra/logging"
 	"github.com/stanley760/devOps/devops-infra/nacos"
 	"github.com/stanley760/devOps/devops-infra/observability"
+	"github.com/stanley760/devOps/devops-infra/security/humakit"
 	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
 	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
 
@@ -27,12 +28,14 @@ import (
 
 	"github.com/stanley760/devOps/devops-id/pkg/idclient"
 	"github.com/stanley760/devOps/devops-system/internal/app"
+	sysaudit "github.com/stanley760/devOps/devops-system/internal/audit"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/authz"
 	"github.com/stanley760/devOps/devops-system/internal/config"
 	"github.com/stanley760/devOps/devops-system/internal/db"
 	"github.com/stanley760/devOps/devops-system/internal/middleware"
 	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devOps/devops-system/internal/router"
 	"github.com/stanley760/devOps/devops-system/internal/store"
 	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
 )
@@ -261,6 +264,14 @@ var serverCmd = &cobra.Command{
 
 		// 业务中间件套件（D7：业务依赖经 Deps 注入，nil 项由 NewKit 补生产默认绑定）。
 		kit := middleware.NewKit(authM, middleware.Deps{})
+
+		// 操作审计装配：Sink 落本租户 t_system_operation_log，采集范围由
+		// router 包的路由白名单决定（只审计写操作，见 audit_modules.go）。
+		// 审计是旁路：写入失败仅 slog.Warn，不影响业务响应。
+		kit.EnableAudit(humakit.AuditDeps{
+			Sink:    sysaudit.NewSink(),
+			Resolve: router.AuditModuleResolver(),
+		})
 
 		serviceName := cfg.Nacos.Registry.ServiceName
 		if serviceName == "" {

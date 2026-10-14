@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devOps/devops-common/domain/gormx"
 	"github.com/stanley760/devOps/devops-infra/errs"
 	"github.com/stanley760/devOps/devops-system/internal/model"
 	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
@@ -113,7 +114,7 @@ func ListPosts(ctx context.Context, q types.PostPageQuery) (domain.PageResult[mo
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	page, err := domain.FindPage[model.Post](
+	page, err := gormx.FindPage[model.Post](
 		db.Order("sort ASC, id ASC"),
 		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
 	)

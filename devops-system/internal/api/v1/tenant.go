@@ -93,7 +93,7 @@ func (h *TenantHandler) List(ctx context.Context, in *TenantListInput) (*TenantL
 
 // Get GET /system/api/v1/tenants/{id}。
 func (h *TenantHandler) Get(ctx context.Context, in *TenantIDInput) (*TenantGetOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -115,7 +115,7 @@ func (h *TenantHandler) Create(ctx context.Context, in *TenantCreateInput) (*Ten
 
 // Update PUT /system/api/v1/tenants/{id}（名称/联系人/过期时间）。
 func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*TenantEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -127,7 +127,7 @@ func (h *TenantHandler) Update(ctx context.Context, in *TenantUpdateInput) (*Ten
 
 // UpdateStatus PUT /system/api/v1/tenants/{id}/status（停用即全员下线）。
 func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput) (*TenantEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -139,7 +139,7 @@ func (h *TenantHandler) UpdateStatus(ctx context.Context, in *TenantStatusInput)
 
 // Delete DELETE /system/api/v1/tenants/{id}（默认租户不可删；需先停用）。
 func (h *TenantHandler) Delete(ctx context.Context, in *TenantIDInput) (*TenantEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}

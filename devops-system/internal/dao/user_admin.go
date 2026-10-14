@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devOps/devops-common/domain/gormx"
 	"github.com/stanley760/devOps/devops-infra/datascope"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
@@ -37,7 +38,7 @@ func ListUsers(ctx context.Context, q types.UserPageQuery) (domain.PageResult[mo
 		db = db.Where("dept_id = ?", q.DeptID.Int64())
 	}
 
-	page, err := domain.FindPage[model.User](
+	page, err := gormx.FindPage[model.User](
 		db.Order("id DESC"),
 		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
 	)

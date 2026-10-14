@@ -7,7 +7,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-common/auditctx"
 	"github.com/stanley760/devOps/devops-system/internal/model"
 )
 

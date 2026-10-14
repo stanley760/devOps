@@ -1,7 +1,10 @@
+// Package domain 提供跨业务复用的分页值对象与元数据。
+//
+// 本包保持零外部依赖（仅标准库），使不使用 GORM 的业务模块也能直接复用分页契约；
+// 依赖 GORM 的查询辅助位于子包 gormx。
 package domain
 
-import "gorm.io/gorm"
-
+// PageParam 分页入参（HTTP query/form 绑定）。
 type PageParam struct {
 	PageNum  int `query:"page_num" form:"page_num" binding:"omitempty,min=1" minimum:"1" default:"1" doc:"页码"`
 	PageSize int `query:"page_size" form:"page_size" binding:"omitempty,min=1,max=100" minimum:"1" maximum:"100" default:"10" doc:"每页记录数"`
@@ -10,7 +13,7 @@ type PageParam struct {
 const (
 	DefaultPageNum  = 1
 	DefaultPageSize = 10
-	MaxPageSize     = 100
+	MaxPageSize     = 1000
 )
 
 // Normalize 补齐默认值并限制单页最大条数。
@@ -59,36 +62,4 @@ func MapPage[T, U any](page PageResult[T], convert func(T) U) PageResult[U] {
 		mapped.List = append(mapped.List, convert(item))
 	}
 	return mapped
-}
-
-// FindPage 统计符合条件的记录数并查询当前页。
-// 调用前在 db 上添加 Model、Where 等筛选条件和 Order 排序，不要预先设置 Limit/Offset。
-func FindPage[T any](db *gorm.DB, param PageParam) (PageResult[T], error) {
-	param = param.Normalize()
-	result := PageResult[T]{
-		List:     make([]T, 0),
-		PageNum:  param.PageNum,
-		PageSize: param.PageSize,
-	}
-
-	if err := db.Session(&gorm.Session{}).Count(&result.Total).Error; err != nil {
-		return result, err
-	}
-	if err := db.Session(&gorm.Session{}).
-		Offset(param.Offset()).
-		Limit(param.PageSize).
-		Find(&result.List).Error; err != nil {
-		return result, err
-	}
-	if result.Total > 0 {
-		result.Pages = (result.Total-1)/int64(param.PageSize) + 1
-	}
-	return result, nil
-}
-
-func Paginate(page, pageSize int) func(*gorm.DB) *gorm.DB {
-	param := (PageParam{PageNum: page, PageSize: pageSize}).Normalize()
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Offset(param.Offset()).Limit(param.PageSize)
-	}
 }

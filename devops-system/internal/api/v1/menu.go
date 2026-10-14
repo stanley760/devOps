@@ -73,7 +73,7 @@ func (h *MenuHandler) List(ctx context.Context, in *MenuListInput) (*MenuListOut
 
 // Get GET /system/api/v1/menus/{id}。
 func (h *MenuHandler) Get(ctx context.Context, in *MenuIDInput) (*MenuGetOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -94,7 +94,7 @@ func (h *MenuHandler) Create(ctx context.Context, in *MenuCreateInput) (*MenuEmp
 
 // Update PUT /system/api/v1/menus/{id}（permission 变更联动重建引用角色 p 行）。
 func (h *MenuHandler) Update(ctx context.Context, in *MenuUpdateInput) (*MenuEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -106,7 +106,7 @@ func (h *MenuHandler) Update(ctx context.Context, in *MenuUpdateInput) (*MenuEmp
 
 // Delete DELETE /system/api/v1/menus/{id}。
 func (h *MenuHandler) Delete(ctx context.Context, in *MenuIDInput) (*MenuEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}

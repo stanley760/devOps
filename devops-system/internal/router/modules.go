@@ -16,17 +16,19 @@ type DeptRoutes func(huma.API)
 type PostRoutes func(huma.API)
 type TenantRoutes func(huma.API)
 type LoginLogRoutes func(huma.API)
+type OperationLogRoutes func(huma.API)
 
 // Modules 是应用层需要显式组合的业务路由模块集合。
 type Modules struct {
-	Auth      AuthRoutes
-	Users     UserRoutes
-	Roles     RoleRoutes
-	Menus     MenuRoutes
-	Depts     DeptRoutes
-	Posts     PostRoutes
-	Tenants   TenantRoutes
-	LoginLogs LoginLogRoutes
+	Auth          AuthRoutes
+	Users         UserRoutes
+	Roles         RoleRoutes
+	Menus         MenuRoutes
+	Depts         DeptRoutes
+	Posts         PostRoutes
+	Tenants       TenantRoutes
+	LoginLogs     LoginLogRoutes
+	OperationLogs OperationLogRoutes
 }
 
 func NewAuthRoutes(svc *service.Auth, kit *middleware.Kit) AuthRoutes {
@@ -67,4 +69,9 @@ func NewTenantRoutes(svc *service.Tenant, kit *middleware.Kit) TenantRoutes {
 func NewLoginLogRoutes(svc *service.LoginLog, kit *middleware.Kit) LoginLogRoutes {
 	h := apiv1.NewLoginLogHandler(svc)
 	return func(api huma.API) { registerLoginLogs(api, h, kit) }
+}
+
+func NewOperationLogRoutes(svc *service.OperationLog, kit *middleware.Kit) OperationLogRoutes {
+	h := apiv1.NewOperationLogHandler(svc)
+	return func(api huma.API) { registerOperationLogs(api, h, kit) }
 }

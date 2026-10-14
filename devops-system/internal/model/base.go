@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/stanley760/devOps/devops-id/pkg/idgorm"
-	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-common/auditctx"
 )
 
 // idHook 进程级发号钩子，由 cmd 装配期注入生成器。

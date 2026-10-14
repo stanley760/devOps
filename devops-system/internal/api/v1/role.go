@@ -84,7 +84,7 @@ func (h *RoleHandler) List(ctx context.Context, in *RoleListInput) (*RoleListOut
 
 // Get GET /system/api/v1/roles/{id}。
 func (h *RoleHandler) Get(ctx context.Context, in *RoleIDInput) (*RoleGetOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -105,7 +105,7 @@ func (h *RoleHandler) Create(ctx context.Context, in *RoleCreateInput) (*RoleEmp
 
 // Update PUT /system/api/v1/roles/{id}。
 func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -117,7 +117,7 @@ func (h *RoleHandler) Update(ctx context.Context, in *RoleUpdateInput) (*RoleEmp
 
 // AssignMenus PUT /system/api/v1/roles/{id}/menus（role_menu 重建 + p 行快照重建）。
 func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput) (*RoleEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -129,7 +129,7 @@ func (h *RoleHandler) AssignMenus(ctx context.Context, in *RoleAssignMenusInput)
 
 // Delete DELETE /system/api/v1/roles/{id}。
 func (h *RoleHandler) Delete(ctx context.Context, in *RoleIDInput) (*RoleEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}

@@ -8,10 +8,13 @@ package middleware
 
 import (
 	"context"
+
+	"github.com/stanley760/devOps/devops-common/audit"
+	"github.com/stanley760/devOps/devops-common/auditctx"
 	client "github.com/stanley760/devOps/devops-infra/database/mysql"
 	"github.com/stanley760/devOps/devops-infra/security/humakit"
 	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/authz"
 	"github.com/stanley760/devOps/devops-system/internal/dao"
@@ -55,12 +58,20 @@ func NewKit(authn *auth.Manager, deps Deps) *Kit {
 	return humakit.NewKit(authn, deps)
 }
 
-// injectAuditActor 认证成功后把用户名注入审计上下文（model.BeforeCreate/BeforeUpdate 消费）。
+// injectAuditActor 认证成功后把身份注入审计上下文：
+// model.BeforeCreate/BeforeUpdate 消费其中的用户名填creator/updater，
+// humakit 审计采集中间件消费完整身份写入审计记录。
+// B 端管理后台的操作者统一标记为 audit.UserTypeAdmin。
 func injectAuditActor(ctx context.Context, claims *securityjwt.Claims) context.Context {
 	if claims == nil || claims.Username == "" {
 		return ctx
 	}
-	return auditctx.WithActor(ctx, auditctx.Actor{Username: claims.Username})
+	return auditctx.WithActor(ctx, auditctx.Actor{
+		UserID:   claims.UID,
+		Username: claims.Username,
+		UserType: int64(audit.UserTypeAdmin),
+		TenantID: claims.TenantID,
+	})
 }
 
 // systemEnvelope 本服务的中文信封文案（六个槽位与历史 gin 版逐字对齐）。

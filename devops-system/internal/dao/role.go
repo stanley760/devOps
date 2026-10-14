@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devOps/devops-common/domain/gormx"
 	"github.com/stanley760/devOps/devops-infra/errs"
 
 	"github.com/stanley760/devOps/devops-system/internal/model"
@@ -30,7 +31,7 @@ func ListRoles(ctx context.Context, q types.RolePageQuery) (domain.PageResult[mo
 		db = db.Where("status = ?", *q.Status)
 	}
 
-	page, err := domain.FindPage[model.Role](
+	page, err := gormx.FindPage[model.Role](
 		db.Order("sort ASC, id ASC"),
 		domain.PageParam{PageNum: q.PageNum, PageSize: q.PageSize},
 	)

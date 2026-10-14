@@ -8,7 +8,6 @@ package app
 
 import (
 	"github.com/stanley760/devOps/devops-infra/http"
-
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/config"
 	"github.com/stanley760/devOps/devops-system/internal/middleware"
@@ -40,15 +39,18 @@ func InitializeHTTP(cfg config.Config, kit *middleware.Kit, authM *auth.Manager)
 	tenantRoutes := router.NewTenantRoutes(tenant, kit)
 	loginLog := service.NewLoginLog()
 	loginLogRoutes := router.NewLoginLogRoutes(loginLog, kit)
+	operationLog := service.NewOperationLog()
+	operationLogRoutes := router.NewOperationLogRoutes(operationLog, kit)
 	modules := router.Modules{
-		Auth:      authRoutes,
-		Users:     userRoutes,
-		Roles:     roleRoutes,
-		Menus:     menuRoutes,
-		Depts:     deptRoutes,
-		Posts:     postRoutes,
-		Tenants:   tenantRoutes,
-		LoginLogs: loginLogRoutes,
+		Auth:          authRoutes,
+		Users:         userRoutes,
+		Roles:         roleRoutes,
+		Menus:         menuRoutes,
+		Depts:         deptRoutes,
+		Posts:         postRoutes,
+		Tenants:       tenantRoutes,
+		LoginLogs:     loginLogRoutes,
+		OperationLogs: operationLogRoutes,
 	}
 	register := router.NewRegister(apiDocConfig, authM, modules)
 	return register

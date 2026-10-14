@@ -73,7 +73,7 @@ func (h *DeptHandler) List(ctx context.Context, in *DeptListInput) (*DeptListOut
 
 // Get GET /system/api/v1/depts/{id}。
 func (h *DeptHandler) Get(ctx context.Context, in *DeptIDInput) (*DeptGetOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -94,7 +94,7 @@ func (h *DeptHandler) Create(ctx context.Context, in *DeptCreateInput) (*DeptEmp
 
 // Update PUT /system/api/v1/depts/{id}（父节点不得是自身或后代，防环）。
 func (h *DeptHandler) Update(ctx context.Context, in *DeptUpdateInput) (*DeptEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}
@@ -106,7 +106,7 @@ func (h *DeptHandler) Update(ctx context.Context, in *DeptUpdateInput) (*DeptEmp
 
 // Delete DELETE /system/api/v1/depts/{id}。
 func (h *DeptHandler) Delete(ctx context.Context, in *DeptIDInput) (*DeptEmptyOutput, error) {
-	id, err := in.ID.Parse()
+	id, err := types.Parse(in.ID)
 	if err != nil {
 		return nil, errs.ToHumaError(err)
 	}

@@ -3,7 +3,7 @@
 //
 // 分层：决策在 security/middleware 与 tenant（infra 决策原语），本包做链组合、
 // 数据权限解析与 fail-closed 收口；文案呈现与业务数据源一律经 Deps/Envelope 注入。
-// 这样各业务模块（devops-system、devops-user）可各自装配自己的文案与数据源，
+// 这样各业务模块可各自装配自己的文案与数据源，
 // 而不复制中间件链实现。
 package humakit
 
@@ -120,6 +120,8 @@ type Kit struct {
 	permM   func(string) Middleware
 	platM   func(string) Middleware
 	scopes  *scopeCache
+	// auditM 操作审计采集中间件；未装配时为 nil，业务链不追加该环节。
+	auditM Middleware
 }
 
 // NewKit 装配中间件套件；deps 的 nil/零值项按 fail-closed 语义回填安全默认。
@@ -135,7 +137,17 @@ func NewKit(authn securitymw.BearerAuthenticator, deps Deps) *Kit {
 	k.scopeM = k.securityScope()
 	k.permM = func(perm string) Middleware { return k.securityPerm(perm) }
 	k.platM = func(perm string) Middleware { return k.securityPlat(perm) }
+	// 默认不采集审计：显式占位而非 nil，huma 的链组合不跳过 nil 元素。
+	k.auditM = noopAudit
 	return k
+}
+
+// EnableAudit 装配操作审计采集中间件。
+//
+// 各业务服务在自己的装配点（cmd 层）调用，传入 Sink 与模块白名单；
+// 未调用的业务服务保持 noopAudit，不产生任何审计写入。
+func (k *Kit) EnableAudit(deps AuditDeps) {
+	k.auditM = k.NewAuditMiddleware(deps)
 }
 
 // JWT 认证中间件（Bearer → token 解析 → 会话态 → claims 注入 ctx）。
@@ -157,22 +169,24 @@ func (k *Kit) Plat(perm string) Middleware { return k.platM(perm) }
 func (k *Kit) Logged() huma.Middlewares { return huma.Middlewares{k.jwtM} }
 
 // TenantBiz 认证 + 租户链（个人信息类接口）。
-func (k *Kit) TenantBiz() huma.Middlewares { return huma.Middlewares{k.jwtM, k.tenantM} }
-
-// Biz 业务路由中间件链：JWT → Tenant → Perm(域内)。
-func (k *Kit) Biz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm)}
+func (k *Kit) TenantBiz() huma.Middlewares {
+	return huma.Middlewares{k.jwtM, k.tenantM, k.auditM}
 }
 
-// ScopedBiz 受控资源路由链：JWT → Tenant → Perm → DataScope（行级数据权限解析）。
+// Biz 业务路由中间件链：JWT → Tenant → Perm(域内) → Audit。
+func (k *Kit) Biz(perm string) huma.Middlewares {
+	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.auditM}
+}
+
+// ScopedBiz 受控资源路由链：JWT → Tenant → Perm → DataScope → Audit。
 // 只挂在需要行级过滤的资源；非受控资源不加，保持解析开销与语义边界显式。
 func (k *Kit) ScopedBiz(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.scopeM}
+	return huma.Middlewares{k.jwtM, k.tenantM, k.permM(perm), k.scopeM, k.auditM}
 }
 
-// PlatChain 平台路由中间件链：JWT → PlatformPerm（不挂 Tenant，操作全局表）。
+// PlatChain 平台路由中间件链：JWT → PlatformPerm → Audit（不挂 Tenant，操作全局表）。
 func (k *Kit) PlatChain(perm string) huma.Middlewares {
-	return huma.Middlewares{k.jwtM, k.platM(perm)}
+	return huma.Middlewares{k.jwtM, k.platM(perm), k.auditM}
 }
 
 // InvalidateDataScope 清空数据权限缓存（角色保存/删除、用户角色变更时调用）。

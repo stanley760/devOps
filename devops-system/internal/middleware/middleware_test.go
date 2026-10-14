@@ -15,7 +15,7 @@ import (
 	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
 	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
 	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
-	"github.com/stanley760/devOps/devops-system/internal/auditctx"
+	"github.com/stanley760/devOps/devops-common/auditctx"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/authz"
 	"github.com/stanley760/devOps/devops-system/internal/config"
