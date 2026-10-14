@@ -10,7 +10,7 @@ type Dept struct {
 	LeaderUserID int64  `gorm:"column:leader_user_id"`
 	Phone        string `gorm:"size:20"`
 	Email        string `gorm:"size:50"`
-	Status       int8   `gorm:"not null;default:1"` // 0停用 1正常
+	Status       int8   `gorm:"not null"` // 0停用 1正常
 }
 
 // TableName 表名。

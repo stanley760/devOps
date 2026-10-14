@@ -6,16 +6,17 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/glebarez/sqlite"
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/stanley760/devOps/devops-common/auditctx"
 	memcache "github.com/stanley760/devOps/devops-infra/cache/memory"
 	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
 	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
 	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
-	"github.com/stanley760/devOps/devops-common/auditctx"
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/authz"
 	"github.com/stanley760/devOps/devops-system/internal/config"
@@ -66,8 +67,10 @@ func testEnv(t *testing.T) (*auth.Manager, securityauthz.Authorizer, *gorm.DB, f
 		t.Fatal(err)
 	}
 
-	// 共享 Casbin authorizer（authz 门面持有）
-	db, err := gorm.Open(sqlite.Open("file:middleware_test?mode=memory&cache=shared"), &gorm.Config{})
+	// 共享 Casbin authorizer（authz 门面持有）。
+	// 库名带 t.Name() 隔离：cache=shared 的内存库在同一进程内同名共享，
+	// 固定名会让不同用例的种子数据互相污染（如租户状态断言）。
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name())), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,8 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -36,14 +38,15 @@ func newTestKit(m *auth.Manager) *middleware.Kit {
 
 func newTestRegister(docCfg config.APIDocConfig, kit *middleware.Kit, authM *auth.Manager, svcCfg config.Config) httpinfra.Register {
 	modules := Modules{
-		Auth:      NewAuthRoutes(service.NewAuth(svcCfg, authM), kit),
-		Users:     NewUserRoutes(service.NewUser(authM, func() {}), kit),
-		Roles:     NewRoleRoutes(service.NewRole(func() {}), kit),
-		Menus:     NewMenuRoutes(service.NewMenu(), kit),
-		Depts:     NewDeptRoutes(service.NewDept(), kit),
-		Posts:     NewPostRoutes(service.NewPost(), kit),
-		Tenants:   NewTenantRoutes(service.NewTenant(authM), kit),
-		LoginLogs: NewLoginLogRoutes(service.NewLoginLog(), kit),
+		Auth:          NewAuthRoutes(service.NewAuth(svcCfg, authM), kit),
+		Users:         NewUserRoutes(service.NewUser(authM, func() {}), kit),
+		Roles:         NewRoleRoutes(service.NewRole(func() {}), kit),
+		Menus:         NewMenuRoutes(service.NewMenu(), kit),
+		Depts:         NewDeptRoutes(service.NewDept(), kit),
+		Posts:         NewPostRoutes(service.NewPost(), kit),
+		Tenants:       NewTenantRoutes(service.NewTenant(authM), kit),
+		LoginLogs:     NewLoginLogRoutes(service.NewLoginLog(), kit),
+		OperationLogs: NewOperationLogRoutes(service.NewOperationLog(), kit),
 	}
 	return NewRegister(docCfg, authM, modules)
 }
@@ -94,6 +97,36 @@ func jwksEnv(t *testing.T) (*auth.Manager, *rsa.PublicKey, *gin.Engine) {
 	return m, pub, r
 }
 
+// operationIDRE 匹配 operations.go 中的 OperationID 字面量。
+var operationIDRE = regexp.MustCompile(`OperationID:\s*"([a-z0-9-]+)"`)
+
+// declaredOperationIDs 从 operations.go 源文件解析出全部已声明的 OperationID。
+//
+// 以源码为唯一契约来源，避免手工维护清单与实际注册漂移——
+// 这正是改造前硬编码计数 43 失效的原因。
+func declaredOperationIDs(t *testing.T) []string {
+	t.Helper()
+	src, err := os.ReadFile("operations.go")
+	if err != nil {
+		t.Fatalf("读取 operations.go 失败: %v", err)
+	}
+	matches := operationIDRE.FindAllStringSubmatch(string(src), -1)
+	if len(matches) == 0 {
+		t.Fatal("未从 operations.go 解析出任何 OperationID")
+	}
+	out := make([]string, 0, len(matches))
+	seen := make(map[string]bool, len(matches))
+	for _, m := range matches {
+		if seen[m[1]] {
+			t.Errorf("OperationID %q 重复声明", m[1])
+			continue
+		}
+		seen[m[1]] = true
+		out = append(out, m[1])
+	}
+	return out
+}
+
 func TestRegisterAPIDoc(t *testing.T) {
 	_, _, r := jwksEnv(t)
 
@@ -126,18 +159,35 @@ func TestRegisterAPIDoc(t *testing.T) {
 	if _, ok := doc.Paths["/system/api/v1/auth/refresh"]; !ok {
 		t.Fatalf("refresh operation missing: %+v", doc.Paths)
 	}
-	// 业务接口计数：apidoc 文档启用时自注册 export-openapi（tag "apidoc"），须排除
+	// 业务接口计数：apidoc 文档启用时自注册 export-openapi（tag "apidoc"），须排除。
+	//
+	// 期望值不再硬编码，而是从 operations.go 源文件解析 OperationID 清单得到——
+	// 声明即契约，测试与实现不可能漂移。改造前此处写死 43，而 feat(audit)
+	// 提交新增了 operationlog 的 list/delete/clean 三个接口却没同步该常量，
+	// 护栏就此长期失效（git log 046b6b9）。
+	declared := declaredOperationIDs(t)
+
 	operationCount := 0
+	registered := make(map[string]struct{})
 	for _, path := range doc.Paths {
 		for _, op := range path {
 			if slices.Contains(op.Tags, "apidoc") {
 				continue
 			}
 			operationCount++
+			if op.OperationID != "" {
+				registered[op.OperationID] = struct{}{}
+			}
 		}
 	}
-	if operationCount != 43 {
-		t.Fatalf("business operation count = %d, want 43", operationCount)
+	if operationCount != len(declared) {
+		t.Fatalf("business operation count = %d, operations.go 声明了 %d 个", operationCount, len(declared))
+	}
+	// 逐个点名：漏注册会直接报出缺失的 ID，比只报数字更有排查价值。
+	for _, id := range declared {
+		if _, ok := registered[id]; !ok {
+			t.Errorf("OperationID %q 已声明但未注册到 OpenAPI", id)
+		}
 	}
 	bearer, ok := doc.Components.SecuritySchemes["bearerAuth"]
 	if !ok || bearer.Type != "http" {

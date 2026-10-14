@@ -12,9 +12,9 @@ import (
 // RolePageQuery GET /roles 查询参数。
 type RolePageQuery struct {
 	domain.PageParam
-	Name     string `form:"name" binding:"omitempty,max=30" doc:"角色名称"`
-	Code     string `form:"code" binding:"omitempty,max=100" doc:"角色编码"`
-	Status   *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"角色状态 0:禁用；1:启用"`
+	Name   string `form:"name" binding:"omitempty,max=30" doc:"角色名称"`
+	Code   string `form:"code" binding:"omitempty,max=100" doc:"角色编码"`
+	Status *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"角色状态 0:禁用；1:启用"`
 }
 
 // RoleSaveReq POST/PUT /roles 入参（code 创建后不可改，更新时忽略）。
@@ -134,9 +134,9 @@ type DeptTreeResp struct {
 // PostPageQuery GET /posts 查询参数。
 type PostPageQuery struct {
 	domain.PageParam
-	Code     string `form:"code" binding:"omitempty,max=64" doc:"岗位编码"`
-	Name     string `form:"name" binding:"omitempty,max=50" doc:"岗位名称"`
-	Status   *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"岗位状态" default:"1"`
+	Code   string `form:"code" binding:"omitempty,max=64" doc:"岗位编码"`
+	Name   string `form:"name" binding:"omitempty,max=50" doc:"岗位名称"`
+	Status *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"岗位状态" default:"1"`
 }
 
 // PostSaveReq POST/PUT /posts 入参（code 创建后不可改）。

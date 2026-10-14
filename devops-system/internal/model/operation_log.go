@@ -17,15 +17,15 @@ type OperationLog struct {
 	BaseTenantModel
 
 	// 链路与操作者
-	TraceID   string               `gorm:"column:trace_id;size:100;not null;default:'';index"` // 链路追踪编号，可与日志/链路系统互查
-	UserID    int64                `gorm:"not null;default:0;index"`                          // 操作者用户编号，未知为 0
-	UserName  string               `gorm:"size:30;not null;default:'';index"`                  // 操作者名称（快照，避免改名后无法追溯）
-	UserType  commonaudit.UserType `gorm:"not null;default:0"`                                // 操作者类别：1 会员(C端) / 2 管理员(B端)
+	TraceID  string               `gorm:"column:trace_id;size:100;not null;default:'';index"` // 链路追踪编号，可与日志/链路系统互查
+	UserID   int64                `gorm:"not null;default:0;index"`                           // 操作者用户编号，未知为 0
+	UserName string               `gorm:"size:30;not null;default:'';index"`                  // 操作者名称（快照，避免改名后无法追溯）
+	UserType commonaudit.UserType `gorm:"not null;default:0"`                                 // 操作者类别：1 会员(C端) / 2 管理员(B端)
 
 	// 操作定位
 	Module    string `gorm:"size:50;not null;default:'';index"` // 一级模块，如 system
 	SubModule string `gorm:"size:50;not null;default:'';index"` // 二级模块，如 user
-	BizID     int64  `gorm:"column:biz_id;not null;default:0"`   // 业务主键，如被改动的用户 ID
+	BizID     int64  `gorm:"column:biz_id;not null;default:0"`  // 业务主键，如被改动的用户 ID
 
 	// 内容与来源
 	Contents      string `gorm:"type:text"`                    // 变更内容摘要；一期通常为空

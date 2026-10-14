@@ -18,7 +18,7 @@ type User struct {
 	Mobile    *string    `gorm:"size:20"`            // 指针：未设置存 NULL，保证 uk_tenant_mobile 多空值不冲突
 	Gender    int8       `gorm:"not null;default:0"` // 0未知 1男 2女
 	Avatar    string     `gorm:"size:512"`
-	Status    int8       `gorm:"not null;default:1"` // 0停用 1正常
+	Status    int8       `gorm:"not null"` // 0停用 1正常
 	LoginIP   string     `gorm:"size:50;column:login_ip"`
 	LoginDate *time.Time `gorm:"column:login_date"`
 }

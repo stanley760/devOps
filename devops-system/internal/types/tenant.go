@@ -10,9 +10,9 @@ import (
 // TenantPageQuery GET /tenants 查询参数。
 type TenantPageQuery struct {
 	domain.PageParam
-	Name     string `form:"name" binding:"omitempty,max=30" doc:"租户名称"`
-	Code     string `form:"code" binding:"omitempty,max=30" doc:"租户编码"`
-	Status   *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"租户状态 0:停用；1:启用"`
+	Name   string `form:"name" binding:"omitempty,max=30" doc:"租户名称"`
+	Code   string `form:"code" binding:"omitempty,max=30" doc:"租户编码"`
+	Status *int8  `form:"status" binding:"omitempty,min=0,max=1" doc:"租户状态 0:停用；1:启用"`
 }
 
 // TenantCreateReq POST /tenants 入参（含租户初始超管，创建后即可登录）。

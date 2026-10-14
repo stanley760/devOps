@@ -19,15 +19,15 @@ const (
 //   - 审计表自身的查询与清理不审计（自审计无意义且会放大写入）。
 var auditedOperations = map[string]string{
 	// 用户
-	"user-create":          "user",
-	"user-update":          "user",
-	"user-delete":          "user",
-	"user-reset-password":  "user",
+	"user-create":         "user",
+	"user-update":         "user",
+	"user-delete":         "user",
+	"user-reset-password": "user",
 	// 角色
-	"role-create":         "role",
-	"role-update":         "role",
-	"role-delete":         "role",
-	"role-assign-menus":   "role",
+	"role-create":       "role",
+	"role-update":       "role",
+	"role-delete":       "role",
+	"role-assign-menus": "role",
 	// 菜单
 	"menu-create": "menu",
 	"menu-update": "menu",
@@ -41,9 +41,9 @@ var auditedOperations = map[string]string{
 	"post-update": "post",
 	"post-delete": "post",
 	// 租户（平台级）
-	"tenant-create":       "tenant",
-	"tenant-update":       "tenant",
-	"tenant-delete":       "tenant",
+	"tenant-create":        "tenant",
+	"tenant-update":        "tenant",
+	"tenant-delete":        "tenant",
 	"tenant-update-status": "tenant",
 	// 个人账号
 	"auth-update-profile":  "profile",

@@ -10,7 +10,7 @@ type Role struct {
 	Sort             int
 	DataScope        int8   `gorm:"column:data_scope;not null;default:1"` // 1全部 2自定义…
 	DataScopeDeptIDs string `gorm:"size:500;column:data_scope_dept_ids"`
-	Status           int8   `gorm:"not null;default:1"` // 0停用 1正常
+	Status           int8   `gorm:"not null"` // 0停用 1正常
 	Type             int8   `gorm:"not null;default:2"` // 1内置 2自定义
 	Remark           string `gorm:"size:500"`
 }

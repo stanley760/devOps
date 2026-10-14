@@ -3,7 +3,11 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMPOSE := docker compose -f deploy/docker-compose.yml
 DEV_COMPOSE := docker compose -f deploy/docker-compose-dev.yml
 
-.PHONY: build-id build-system build migrate up down logs ps dev-up dev-down dev-logs dev-ps dev-migrate
+# 本地 Go 工具链（模块缓存在 /d/Go/pkg）
+GO ?= /d/GoToolchain/go/bin/go.exe
+
+.PHONY: build-id build-system build migrate up down logs ps dev-up dev-down dev-logs dev-ps dev-migrate \
+	vet test build-local test-system
 
 build-id:
 	docker build -f devops-id/Dockerfile --build-arg VERSION=$(VERSION) -t devops-id:$(VERSION) .
@@ -48,3 +52,21 @@ dev-ps:
 dev-migrate:
 	$(DEV_COMPOSE) build devops-system
 	$(DEV_COMPOSE) --profile app run --rm devops-system migrate
+
+# 以下为本地开发（不走容器）使用的校验目标
+
+# build-local 编译全工作区
+build-local:
+	$(GO) build ./...
+
+# vet 静态检查全工作区
+vet:
+	$(GO) vet ./...
+
+# test 跑全工作区测试
+test:
+	$(GO) test ./...
+
+# test-system 只跑 devops-system 的测试
+test-system:
+	$(GO) test ./devops-system/...

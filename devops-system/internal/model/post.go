@@ -8,7 +8,7 @@ type Post struct {
 	Code   string `gorm:"size:64;not null"`
 	Name   string `gorm:"size:50;not null"`
 	Sort   int
-	Status int8   `gorm:"not null;default:1"` // 0停用 1正常
+	Status int8   `gorm:"not null"` // 0停用 1正常
 	Remark string `gorm:"size:500"`
 }
 
