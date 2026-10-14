@@ -52,7 +52,7 @@ start_services() {
   sleep 3
   start_service devops-system devops-system
   echo ""
-  echo "首次运行或 schema 变更后，请先执行数据库迁移：sh deploy/dev.sh migrate"
+  echo "首次运行或 schema 变更后，请先执行建表与种子初始化：sh deploy/dev.sh migrate"
   echo "首次使用前需复制 .env.example 为 .env 并填入局域网 IP（NACOS_REGISTER_IP）。"
 }
 

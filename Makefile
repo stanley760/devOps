@@ -13,7 +13,7 @@ build-system:
 
 build: build-id build-system
 
-# 一次性建业务表与种子数据（幂等，可重复执行）
+# 一次性建业务表与种子数据（表存在即跳过，幂等，可重复执行）
 migrate:
 	$(COMPOSE) run --rm devops-system migrate
 
@@ -44,7 +44,7 @@ dev-logs:
 dev-ps:
 	$(DEV_COMPOSE) ps
 
-# dev-migrate 用一次性容器执行数据库迁移（devops-system 服务在 app profile 下）
+# dev-migrate 用一次性容器执行建表与种子初始化（devops-system 服务在 app profile 下）
 dev-migrate:
 	$(DEV_COMPOSE) build devops-system
 	$(DEV_COMPOSE) --profile app run --rm devops-system migrate

@@ -32,7 +32,7 @@ import (
 	"github.com/stanley760/devOps/devops-system/internal/auth"
 	"github.com/stanley760/devOps/devops-system/internal/authz"
 	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/db"
+	"github.com/stanley760/devOps/devops-system/internal/dbinit"
 	"github.com/stanley760/devOps/devops-system/internal/middleware"
 	"github.com/stanley760/devOps/devops-system/internal/model"
 	"github.com/stanley760/devOps/devops-system/internal/router"
@@ -190,8 +190,8 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		// 装配链：db → TenantPlugin(fail-closed) → 启动迁移
-		//   （AutoMigrate + 版本化 SQL 种子，internal/migration）→ authz → store(Redis 会话)
+		// 装配链：db → TenantPlugin(fail-closed) → 启动初始化
+		//   （建表 SQL + 种子 SQL，internal/dbinit）→ authz → store(Redis 会话)
 		//   → 共享安全(RS256 JWT + session) → idclient（发号）→ auth/service → httpx
 		if err := client.Init(cfg.Mysql); err != nil {
 			return err
@@ -203,17 +203,11 @@ var serverCmd = &cobra.Command{
 		if err := tenantdb.RegisterPlugin(client.Get()); err != nil {
 			return fmt.Errorf("注册租户过滤插件失败: %w", err)
 		}
-		// 启动期迁移（混合方案，详见 internal/migration 包文档）：
-		// AutoMigrate 建表 → 复合唯一索引 → 版本化 SQL 种子（执行过即跳过）
-		// → casbin。全部就绪后才注册 Nacos 接流量；失败 fail-closed 拒绝启动。
-		if err := autoMigrate(client.Get()); err != nil {
-			return fmt.Errorf("启动建表失败: %w", err)
-		}
-		if err := db.EnsureCompositeUniques(client.Get()); err != nil {
-			return fmt.Errorf("创建唯一索引失败: %w", err)
-		}
-		if err := runDataMigrations(client.Get()); err != nil {
-			return fmt.Errorf("启动数据迁移失败: %w", err)
+		// 启动期初始化（详见 internal/dbinit 包文档）：建表 SQL + 种子 SQL
+		// 按表存在性跳过（表已存在不再执行）→ casbin。全部就绪后才注册
+		// Nacos 接流量；失败 fail-closed 拒绝启动。
+		if err := dbinit.Run(client.Get()); err != nil {
+			return fmt.Errorf("启动建表/种子失败: %w", err)
 		}
 		if err := authz.Init(client.Get()); err != nil {
 			return err

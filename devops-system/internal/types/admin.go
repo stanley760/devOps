@@ -107,7 +107,7 @@ type DeptSaveReq struct {
 	LeaderUserID ID     `json:"leader_user_id,omitempty" doc:"负责人用户id"`
 	Phone        string `json:"phone,omitempty" binding:"omitempty,max=20" maxLength:"20" doc:"联系电话"`
 	Email        string `json:"email,omitempty" binding:"omitempty,email,max=50" format:"email" maxLength:"50" doc:"邮箱"`
-	Status       int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" minimum:"0" maximum:"1" doc:"部门状态 0:禁用；1:启用"`
+	Status       int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" default:"1"  doc:"部门状态 0:禁用；1:启用"`
 }
 
 // DeptDTO 部门信息。
@@ -144,7 +144,7 @@ type PostSaveReq struct {
 	Code   string `json:"code" binding:"required,min=1,max=64" minLength:"1" maxLength:"64" doc:"岗位编号"`
 	Name   string `json:"name" binding:"required,min=1,max=50" minLength:"1" maxLength:"50" doc:"岗位名称"`
 	Sort   int    `json:"sort,omitempty" doc:"排序"`
-	Status int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" doc:"岗位状态 0:禁用；1:启用"`
+	Status int8   `json:"status,omitempty" binding:"omitempty,min=0,max=1" default:"1"  doc:"岗位状态 0:禁用；1:启用"`
 	Remark string `json:"remark,omitempty" binding:"omitempty,max=500" maxLength:"500" doc:"备注"`
 }
 

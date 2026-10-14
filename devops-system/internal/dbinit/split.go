@@ -1,4 +1,4 @@
-package migration
+package dbinit
 
 import "strings"
 
@@ -9,7 +9,7 @@ import "strings"
 //   - 纯注释/空白段不产出语句。
 //
 // 方言边界：本包面向 MySQL（生产）与 sqlite（单测），不处理 PG 的
-// dollar-quoted 字符串——当前迁移文件不含该语法。
+// dollar-quoted 字符串——当前脚本不含该语法。
 func splitStatements(sql string) []string {
 	var stmts []string
 	var b strings.Builder

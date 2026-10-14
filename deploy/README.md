@@ -25,7 +25,7 @@ sh deploy/dev.sh
 - **sh**：以后台进程启动，日志与 PID 记录在 `deploy/.dev-logs/` 下
   （`tail -f deploy/.dev-logs/devops-system.log` 查看输出）。
 
-首次运行或 schema 变更后，先执行数据库迁移：
+首次运行或 schema 变更后，先执行建表与种子初始化：
 
 ```powershell
 .\deploy\dev.ps1 -Command migrate
@@ -46,7 +46,7 @@ sh deploy/dev.sh migrate
 ```powershell
 .\deploy\dev.ps1 -Command ps       # 查看容器状态
 .\deploy\dev.ps1 -Command logs     # 跟踪日志
-.\deploy\dev.ps1 -Command migrate  # 数据库迁移
+.\deploy\dev.ps1 -Command migrate  # 建表与种子初始化（表存在即跳过）
 .\deploy\dev.ps1 -Command restart  # 重启中间件
 .\deploy\dev.ps1 -Command app      # 仅启动本地业务服务（不动容器）
 .\deploy\dev.ps1 -Command sync     # 同步 deploy/higress 配置到命名卷并重启网关
@@ -56,7 +56,7 @@ sh deploy/dev.sh migrate
 ```bash
 sh deploy/dev.sh ps       # 查看容器状态
 sh deploy/dev.sh logs     # 跟踪日志
-sh deploy/dev.sh migrate  # 数据库迁移
+sh deploy/dev.sh migrate  # 建表与种子初始化（表存在即跳过）
 sh deploy/dev.sh restart  # 重启中间件
 sh deploy/dev.sh app      # 仅启动本地业务服务（不动容器）
 sh deploy/dev.sh stop    # 停止本地业务服务（不动容器）

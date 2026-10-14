@@ -51,8 +51,8 @@ GRANT ALL PRIVILEGES ON devops.* TO 'devops'@'%';
 ```bash
 cd devops-id && go run . server    # gRPC :9990（Snowflake 发号）
 
-cd devops-system && go run . migrate  # 建业务表 + 种子（租户 default、admin/Admin@123、菜单树、角色）
-cd devops-system && go run . server   # HTTP :8080
+cd devops-system && go run . migrate  # 建表 + 种子 SQL（表存在即跳过；server 启动时也会自动执行）
+cd devops-system && go run . server   # HTTP :8080（种子：租户 default、admin/Admin@123、菜单树、角色）
 ```
 
 ### 验证
@@ -75,7 +75,7 @@ curl -s http://localhost:8080/system/api/v1/users?page_no=1&page_size=10 \
 ```text
 devops-system            用户权限系统
   server                 启动 HTTP 服务（:8080）
-  migrate                建表 + 复合唯一索引 + 种子数据（幂等）
+  migrate                建表 SQL + 种子 SQL（表存在即跳过，幂等；与 server 启动一致）
 
 devops-id                分布式 ID 发号服务
   server                 启动 gRPC Snowflake 发号服务（:9990）

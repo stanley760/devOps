@@ -45,7 +45,7 @@ type BaseTenantModel struct {
 }
 
 // BeforeCreate 填充当前操作者并由 devops-id 分配主键（ID 为 0 时）。
-// 无操作者时保留显式审计字段，供迁移/种子等系统写入使用。
+// 无操作者时保留显式审计字段，供种子等系统写入使用。
 func (m *BaseModel) BeforeCreate(tx *gorm.DB) error {
 	actor, ok := auditctx.From(tx.Statement.Context)
 	username := strings.TrimSpace(actor.Username)
