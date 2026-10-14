@@ -1,12 +1,11 @@
 // Package dbinit 启动期建表与初始数据初始化（纯 SQL 脚本，零记账）。
 //
 // 职责边界：建表与初始数据都写成 .sql 脚本嵌入二进制，服务启动完成前
-// （server 装配链 / migrate 子命令）执行一次。不引入版本表、checksum、
-// 分布式锁等迁移框架机制——「执行过不再执行」直接靠表存在性判定。
+// （server 装配链 / migrate 子命令）执行一次。
 //
 // 脚本布局（文件名主干 = 表名，须匹配 ^t_[a-z0-9_]+$）：
-//   - sql/ddl/<table>.sql   每表一个 CREATE TABLE IF NOT EXISTS；
-//   - sql/data/<table>.sql  每表的初始数据（无种子的表不放文件）。
+//   - sql/schema/<table>.sql   每表一个 CREATE TABLE IF NOT EXISTS；
+//   - sql/datas/<table>.sql  每表的初始数据（无种子的表不放文件）。
 //
 // 跳过判定：
 //   - 建表：表已存在（information_schema 判存）整个跳过；
@@ -30,7 +29,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//go:embed sql/ddl sql/data
+//go:embed sql/schema sql/datas
 var scriptFS embed.FS
 
 // tablePattern 文件名主干约定：表名。
@@ -53,11 +52,11 @@ func Run(gdb *gorm.DB) error {
 
 // runFS 对给定文件系统执行建表与种子脚本（独立给单测注入 MapFS）。
 func runFS(gdb *gorm.DB, fsys fs.FS) error {
-	ddls, err := loadScripts(fsys, "sql/ddl", true)
+	ddls, err := loadScripts(fsys, "sql/schema", true)
 	if err != nil {
 		return fmt.Errorf("加载建表脚本失败: %w", err)
 	}
-	datas, err := loadScripts(fsys, "sql/data", false)
+	datas, err := loadScripts(fsys, "sql/datas", false)
 	if err != nil {
 		return fmt.Errorf("加载种子脚本失败: %w", err)
 	}
@@ -67,7 +66,7 @@ func runFS(gdb *gorm.DB, fsys fs.FS) error {
 	}
 	for _, s := range datas {
 		if !ddlTables[s.Table] {
-			return fmt.Errorf("种子脚本 %s 没有对应的建表脚本 sql/ddl/%s", s.Name, s.Name)
+			return fmt.Errorf("种子脚本 %s 没有对应的建表脚本 sql/schema/%s", s.Name, s.Name)
 		}
 	}
 

@@ -1,6 +1,6 @@
 // t_system_users 用户表（租户表）。
 // 唯一性：uk_tenant_username(tenant_id,username)、uk_tenant_mobile(tenant_id,mobile)
-// —— 跨嵌入字段的复合唯一索引由 internal/dbinit/sql/ddl 建表 SQL 声明（GORM tag 无法跨嵌入组合）。
+// —— 跨嵌入字段的复合唯一索引由 internal/dbinit/sql/schema 建表 SQL 声明（GORM tag 无法跨嵌入组合）。
 package model
 
 import "time"

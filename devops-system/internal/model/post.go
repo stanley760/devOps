@@ -1,5 +1,5 @@
 // t_system_post 岗位表（租户表）。
-// 唯一性：uk_tenant_code(tenant_id,code) 由 internal/dbinit/sql/ddl 建表 SQL 声明。
+// 唯一性：uk_tenant_code(tenant_id,code) 由 internal/dbinit/sql/schema 建表 SQL 声明。
 package model
 
 // Post 岗位。

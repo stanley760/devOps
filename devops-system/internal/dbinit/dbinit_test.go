@@ -34,8 +34,8 @@ func mapFS(files map[string]string) fstest.MapFS {
 func TestRunCreatesTablesAndSeeds(t *testing.T) {
 	db := testDB(t)
 	fs := mapFS(map[string]string{
-		"ddl/t_demo.sql":  "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT);",
-		"data/t_demo.sql": "INSERT INTO t_demo (id, v) VALUES (1, 'a');",
+		"schema/t_demo.sql":  "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT);",
+		"datas/t_demo.sql": "INSERT INTO t_demo (id, v) VALUES (1, 'a');",
 	})
 	if err := runFS(db, fs); err != nil {
 		t.Fatalf("first run: %v", err)
@@ -52,8 +52,8 @@ func TestRunCreatesTablesAndSeeds(t *testing.T) {
 func TestRunSecondRunSkipsEverything(t *testing.T) {
 	db := testDB(t)
 	fs := mapFS(map[string]string{
-		"ddl/t_demo.sql":  "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT);",
-		"data/t_demo.sql": "INSERT INTO t_demo (id, v) VALUES (1, 'a');",
+		"schema/t_demo.sql":  "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT);",
+		"datas/t_demo.sql": "INSERT INTO t_demo (id, v) VALUES (1, 'a');",
 	})
 	if err := runFS(db, fs); err != nil {
 		t.Fatalf("first run: %v", err)
@@ -78,10 +78,10 @@ func TestRunDataSkippedWhenTablePreExists(t *testing.T) {
 		t.Fatalf("pre-create t_a: %v", err)
 	}
 	fs := mapFS(map[string]string{
-		"ddl/t_a.sql":  "CREATE TABLE IF NOT EXISTS t_a (id INTEGER PRIMARY KEY);",
-		"data/t_a.sql": "INSERT INTO t_a (id) VALUES (1);",
-		"ddl/t_b.sql":  "CREATE TABLE IF NOT EXISTS t_b (id INTEGER PRIMARY KEY);",
-		"data/t_b.sql": "INSERT INTO t_b (id) VALUES (1);",
+		"schema/t_a.sql":  "CREATE TABLE IF NOT EXISTS t_a (id INTEGER PRIMARY KEY);",
+		"datas/t_a.sql": "INSERT INTO t_a (id) VALUES (1);",
+		"schema/t_b.sql":  "CREATE TABLE IF NOT EXISTS t_b (id INTEGER PRIMARY KEY);",
+		"datas/t_b.sql": "INSERT INTO t_b (id) VALUES (1);",
 	})
 	if err := runFS(db, fs); err != nil {
 		t.Fatalf("run: %v", err)
@@ -104,7 +104,7 @@ func TestRunDataSkippedWhenTablePreExists(t *testing.T) {
 func TestRunDDLFailureFailsClosed(t *testing.T) {
 	// 单条建表语句语法错误（括号未闭合）：执行期 fail-closed
 	fs := mapFS(map[string]string{
-		"ddl/t_demo.sql": "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT",
+		"schema/t_demo.sql": "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY, v TEXT",
 	})
 	if err := runFS(testDB(t), fs); err == nil {
 		t.Fatal("坏建表语句执行失败应报错")
@@ -113,7 +113,7 @@ func TestRunDDLFailureFailsClosed(t *testing.T) {
 
 func TestRunRejectsMultiStmtDDL(t *testing.T) {
 	fs := mapFS(map[string]string{
-		"ddl/t_demo.sql": "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY); INSERT INTO t_demo (id) VALUES (1);",
+		"schema/t_demo.sql": "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY); INSERT INTO t_demo (id) VALUES (1);",
 	})
 	err := runFS(testDB(t), fs)
 	if err == nil || !strings.Contains(err.Error(), "恰含 1 条") {
@@ -123,7 +123,7 @@ func TestRunRejectsMultiStmtDDL(t *testing.T) {
 
 func TestRunRejectsStemContentMismatch(t *testing.T) {
 	fs := mapFS(map[string]string{
-		"ddl/t_x.sql": "CREATE TABLE IF NOT EXISTS t_y (id INTEGER PRIMARY KEY);",
+		"schema/t_x.sql": "CREATE TABLE IF NOT EXISTS t_y (id INTEGER PRIMARY KEY);",
 	})
 	err := runFS(testDB(t), fs)
 	if err == nil || !strings.Contains(err.Error(), "与文件名主干不一致") {
@@ -133,8 +133,8 @@ func TestRunRejectsStemContentMismatch(t *testing.T) {
 
 func TestRunRejectsDataWithoutDdl(t *testing.T) {
 	fs := mapFS(map[string]string{
-		"ddl/t_a.sql":  "CREATE TABLE IF NOT EXISTS t_a (id INTEGER PRIMARY KEY);",
-		"data/t_z.sql": "INSERT INTO t_z (id) VALUES (1);",
+		"schema/t_a.sql":  "CREATE TABLE IF NOT EXISTS t_a (id INTEGER PRIMARY KEY);",
+		"datas/t_z.sql": "INSERT INTO t_z (id) VALUES (1);",
 	})
 	err := runFS(testDB(t), fs)
 	if err == nil || !strings.Contains(err.Error(), "没有对应的建表脚本") {
@@ -143,7 +143,7 @@ func TestRunRejectsDataWithoutDdl(t *testing.T) {
 }
 
 func TestRunRejectsBadFilename(t *testing.T) {
-	for _, name := range []string{"ddl/demo.sql", "ddl/0001_x.sql"} {
+	for _, name := range []string{"schema/demo.sql", "schema/0001_x.sql"} {
 		fs := mapFS(map[string]string{
 			name: "CREATE TABLE IF NOT EXISTS t_demo (id INTEGER PRIMARY KEY);",
 		})
@@ -162,13 +162,13 @@ func TestRunEmptyFSOK(t *testing.T) {
 }
 
 func TestEmbeddedSQLWellFormed(t *testing.T) {
-	// 真实嵌入脚本的结构性契约（不连库）：命名/主干一致、data 都有 ddl 对应、
-	// ddl 覆盖全部 10 张业务表。
-	ddls, err := loadScripts(scriptFS, "sql/ddl", true)
+	// 真实嵌入脚本的结构性契约（不连库）：命名/主干一致、datas 都有 ddl 对应、
+	// schema 覆盖全部 10 张业务表。
+	ddls, err := loadScripts(scriptFS, "sql/schema", true)
 	if err != nil {
 		t.Fatalf("load ddl: %v", err)
 	}
-	datas, err := loadScripts(scriptFS, "sql/data", false)
+	datas, err := loadScripts(scriptFS, "sql/datas", false)
 	if err != nil {
 		t.Fatalf("load data: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestEmbeddedSQLWellFormed(t *testing.T) {
 	}
 	for tbl := range want {
 		if !got[tbl] {
-			t.Errorf("缺建表脚本 sql/ddl/%s.sql", tbl)
+			t.Errorf("缺建表脚本 sql/schema/%s.sql", tbl)
 		}
 	}
 	for tbl := range got {

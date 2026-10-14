@@ -1,5 +1,5 @@
 // t_system_role 角色表（租户表）。
-// 唯一性：uk_tenant_code(tenant_id,code) 由 internal/dbinit/sql/ddl 建表 SQL 声明。
+// 唯一性：uk_tenant_code(tenant_id,code) 由 internal/dbinit/sql/schema 建表 SQL 声明。
 package model
 
 // Role 角色。data_scope/data_scope_dept_ids 仅存储，行级数据权限列 Roadmap。
