@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
+	etcdinfra "github.com/stanley760/devops/devops-infra/etcd"
 
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
 )
 
 func TestMapInfraErr(t *testing.T) {

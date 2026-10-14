@@ -1,12 +1,12 @@
 package query
 
 import (
-	commonaudit "github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-common/domain"
+	commonaudit "github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-common/domain"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/auditlog"
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/domain/auditlog"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // 领域对象 → API DTO 的视图映射。

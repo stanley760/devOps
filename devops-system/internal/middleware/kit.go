@@ -9,16 +9,16 @@ package middleware
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-common/auditctx"
-	client "github.com/stanley760/devOps/devops-infra/database/mysql"
-	"github.com/stanley760/devOps/devops-infra/security/humakit"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	"github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-common/auditctx"
+	client "github.com/stanley760/devops/devops-infra/database/mysql"
+	"github.com/stanley760/devops/devops-infra/security/humakit"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
 
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/authz"
-	"github.com/stanley760/devOps/devops-system/internal/dao"
-	"github.com/stanley760/devOps/devops-system/internal/store"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/authz"
+	"github.com/stanley760/devops/devops-system/internal/dao"
+	"github.com/stanley760/devops/devops-system/internal/store"
 )
 
 // 类型别名：router/app/wire 的 *middleware.Kit 签名零改动，wire 无需重新生成。

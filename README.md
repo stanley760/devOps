@@ -1,4 +1,4 @@
-# devOps — 用户权限系统（多租户）
+# devops — 用户权限系统（多租户）
 
 ![Go Version](https://img.shields.io/badge/go-1.26+-00ADD8?logo=go)
 ![Gin](https://img.shields.io/badge/Gin-v1.12-00ADD8?logo=gin)
@@ -6,8 +6,6 @@
 ![Casbin](https://img.shields.io/badge/Casbin-v3-00ADD8)
 
 Go 工作区（go.work）三模块：**devops-infra**（共享基础设施）+ **devops-system**（用户权限系统）+ **devops-id**（分布式 ID 发号服务，美团 Leaf）。
-
-数据模型对齐 [RuoYi-vue-pro（yudao）](https://github.com/YunaiV/ruoyi-vue-pro) 精简版。
 
 ## 特性 / Features
 
@@ -63,7 +61,7 @@ curl -s -X POST "http://127.0.0.1:8080/system/api/v1/auth/login" \
   -H "Host: api.devops.local" \
   -H "Content-Type: application/json" \
   -d '{"tenant_code":"default","username":"admin","password":"Admin@123"}'
-# → {"code":200,"msg":"ok","data":{"access_token":"...","refresh_token":"...","expires_in":7200,"tenant":{"id":"1","name":"devOps","code":"default"}}}
+# → {"code":200,"msg":"ok","data":{"access_token":"...","refresh_token":"...","expires_in":7200,"tenant":{"id":"1","name":"devops","code":"default"}}}
 
 # 携带 token 查询用户列表
 curl -s http://localhost:8080/system/api/v1/users?page_no=1&page_size=10 \

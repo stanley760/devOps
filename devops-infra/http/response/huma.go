@@ -10,9 +10,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	commonResp "github.com/stanley760/devOps/devops-common/response"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-common/domain"
+	commonResp "github.com/stanley760/devops/devops-common/response"
+	"github.com/stanley760/devops/devops-infra/errs"
 )
 
 // OKBody 成功响应体（huma handler Output.Body 用）。

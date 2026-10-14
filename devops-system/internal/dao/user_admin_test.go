@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stanley760/devOps/devops-system/internal/dao"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/dao"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 func TestPostIDsJSON(t *testing.T) {

@@ -9,9 +9,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	"github.com/stanley760/devops/devops-infra/datascope"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 )
 
 // fakeAuthn 返回固定 claims 的认证器（免去 JWT/会话装配）。

@@ -3,7 +3,7 @@ package iam
 import (
 	"encoding/json"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // 用户域事件名（持久化与投影路由的键，改动需同步迁移历史数据）。

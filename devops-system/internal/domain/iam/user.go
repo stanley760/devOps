@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // 内置超管用户 ID（种子固定为 1，不可删除）。

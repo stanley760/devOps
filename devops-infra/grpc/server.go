@@ -8,7 +8,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/stanley760/devOps/devops-infra/grpc/interceptor"
+	"github.com/stanley760/devops/devops-infra/grpc/interceptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"

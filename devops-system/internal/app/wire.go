@@ -3,12 +3,12 @@
 package app
 
 import (
-	httpinfra "github.com/stanley760/devOps/devops-infra/http"
+	httpinfra "github.com/stanley760/devops/devops-infra/http"
 
 	"github.com/google/wire"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/middleware"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/middleware"
 )
 
 // InitializeHTTP assembles services, handlers, and the business route callback.

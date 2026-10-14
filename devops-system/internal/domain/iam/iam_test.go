@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 )
 
 func fixedTime() time.Time { return time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC) }

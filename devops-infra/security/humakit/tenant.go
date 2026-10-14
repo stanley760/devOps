@@ -1,7 +1,7 @@
 package humakit
 
 import (
-	tenantinfra "github.com/stanley760/devOps/devops-infra/tenant"
+	tenantinfra "github.com/stanley760/devops/devops-infra/tenant"
 )
 
 // securityTenant 租户校验 + 上下文注入（可用性判定经 Deps.TenantUsable 注入，

@@ -13,14 +13,14 @@
 package app
 
 import (
-	"github.com/stanley760/devOps/devops-system/internal/application/command"
-	"github.com/stanley760/devOps/devops-system/internal/application/query"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/domain/auditlog"
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
-	"github.com/stanley760/devOps/devops-system/internal/infrastructure/event"
-	"github.com/stanley760/devOps/devops-system/internal/infrastructure/persistence"
+	"github.com/stanley760/devops/devops-system/internal/application/command"
+	"github.com/stanley760/devops/devops-system/internal/application/query"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/domain/auditlog"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/infrastructure/event"
+	"github.com/stanley760/devops/devops-system/internal/infrastructure/persistence"
 )
 
 // Repositories 汇总全部仓储实现（由本包注入各端口）。

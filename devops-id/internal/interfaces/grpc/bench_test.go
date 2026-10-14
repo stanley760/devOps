@@ -19,9 +19,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	idapp "github.com/stanley760/devOps/devops-id/internal/application/idgen"
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
-	"github.com/stanley760/devOps/devops-id/pkg/idgenpb"
+	idapp "github.com/stanley760/devops/devops-id/internal/application/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
+	"github.com/stanley760/devops/devops-id/pkg/idgenpb"
 )
 
 // quietLogsOnce 保证只在首个基准初始化时屏蔽一次日志。

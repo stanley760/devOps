@@ -12,9 +12,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-infra/cache"
+	"github.com/stanley760/devops/devops-infra/cache"
 
-	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/model"
 )
 
 // tenantCacheTTL 租户状态缓存时长。

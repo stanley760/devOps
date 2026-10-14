@@ -1,7 +1,7 @@
 // 用户管理模块 DTO。ID 一律 types.ID 字符串形态。
 package types
 
-import "github.com/stanley760/devOps/devops-common/domain"
+import "github.com/stanley760/devops/devops-common/domain"
 
 // UserPageQuery GET /users 查询参数。
 type UserPageQuery struct {

@@ -7,13 +7,13 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-common/domain/gormx"
-	"github.com/stanley760/devOps/devops-infra/datascope"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain/gormx"
+	"github.com/stanley760/devops/devops-infra/datascope"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/model"
 )
 
 // userRepo 是 iam.UserRepository 的 GORM 实现。

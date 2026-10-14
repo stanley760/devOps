@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/stanley760/devOps/devops-id/pkg/idgenpb"
+	"github.com/stanley760/devops/devops-id/pkg/idgenpb"
 )
 
 // BufferConfig 预取缓冲配置。

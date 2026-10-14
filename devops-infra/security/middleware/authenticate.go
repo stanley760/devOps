@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
+	securitysession "github.com/stanley760/devops/devops-infra/security/session"
 )
 
 var (

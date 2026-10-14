@@ -9,7 +9,7 @@ import (
 
 	"github.com/DeRuina/timberjack"
 
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 )
 
 const (

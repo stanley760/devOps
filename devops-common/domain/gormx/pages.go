@@ -7,7 +7,7 @@ package gormx
 import (
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain"
 )
 
 // FindPage 统计符合条件的记录数并查询当前页。

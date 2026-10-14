@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/danielgtaylor/huma/v2"
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 	"net/http"
 	"strings"
 	"testing"

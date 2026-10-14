@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
 )
 
 // 登录结果（与既有 DB 列口径一致）。

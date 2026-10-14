@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-infra/database"
+	"github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-infra/database"
 )
 
 // row 是测试用的审计表实体，gorm tag 与真实业务表同构（列宽对齐契约常量）。

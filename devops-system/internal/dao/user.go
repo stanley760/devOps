@@ -11,12 +11,12 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	infratenant "github.com/stanley760/devops/devops-infra/tenant"
 
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
 )
 
 // tenantOf 取 ctx 中的租户（原生 JOIN 查询显式过滤用；缺失即调用方误用，fail-fast）。

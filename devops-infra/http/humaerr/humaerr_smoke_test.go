@@ -10,8 +10,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-infra/http/humaerr"
+	"github.com/stanley760/devops/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/http/humaerr"
 )
 
 // smokeInput 冒烟用输入：name 有 minLength 约束。

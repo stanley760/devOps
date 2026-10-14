@@ -4,7 +4,7 @@ package types
 import (
 	"time"
 
-	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain"
 )
 
 // LoginLogPageQuery GET /login-logs 查询参数。

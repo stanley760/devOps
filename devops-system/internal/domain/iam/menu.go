@@ -4,9 +4,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // Menu 菜单聚合根（全局表，无 tenant_id）。

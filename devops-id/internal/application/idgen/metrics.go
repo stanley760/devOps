@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
 )
 
 // MetricsObserver 实现 iddomain.Observer，将领域事件记录为 OTel 指标。

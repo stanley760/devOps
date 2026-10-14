@@ -10,7 +10,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/stanley760/devOps/devops-infra/cache"
+	"github.com/stanley760/devops/devops-infra/cache"
 )
 
 // Client 封装 go-redis 客户端并实现 cache.Cache。

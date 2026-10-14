@@ -5,7 +5,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 )
 
 // Config Redis 连接配置。类型别名保持服务配置统一加载。

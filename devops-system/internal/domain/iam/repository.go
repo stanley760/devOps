@@ -3,7 +3,7 @@ package iam
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain"
 )
 
 // 仓储端口（Repository Pattern）。

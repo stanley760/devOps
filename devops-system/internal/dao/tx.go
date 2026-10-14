@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
 )
 
 // WithTx 在租户感知连接上开启事务（dao 内部多步写共用）。

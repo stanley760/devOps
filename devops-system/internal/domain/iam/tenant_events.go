@@ -3,7 +3,7 @@ package iam
 import (
 	"encoding/json"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // 租户域事件名。

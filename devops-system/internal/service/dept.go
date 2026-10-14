@@ -7,12 +7,12 @@ package service
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/dao"
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-infra/errs"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/dao"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // Dept 部门管理服务。

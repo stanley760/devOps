@@ -8,7 +8,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
+	securityauthz "github.com/stanley760/devops/devops-infra/security/authz"
 )
 
 // testDB 内存库（casbin_rule 由 gorm-adapter 自动建表）。

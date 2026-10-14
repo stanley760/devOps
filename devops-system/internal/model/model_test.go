@@ -5,12 +5,12 @@ package model_test
 import (
 	"context"
 	"fmt"
-	"github.com/stanley760/devOps/devops-id/pkg/idclient"
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
-	client "github.com/stanley760/devOps/devops-infra/database/mysql"
-	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
-	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-id/pkg/idclient"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
+	client "github.com/stanley760/devops/devops-infra/database/mysql"
+	grpcinfra "github.com/stanley760/devops/devops-infra/grpc"
+	"github.com/stanley760/devops/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/model"
 	"testing"
 	"time"
 )

@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	database "github.com/stanley760/devOps/devops-infra/database"
+	database "github.com/stanley760/devops/devops-infra/database"
 )
 
 // Client 封装 GORM MySQL 连接池。

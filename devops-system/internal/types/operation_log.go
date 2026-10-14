@@ -5,8 +5,8 @@ package types
 import (
 	"time"
 
-	commonaudit "github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-common/domain"
+	commonaudit "github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-common/domain"
 )
 
 // OperationLogPageQuery GET /operation-logs 查询参数。

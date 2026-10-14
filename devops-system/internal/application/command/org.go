@@ -3,10 +3,10 @@ package command
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devops/devops-infra/datascope"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // RoleCommand 角色写侧命令处理器。

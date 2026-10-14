@@ -26,12 +26,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	securitymiddleware "github.com/stanley760/devOps/devops-infra/security/middleware"
-	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
+	"github.com/stanley760/devops/devops-infra/errs"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
+	securitymiddleware "github.com/stanley760/devops/devops-infra/security/middleware"
+	securitysession "github.com/stanley760/devops/devops-infra/security/session"
 
-	"github.com/stanley760/devOps/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/config"
 )
 
 // AccessClaims access token 载荷（字段名与 JSON 标签保持兼容，调用方无感）。

@@ -10,10 +10,10 @@ import (
 
 	"gorm.io/gorm"
 
-	infraaudit "github.com/stanley760/devOps/devops-infra/audit"
+	infraaudit "github.com/stanley760/devops/devops-infra/audit"
 
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
 )
 
 // Executor 按请求上下文解析数据库连接。

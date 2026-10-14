@@ -7,16 +7,16 @@ package service
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devops/devops-infra/datascope"
 
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/authz"
-	"github.com/stanley760/devOps/devops-system/internal/dao"
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/authz"
+	"github.com/stanley760/devops/devops-system/internal/dao"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // validateDataScope 数据权限口径校验：自定义部门必须携带可解析的非空部门集合

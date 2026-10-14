@@ -3,7 +3,7 @@ package query
 import (
 	"testing"
 
-	"github.com/stanley760/devOps/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain"
 )
 
 // node 是树测试用的载荷。

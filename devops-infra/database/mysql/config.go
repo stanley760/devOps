@@ -2,7 +2,7 @@ package mysql
 
 import (
 	"fmt"
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 	"gorm.io/gorm/logger"
 	"time"
 )

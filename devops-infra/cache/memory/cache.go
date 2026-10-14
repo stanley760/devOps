@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	cacheinf "github.com/stanley760/devOps/devops-infra/cache"
+	cacheinf "github.com/stanley760/devops/devops-infra/cache"
 )
 
 type entry struct {

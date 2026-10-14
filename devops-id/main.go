@@ -4,8 +4,8 @@ import (
 	_ "embed"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
-	"github.com/stanley760/devOps/devops-id/internal/cmd"
-	"github.com/stanley760/devOps/devops-infra/utils"
+	"github.com/stanley760/devops/devops-id/internal/cmd"
+	"github.com/stanley760/devops/devops-infra/utils"
 	"log"
 )
 

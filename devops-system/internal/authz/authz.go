@@ -23,7 +23,7 @@ import (
 
 	"gorm.io/gorm"
 
-	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
+	securityauthz "github.com/stanley760/devops/devops-infra/security/authz"
 )
 
 // holder 显式初始化的实例持有者（装配链：Init/SetAuthorizer → 各包级函数）。

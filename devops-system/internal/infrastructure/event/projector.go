@@ -21,10 +21,10 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/authz"
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/authz"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // casbinProjector 把 IAM 领域事件投影到 casbin 策略。

@@ -12,8 +12,8 @@ package middleware
 import (
 	"errors"
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/stanley760/devOps/devops-infra/http/response"
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	"github.com/stanley760/devops/devops-infra/http/response"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 	"log/slog"
 	"net/http"
 )

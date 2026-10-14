@@ -8,7 +8,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 	"net"
 	"strconv"
 	"strings"

@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/stanley760/devOps/devops-infra/security/humakit"
+	"github.com/stanley760/devops/devops-infra/security/humakit"
 )
 
 // 审计模块名（写入 t_system_operation_log 的 module / sub_module 两列）。

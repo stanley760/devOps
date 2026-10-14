@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-infra/http/response"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/http/response"
 )
 
 // run 经真实 gin 引擎执行 handler，返回其响应。

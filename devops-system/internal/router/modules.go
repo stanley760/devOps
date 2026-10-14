@@ -3,9 +3,9 @@ package router
 import (
 	"github.com/danielgtaylor/huma/v2"
 
-	apiv1 "github.com/stanley760/devOps/devops-system/internal/api/v1"
-	"github.com/stanley760/devOps/devops-system/internal/middleware"
-	"github.com/stanley760/devOps/devops-system/internal/service"
+	apiv1 "github.com/stanley760/devops/devops-system/internal/api/v1"
+	"github.com/stanley760/devops/devops-system/internal/middleware"
+	"github.com/stanley760/devops/devops-system/internal/service"
 )
 
 type AuthRoutes func(huma.API)

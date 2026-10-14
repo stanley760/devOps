@@ -12,9 +12,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/stanley760/devOps/devops-infra/http/response"
-	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
+	"github.com/stanley760/devops/devops-infra/http/response"
+	securityauthz "github.com/stanley760/devops/devops-infra/security/authz"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
 )
 
 // ErrNotPlatformAdmin 非平台管理员（供回调区分文案，行为仍为拒绝）。

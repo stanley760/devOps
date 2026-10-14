@@ -1,7 +1,7 @@
 package humakit
 
 import (
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 )
 
 // securityPerm 域内鉴权（uid × tid × perm）。

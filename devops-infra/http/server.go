@@ -12,12 +12,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/stanley760/devOps/devops-infra/config"
-	commonResp "github.com/stanley760/devOps/devops-common/response"
-	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-infra/http/middleware"
-	"github.com/stanley760/devOps/devops-infra/http/response"
-	"github.com/stanley760/devOps/devops-infra/observability"
+	"github.com/stanley760/devops/devops-infra/config"
+	commonResp "github.com/stanley760/devops/devops-common/response"
+	"github.com/stanley760/devops/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/http/middleware"
+	"github.com/stanley760/devops/devops-infra/http/response"
+	"github.com/stanley760/devops/devops-infra/observability"
 )
 
 type Register func(r *gin.Engine)

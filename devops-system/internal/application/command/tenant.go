@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	infratenant "github.com/stanley760/devops/devops-infra/tenant"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/iam"
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/domain/iam"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
 )
 
 // TenantCommand 租户写侧命令处理器。

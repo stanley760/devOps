@@ -11,8 +11,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
-	"github.com/stanley760/devOps/devops-infra/http/humaerr"
-	"github.com/stanley760/devOps/devops-infra/http/humaparam"
+	"github.com/stanley760/devops/devops-infra/http/humaerr"
+	"github.com/stanley760/devops/devops-infra/http/humaparam"
 )
 
 // optInput 带 Optional query 参数的输入（复现分页筛选的 *int8 语义）。

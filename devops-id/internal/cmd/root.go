@@ -8,11 +8,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/stanley760/devOps/devops-id/internal/config"
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
-	"github.com/stanley760/devOps/devops-infra/logging"
-	"github.com/stanley760/devOps/devops-infra/nacos"
-	"github.com/stanley760/devOps/devops-infra/observability"
+	"github.com/stanley760/devops/devops-id/internal/config"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/logging"
+	"github.com/stanley760/devops/devops-infra/nacos"
+	"github.com/stanley760/devops/devops-infra/observability"
 	"log/slog"
 	"time"
 )
@@ -23,7 +23,7 @@ var obsRuntime *observability.Runtime
 
 var rootCmd = &cobra.Command{
 	Use:   "devops-id",
-	Short: "devOps 分布式 ID 发号服务",
+	Short: "devops 分布式 ID 发号服务",
 
 	// 所有子命令执行前都会先跑这里：初始化日志
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

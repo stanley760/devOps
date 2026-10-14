@@ -1,4 +1,4 @@
-# devOps 任务运行器（替代 Makefile）
+# devops 任务运行器（替代 Makefile）
 #
 # 语法要点（just 与 make 的关键差异）：
 #   - 缩进用【空格】，命令之间不用制表符

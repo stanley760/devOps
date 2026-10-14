@@ -9,7 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 )
 
 func TestToHumaErrorMapsBizStatusAndMessage(t *testing.T) {

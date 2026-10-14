@@ -10,8 +10,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-system/internal/dao"
-	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/dao"
+	"github.com/stanley760/devops/devops-system/internal/model"
 )
 
 // txDB 建 sqlite 内存库并迁移本组测试所需表。

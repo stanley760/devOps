@@ -14,30 +14,30 @@ import (
 
 	"github.com/spf13/cobra"
 
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
-	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
-	httpinfra "github.com/stanley760/devOps/devops-infra/http"
-	"github.com/stanley760/devOps/devops-infra/logging"
-	"github.com/stanley760/devOps/devops-infra/nacos"
-	"github.com/stanley760/devOps/devops-infra/observability"
-	"github.com/stanley760/devOps/devops-infra/security/humakit"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	securitysession "github.com/stanley760/devOps/devops-infra/security/session"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
+	grpcinfra "github.com/stanley760/devops/devops-infra/grpc"
+	httpinfra "github.com/stanley760/devops/devops-infra/http"
+	"github.com/stanley760/devops/devops-infra/logging"
+	"github.com/stanley760/devops/devops-infra/nacos"
+	"github.com/stanley760/devops/devops-infra/observability"
+	"github.com/stanley760/devops/devops-infra/security/humakit"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
+	securitysession "github.com/stanley760/devops/devops-infra/security/session"
 
-	client "github.com/stanley760/devOps/devops-infra/database/mysql"
+	client "github.com/stanley760/devops/devops-infra/database/mysql"
 
-	"github.com/stanley760/devOps/devops-id/pkg/idclient"
-	"github.com/stanley760/devOps/devops-system/internal/app"
-	sysaudit "github.com/stanley760/devOps/devops-system/internal/audit"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/authz"
-	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/dbinit"
-	"github.com/stanley760/devOps/devops-system/internal/middleware"
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/router"
-	"github.com/stanley760/devOps/devops-system/internal/store"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-id/pkg/idclient"
+	"github.com/stanley760/devops/devops-system/internal/app"
+	sysaudit "github.com/stanley760/devops/devops-system/internal/audit"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/authz"
+	"github.com/stanley760/devops/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/dbinit"
+	"github.com/stanley760/devops/devops-system/internal/middleware"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/router"
+	"github.com/stanley760/devops/devops-system/internal/store"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
 )
 
 var confFile string
@@ -46,7 +46,7 @@ var obsRuntime *observability.Runtime
 
 var rootCmd = &cobra.Command{
 	Use:   "devops-system",
-	Short: "devOps 用户权限系统",
+	Short: "devops 用户权限系统",
 
 	// 所有子命令执行前都会先跑这里：初始化日志
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

@@ -5,13 +5,13 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-common/domain/gormx"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain/gormx"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // 审计行列宽（与 model.LoginLog gorm tag 对齐；超长截断保行不丢）。

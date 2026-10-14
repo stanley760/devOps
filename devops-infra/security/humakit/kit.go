@@ -14,11 +14,11 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
-	"github.com/stanley760/devOps/devops-infra/http/response"
-	securityauthz "github.com/stanley760/devOps/devops-infra/security/authz"
-	securityjwt "github.com/stanley760/devOps/devops-infra/security/jwt"
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	"github.com/stanley760/devops/devops-infra/datascope"
+	"github.com/stanley760/devops/devops-infra/http/response"
+	securityauthz "github.com/stanley760/devops/devops-infra/security/authz"
+	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 )
 
 // Middleware huma 中间件类型别名（huma 无独立命名类型）。

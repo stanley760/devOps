@@ -8,8 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
 )
 
 // txKey 事务句柄在 context 中的存放键。

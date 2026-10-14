@@ -8,8 +8,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
-	securitymw "github.com/stanley760/devOps/devops-infra/security/middleware"
+	"github.com/stanley760/devops/devops-infra/datascope"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 )
 
 // errNoScopeSource 解析数据源未注入（fail-closed：解析失败 → 空 Scope）。

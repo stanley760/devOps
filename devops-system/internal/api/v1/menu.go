@@ -4,14 +4,14 @@ package api
 import (
 	"context"
 
-	commonResp "github.com/stanley760/devOps/devops-common/response"
-	"github.com/stanley760/devOps/devops-infra/errs"
-	"github.com/stanley760/devOps/devops-infra/http/humaparam"
-	"github.com/stanley760/devOps/devops-infra/http/response"
+	commonResp "github.com/stanley760/devops/devops-common/response"
+	"github.com/stanley760/devops/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/http/humaparam"
+	"github.com/stanley760/devops/devops-infra/http/response"
 
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/service"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/service"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // MenuHandler 菜单管理接口。

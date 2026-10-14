@@ -7,7 +7,7 @@ package idgen
 
 import (
 	"context"
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"

@@ -7,10 +7,10 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	httpinfra "github.com/stanley760/devOps/devops-infra/http"
-	"github.com/stanley760/devOps/devops-infra/http/apidoc"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/config"
+	httpinfra "github.com/stanley760/devops/devops-infra/http"
+	"github.com/stanley760/devops/devops-infra/http/apidoc"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/config"
 	"net/http"
 )
 

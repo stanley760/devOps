@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-system/internal/domain/shared"
-	"github.com/stanley760/devOps/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/domain/shared"
+	"github.com/stanley760/devops/devops-system/internal/model"
 )
 
 // 领域事件表名。

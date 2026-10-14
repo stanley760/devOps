@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 )
 
 // TestRollingBySize 验证单文件超过 max_size 后会自动切分并压缩历史文件。

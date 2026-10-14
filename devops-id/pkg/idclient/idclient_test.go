@@ -5,8 +5,8 @@ package idclient_test
 
 import (
 	"context"
-	"github.com/stanley760/devOps/devops-id/pkg/idclient"
-	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
+	"github.com/stanley760/devops/devops-id/pkg/idclient"
+	grpcinfra "github.com/stanley760/devops/devops-infra/grpc"
 	"testing"
 	"time"
 )

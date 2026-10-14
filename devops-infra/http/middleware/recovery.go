@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	commonResp "github.com/stanley760/devOps/devops-common/response"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	commonResp "github.com/stanley760/devops/devops-common/response"
+	"github.com/stanley760/devops/devops-infra/errs"
 )
 
 // Recovery panic 统一处理：记录堆栈后返回 500 错误信封。

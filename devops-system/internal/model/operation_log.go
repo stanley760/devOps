@@ -1,7 +1,7 @@
 package model
 
 import (
-	commonaudit "github.com/stanley760/devOps/devops-common/audit"
+	commonaudit "github.com/stanley760/devops/devops-common/audit"
 )
 
 // OperationLog 操作审计表（租户表）。

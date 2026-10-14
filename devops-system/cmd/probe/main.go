@@ -7,15 +7,15 @@ import (
 	"os"
 	"time"
 
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	grpcinfra "github.com/stanley760/devOps/devops-infra/grpc"
-	"github.com/stanley760/devOps/devops-infra/nacos"
+	grpcinfra "github.com/stanley760/devops/devops-infra/grpc"
+	"github.com/stanley760/devops/devops-infra/nacos"
 
-	"github.com/stanley760/devOps/devops-id/pkg/idclient"
+	"github.com/stanley760/devops/devops-id/pkg/idclient"
 )
 
 func main() {

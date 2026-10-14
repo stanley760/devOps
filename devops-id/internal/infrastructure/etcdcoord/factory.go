@@ -4,9 +4,9 @@
 package etcdcoord
 
 import (
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
-	"github.com/stanley760/devOps/devops-id/internal/infrastructure/workerfile"
-	etcdinfra "github.com/stanley760/devOps/devops-infra/etcd"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
+	"github.com/stanley760/devops/devops-id/internal/infrastructure/workerfile"
+	etcdinfra "github.com/stanley760/devops/devops-infra/etcd"
 	"time"
 )
 

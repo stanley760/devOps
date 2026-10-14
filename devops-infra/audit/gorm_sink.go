@@ -16,8 +16,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-infra/database"
+	"github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-infra/database"
 )
 
 // Executor 审计写入所需的数据库执行器。

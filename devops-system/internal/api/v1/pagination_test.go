@@ -11,9 +11,9 @@ import (
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-infra/http/response"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-infra/http/response"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 func TestRoleListPageParamEmbedding(t *testing.T) {

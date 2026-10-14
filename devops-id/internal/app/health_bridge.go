@@ -1,7 +1,7 @@
 package app
 
 import (
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"sync"

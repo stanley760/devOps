@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
 )
 
 func TestClientOptionsUsesConfig(t *testing.T) {

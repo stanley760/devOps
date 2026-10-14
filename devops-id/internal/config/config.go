@@ -5,7 +5,7 @@
 package config
 
 import (
-	"github.com/stanley760/devOps/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/config"
 	"time"
 )
 

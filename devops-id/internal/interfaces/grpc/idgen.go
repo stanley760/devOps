@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	idapp "github.com/stanley760/devOps/devops-id/internal/application/idgen"
-	iddomain "github.com/stanley760/devOps/devops-id/internal/domain/idgen"
-	"github.com/stanley760/devOps/devops-id/pkg/idgenpb"
+	idapp "github.com/stanley760/devops/devops-id/internal/application/idgen"
+	iddomain "github.com/stanley760/devops/devops-id/internal/domain/idgen"
+	"github.com/stanley760/devops/devops-id/pkg/idgenpb"
 )
 
 // maxBatchCount 单次批量取号上限（与领域层共享常量，防止漂移）。

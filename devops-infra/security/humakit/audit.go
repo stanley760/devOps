@@ -10,10 +10,10 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 
-	commonaudit "github.com/stanley760/devOps/devops-common/audit"
-	"github.com/stanley760/devOps/devops-common/auditctx"
-	"github.com/stanley760/devOps/devops-infra/observability"
-	infratenant "github.com/stanley760/devOps/devops-infra/tenant"
+	commonaudit "github.com/stanley760/devops/devops-common/audit"
+	"github.com/stanley760/devops/devops-common/auditctx"
+	"github.com/stanley760/devops/devops-infra/observability"
+	infratenant "github.com/stanley760/devops/devops-infra/tenant"
 )
 
 // ModuleResolver 把路由的 OperationID 解析为审计模块。

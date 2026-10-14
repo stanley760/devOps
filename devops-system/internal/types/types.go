@@ -8,8 +8,8 @@ package types
 import (
 	"errors"
 
-	commontypes "github.com/stanley760/devOps/devops-common/types"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	commontypes "github.com/stanley760/devops/devops-common/types"
+	"github.com/stanley760/devops/devops-infra/errs"
 )
 
 // ID int64 主键的 DTO 形态：JSON 序列化为字符串（定义见 devops-common/types）。

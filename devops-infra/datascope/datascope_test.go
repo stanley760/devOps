@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/stanley760/devOps/devops-infra/datascope"
+	"github.com/stanley760/devops/devops-infra/datascope"
 )
 
 func TestParseDeptIDs(t *testing.T) {

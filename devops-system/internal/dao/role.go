@@ -9,13 +9,13 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/stanley760/devOps/devops-common/domain"
-	"github.com/stanley760/devOps/devops-common/domain/gormx"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-common/domain"
+	"github.com/stanley760/devops/devops-common/domain/gormx"
+	"github.com/stanley760/devops/devops-infra/errs"
 
-	"github.com/stanley760/devOps/devops-system/internal/model"
-	"github.com/stanley760/devOps/devops-system/internal/tenantdb"
-	"github.com/stanley760/devOps/devops-system/internal/types"
+	"github.com/stanley760/devops/devops-system/internal/model"
+	"github.com/stanley760/devops/devops-system/internal/tenantdb"
+	"github.com/stanley760/devops/devops-system/internal/types"
 )
 
 // ListRoles 分页查询角色（筛选 name/code/status）。

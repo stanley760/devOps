@@ -19,7 +19,7 @@ package datascope
 import (
 	"context"
 	"encoding/json"
-	"github.com/stanley760/devOps/devops-infra/errs"
+	"github.com/stanley760/devops/devops-infra/errs"
 	"gorm.io/gorm"
 	"slices"
 	"sort"

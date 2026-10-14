@@ -11,12 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	infracfg "github.com/stanley760/devOps/devops-infra/config"
-	"github.com/stanley760/devOps/devops-infra/database/mysql"
+	infracfg "github.com/stanley760/devops/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/database/mysql"
 
-	"github.com/stanley760/devOps/devops-system/internal/authz"
-	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/dbinit"
+	"github.com/stanley760/devops/devops-system/internal/authz"
+	"github.com/stanley760/devops/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/dbinit"
 )
 
 var migrateCmd = &cobra.Command{

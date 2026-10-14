@@ -7,12 +7,12 @@
 package app
 
 import (
-	"github.com/stanley760/devOps/devops-infra/http"
-	"github.com/stanley760/devOps/devops-system/internal/auth"
-	"github.com/stanley760/devOps/devops-system/internal/config"
-	"github.com/stanley760/devOps/devops-system/internal/middleware"
-	"github.com/stanley760/devOps/devops-system/internal/router"
-	"github.com/stanley760/devOps/devops-system/internal/service"
+	"github.com/stanley760/devops/devops-infra/http"
+	"github.com/stanley760/devops/devops-system/internal/auth"
+	"github.com/stanley760/devops/devops-system/internal/config"
+	"github.com/stanley760/devops/devops-system/internal/middleware"
+	"github.com/stanley760/devops/devops-system/internal/router"
+	"github.com/stanley760/devops/devops-system/internal/service"
 )
 
 // Injectors from wire.go:

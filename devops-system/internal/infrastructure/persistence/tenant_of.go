@@ -3,7 +3,7 @@ package persistence
 import (
 	"context"
 
-	"github.com/stanley760/devOps/devops-infra/tenant"
+	"github.com/stanley760/devops/devops-infra/tenant"
 )
 
 // tenantOf 从上下文取租户 ID。

@@ -9,11 +9,11 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	humagin "github.com/danielgtaylor/huma/v2/adapters/humagin"
 
-	"github.com/stanley760/devOps/devops-infra/http/humaerr"
+	"github.com/stanley760/devops/devops-infra/http/humaerr"
 
-	apiv1 "github.com/stanley760/devOps/devops-system/internal/api/v1"
-	"github.com/stanley760/devOps/devops-system/internal/middleware"
-	"github.com/stanley760/devOps/devops-system/internal/service"
+	apiv1 "github.com/stanley760/devops/devops-system/internal/api/v1"
+	"github.com/stanley760/devops/devops-system/internal/middleware"
+	"github.com/stanley760/devops/devops-system/internal/service"
 )
 
 const systemAPIPrefix = "/system"
