@@ -7,6 +7,11 @@ metadata:
     higress.io/canary: "true"
     higress.io/canary-weight: "10"
     higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
+    # canary 规则命中后走灰度实例，同样需要注入网关身份头。
+    # 注意：Higress 的 canary 分流与 header-control 都作用于最终选中的上游，
+    # 但若 canary 路由缺少本注解，命中灰度流量的请求将因缺少身份头被应用层 403。
+    higress.io/request-header-control-update: |
+      X-Gateway-Token shared-gateway-token-change-me
 spec:
   ingressClassName: higress
   rules:

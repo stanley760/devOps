@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 
 	infracfg "github.com/stanley760/devops/devops-infra/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/stanley760/devops/devops-infra/logging"
 	"github.com/stanley760/devops/devops-infra/nacos"
 	"github.com/stanley760/devops/devops-infra/observability"
+	"github.com/stanley760/devops/devops-infra/security/gateway"
 	"github.com/stanley760/devops/devops-infra/security/humakit"
 	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
 	securitysession "github.com/stanley760/devops/devops-infra/security/session"
@@ -284,6 +286,19 @@ var serverCmd = &cobra.Command{
 			{Name: "devops-id", Check: idc.Ping},
 		}
 		register := app.InitializeHTTP(cfg, kit, authM)
-		return httpinfra.RunWithOptions(cfg.Server, register, obsRuntime, readiness...)
+
+		// 流量入口收口（第三层）：拒绝未经网关的直连请求。
+		// 网关侧以 request-header-control-update 覆盖注入 X-Gateway-Token
+		// （见 deploy/higress/ingresses/devops-system.yaml），客户端伪造无效。
+		// 运维端点不经网关，列入放行名单，否则健康检查与 Prometheus 抓取会被拦。
+		guard := &httpinfra.GuardHooks{Guards: []gin.HandlerFunc{
+			gateway.EnforceFromConfig(cfg.Gateway,
+				// 健康检查与指标：容器编排与 Prometheus 直连抓取。
+				[]string{"/healthz", "/readyz", "/metrics"},
+				// 接口文档挂载点：仅 dev/test 开启（apidoc.enabled 控制）。
+				[]string{cfg.APIDoc.BasePath},
+			),
+		}}
+		return httpinfra.RunWithOptions(cfg.Server, register, obsRuntime, guard, readiness...)
 	},
 }

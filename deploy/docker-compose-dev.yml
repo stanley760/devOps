@@ -1,4 +1,11 @@
 # 单节点 Docker 开发环境。生产部署请使用 docker-compose.yml。
+#
+# —— 与生产 compose 的隔离差异（务必注意）——
+# 生产形态下 devops-system 由容器承载，edge/infra 双网络可强制「只从网关进」。
+# dev 形态下业务服务以 go run 跑在宿主机 127.0.0.1:9999，且所有中间件都发布了
+# 宿主机端口供本地直连调试，因此**无法**做网络隔离（隔离会把调试链路一并切断）。
+# dev 的流量收口只依赖应用层守卫，且 system-dev.yaml 中 require_token=false，
+# 即本地 curl 直连是刻意允许的。生产安全边界见 docker-compose.yml 与 higress/README.md。
 name: devops_dev
 
 services:

@@ -31,11 +31,23 @@ func Run(cfg config.ServerConfig, register Register, readiness ...ReadinessCheck
 	return RunWithOptions(cfg, register, nil, readiness...)
 }
 
+// GuardHooks 业务侧注入的全局中间件，在运维端点挂载之后、业务路由之前生效。
+//
+// 之所以做成扩展点而非把流量入口守卫写死在 infra：守卫（拒绝未经网关的直连请求）
+// 是对外暴露 HTTP 的业务才需要的策略，且 Secret 由业务配置持有；infra 不应
+// 感知具体业务的安全开关。
+type GuardHooks struct {
+	// Guards 在运维端点（/healthz /readyz /metrics）挂载后按序注册。
+	// 这些端点不经网关，必须在守卫之前挂载，否则健康检查与 Prometheus 抓取会被拦。
+	Guards []gin.HandlerFunc
+}
+
 // RunWithOptions 在现有 HTTP 装配上接入 OTel trace/RED 中间件与 /metrics。
-// observability 运行时可为 nil，保持既有调用方零改动。
-func RunWithOptions(cfg config.ServerConfig, register Register, obs *observability.Runtime, readiness ...ReadinessCheck) error {
+// observability 运行时可为 nil，保持既有调用方零改动；
+// guard 为 nil 时不注册任何业务守卫，同样保持既有调用方零改动。
+func RunWithOptions(cfg config.ServerConfig, register Register, obs *observability.Runtime, guard *GuardHooks, readiness ...ReadinessCheck) error {
 	gin.SetMode(ginMode())
-	r, err := newRouter(cfg, register, readiness, obs)
+	r, err := newRouter(cfg, register, readiness, obs, guard)
 	if err != nil {
 		return err
 	}
@@ -69,7 +81,7 @@ func RunWithOptions(cfg config.ServerConfig, register Register, obs *observabili
 	return nil
 }
 
-func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck, obs ...*observability.Runtime) (*gin.Engine, error) {
+func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck, obs []*observability.Runtime, guard ...*GuardHooks) (*gin.Engine, error) {
 	r := gin.New()
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("配置可信代理失败: %w", err)
@@ -113,6 +125,14 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 			Data: gin.H{"status": "unready", "ready": ready, "unready": unready},
 		})
 	})
+	// 业务守卫必须在运维端点之后、业务路由之前：前者供直连探活，后者强制收口。
+	if len(guard) > 0 && guard[0] != nil {
+		for _, g := range guard[0].Guards {
+			if g != nil {
+				r.Use(g)
+			}
+		}
+	}
 	if register != nil {
 		register(r)
 	}

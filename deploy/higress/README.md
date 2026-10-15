@@ -38,9 +38,15 @@ Client ──▶ Higress Gateway(:8080/:8443)
            Nacos 服务发现 ──▶ devops-system / devops-system-gray（注册于 DEVOPS_GROUP）
 ```
 
-**安全边界约定**：`devops-system:9999` 仅在容器网络内部暴露，永远不发布到宿主机
-端口或公网负载均衡；运维端点（`/metrics` `/apidoc` `/healthz` `/readyz`）不经
-公网网关暴露，Ingress 只路由 `/api` 与 `/.well-known/jwks.json`。
+**安全边界**：`devops-system:9999` 不发布到宿主机端口或公网负载均衡；运维端点
+（`/metrics` `/apidoc` `/healthz` `/readyz`）不经公网网关暴露，Ingress 只路由
+`/system` 与 `/.well-known/jwks.json`。
+
+> ⚠️ 「不发布到宿主机」只是**第一道**防线，不足以保证流量入口统一。
+> 同网络内的任何容器（如 MySQL、Redis、Nacos 容器）都能直连 `devops-system:9999`
+> 绕过网关，此时网关层能力全部失效：限流失效、GeoIP 注头消失（登录审计的
+> `X-Higress-Geo-*` 四字段全空）、灰度失效、CORS 失效。
+> 因此本项目采用**三层收口**，详见第七章 7.1。
 
 ---
 
@@ -77,7 +83,7 @@ sh deploy/dev.sh sync       # 或 .\deploy\dev.ps1 -Command sync
 |---|---|---|
 | 控制台「服务来源」显示 `higress-console` 而非 `devops-nacos` | 卷里是 all-in-one 首次启动生成的默认 McpBridge，git 配置没灌入 | 执行 `sync`；确认 `/data/mcpbridges/default.yaml` 里是 `devops-nacos` |
 | 路由 404 / Ingress 不生效 | 同上，`/data/ingresses/` 为空 | 同上 |
-| Docker 引擎 500 / CPU 异常高 | ① Windows bind mount（已改命名卷）；② all-in-one 内置 prometheus/loki/promtail/grafana 与外部栈重复运行；③ `higress-config` 里 `proxyStatsMatcher.inclusionRegexps: [.*]` 导致 Envoy 全量高基数指标 | 用命名卷；禁用内置可观测组件（见「七、可观测性」）；`sync` 已内含该修复（见下行） |
+| Docker 引擎 500 / CPU 异常高 | ① Windows bind mount（已改命名卷）；② all-in-one 内置 prometheus/loki/promtail/grafana 与外部栈重复运行；③ `higress-config` 里 `proxyStatsMatcher.inclusionRegexps: [.*]` 导致 Envoy 全量高基数指标 | 用命名卷；禁用内置可观测组件（见「八、可观测性」）；`sync` 已内含该修复（见下行） |
 | envoy 启动 ~1 分钟后消失，8080 TCP 通但空回复（8001 正常） | `higress-config` 的 `inclusionRegexps: [.*]`（**新卷每次首启都会自动重新生成**，且文件为 CRLF 行尾）→ envoy 统计表爆内存，被 cgroup OOM 杀；supervisord 视其 exit 0 为 expected 不自动拉起 | `sh deploy/dev.sh sync`（停机删配置再启动）；dev compose 内存上限已提 2g 兜底 |
 | all-in-one 内部各进程批量 exited | 容器停止/重启的 supervisor shutdown 序列，日志形如 `exited: prometheus (exit status 0; expected)` | 先看 `docker compose ps` 确认容器是否在重启循环 |
 
@@ -308,7 +314,109 @@ system 持私钥签发，Higress 只配公钥 JWKS。**JWT 密钥不得写入本
 
 ---
 
-## 七、可观测性
+## 七、流量入口统一管理（三层收口）
+
+### 7.1 为什么需要收口
+
+只要 `devops-system:9999` 在容器网络内可达，任何一个被攻陷或误配的容器都能直连后端。
+此时 **JWT 鉴权仍然有效**（它在应用内部），但**网关层能力全部失效**：
+
+| 失效的能力 | 后果 |
+| --- | --- |
+| `cluster-key-rate-limit` | 限流形同虚设，可直接打后端 |
+| `geo-ip` 注头 | 登录审计 `X-Higress-Geo-*` 四字段全空，审计链断裂且无法区分正常与旁路请求 |
+| `canary` 灰度 | 可绕过灰度直接打生产实例 |
+| `cors` | 跨域策略失效 |
+| 访问日志 | 入口日志缺失，事后无法审计 |
+
+### 7.2 三层模型
+
+| 层 | 机制 | 强制力 | 生效形态 |
+| --- | --- | --- | --- |
+| 第一层 网络 | K8s NetworkPolicy | **强制** | K8s |
+| 第一层 网络 | compose `edge`/`infra` 双网络 + `internal: true` | 部分强制（挡基础设施侧旁路） | Docker |
+| 第二层 网关 | `higress.io/request-header-control-update` 注入 `X-Gateway-Token` | 需配合第三层 | Docker / K8s |
+| 第三层 应用 | `devops-infra/security/gateway` 中间件校验，失败 403 | **强制** | Docker / K8s |
+
+**Docker 形态**：compose 里 `devops-system` 只 `expose: "9999"` 无 `ports`，宿主机层面
+已无法旁路；再叠加 `edge`/`infra` 网络隔离，MySQL/Redis/Nacos/etcd 容器不在业务网络内。
+真正的强制手段是第三层守卫——因为 compose 无法对单个端口做「只允许网关访问」的 ACL。
+
+**K8s 形态**：第一层 NetworkPolicy 真正闭合（应用层守卫退化为 defense-in-depth）。
+`deploy/k8s/networkpolicy.yaml` 中 `allow-gateway-to-system` 让 9999 只接受来自
+`higress-system` namespace 的 `app=higress` Pod。
+
+### 7.3 第二层：身份头注入（成败点）
+
+⚠️ **必须用 `request-header-control-update`，不能用 `request-header-control-add`。**
+
+- `add`：把值**拼接在原值之后**。客户端自带 `X-Gateway-Token: xxx` 会与注入值共存，
+  应用侧比对仍可能命中 → 伪造头可通过整套机制。
+- `update`：**无条件覆盖**客户端同名头，客户端伪造失效。
+
+三份 ingress 都要注入（`devops-system.yaml` / `devops-system-canary.yaml` /
+`devops-system-gray-route.yaml`），漏掉任一份，命中该路由的请求会因缺少身份头被 403。
+
+### 7.4 第三层：应用守卫
+
+中间件位于 `devops-infra/security/gateway`，用 `crypto/subtle.ConstantTimeCompare`
+做**常数时间**比较（防时序侧信道），失败统一返回 403 且不区分「头缺失」与「头错误」
+（防探测）。挂载位置在 `devops-infra/http/server.go`：运维端点之后、业务路由之前，
+否则 `/healthz` `/readyz` `/metrics` 会被拦。
+
+配置项（`deploy/config/system-prod.yaml`）：
+
+```yaml
+gateway:
+  require_token: true
+  token: "shared-gateway-token-change-me"   # 必须与 ingress 注解逐字一致
+  exempt_paths: []
+```
+
+**secret 为空或 `require_token: false` 时守卫直通**，未启用环境零改动，也不会因
+漏配密钥导致全站 403。dev 环境刻意关闭：业务服务以 `go run` 跑在宿主机
+`127.0.0.1:9999`，本地 curl 直连调试会被 403 显著拖慢。
+
+### 7.5 验证命令
+
+```bash
+# 1) 确认 token 一致（两侧必须完全相同）
+grep -r "X-Gateway-Token" deploy/higress/ingresses/
+grep -A3 "^gateway:" deploy/config/system-prod.yaml
+
+# 2) 经网关访问：应 200
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H 'Host: api.devops.local' http://localhost:8080/system/actuator/health
+
+# 3) 直连容器绕过网关：应 403（第三层守卫生效）
+docker compose -f deploy/docker-compose.yml exec devops-system \
+  wget -qO- --header='Host: x' http://127.0.0.1:9999/system/actuator/health
+
+# 4) 伪造身份头直连：仍应 403
+docker compose -f deploy/docker-compose.yml exec devops-system \
+  wget -qO- --header='X-Gateway-Token: shared-gateway-token-change-me' \
+  http://127.0.0.1:9999/system/actuator/health
+
+# 5) K8s 确认 NetworkPolicy 真的被 CNI 执行（见 networkpolicy.yaml 顶部警告）
+kubectl -n devops get networkpolicy
+# 判据：在 devops-system Pod 内 curl 其他 Pod（如 mysql:3306）应连接超时，
+#      仅网关来源可通。apply 成功不代表 CNI 执行，需实测。
+```
+
+### 7.6 常见误区
+
+- **只做 compose 网络隔离就以为收口了**：Docker 无端口级 ACL，同 edge 网络的容器
+  仍可旁路。必须叠加第三层。
+- **用 `request-header-control-add`**：伪造头会生效，等于没做。必须 `update`。
+- **只改主 ingress 忘了 canary / gray 路由**：灰度流量全量 403。
+- **secret 配空**：`Enforce` 会直接直通（设计如此，避免误伤），但意味着收口静默失效。
+  上生产前务必 grep 确认 token 非空。
+- **NetworkPolicy apply 后不测**：kind/k3s 默认 kindnet 不支持 NetworkPolicy，
+  apply 无报错但完全无效。
+
+---
+
+## 八、可观测性
 
 外部栈（dev compose / 生产均适用）：**Jaeger（trace）+ Prometheus（指标）+
 Grafana（看板）**，配置在 `deploy/prometheus/` 与 `deploy/grafana/`。
@@ -335,9 +443,9 @@ Grafana（看板）**，配置在 `deploy/prometheus/` 与 `deploy/grafana/`。
 
 ---
 
-## 八、Docker 生产级部署方案
+## 九、Docker 生产级部署方案
 
-### 8.1 为什么不能用 all-in-one 上生产
+### 9.1 为什么不能用 all-in-one 上生产
 
 all-in-one 把 pilot/controller、gateway、console、内置可观测组件塞在一个容器里，
 supervisord 拉起所有进程：无法独立扩缩容（网关是无状态热点组件，controller 不是）、
@@ -358,7 +466,7 @@ supervisord 拉起所有进程：无法独立扩缩容（网关是无状态热�
 └────────────────────────────────────────────────┘
 ```
 
-### 8.2 生产 compose 模板
+### 9.2 生产 compose 模板
 
 > 组件镜像与启动参数以官方 **higress-standalone**
 > （github.com/higress-group/higress-standalone）仓库的 docker-compose 为准——
@@ -426,7 +534,7 @@ volumes:
   gateway-data:
 ```
 
-### 8.3 生产化要点清单
+### 9.3 生产化要点清单
 
 **配置管理**
 - 生产用 **Nacos 作为 Higress 配置后端**（controller 直连 Nacos），不再使用文件
@@ -463,7 +571,7 @@ volumes:
 
 ---
 
-## 九、Kubernetes 部署（正式生产推荐）
+## 十、Kubernetes 部署（正式生产推荐）
 
 规模化、高可用、滚动升级需求强烈时迁移 K8s，见 `deploy/k8s/devops.yaml`：
 
@@ -473,7 +581,18 @@ helm install higress -n higress-system higress.io/higress --create-namespace
 kubectl apply -f deploy/higress/mcpbridges/default.yaml
 kubectl apply -f deploy/higress/ingresses
 kubectl apply -f deploy/higress/wasmplugins
+kubectl apply -f deploy/k8s/devops.yaml
+# 网络收口：让 devops-system:9999 只接受来自 higress-system 的流量。
+# 必须先确认 CNI 支持 NetworkPolicy（Calico/Cilium），kindnet 不支持。
+kubectl apply -f deploy/k8s/networkpolicy.yaml
 ```
+
+K8s 形态下第一层收口是**真正强制**的，`devops-system` 被 NetworkPolicy 挡住后
+任何旁路都会连接超时（详见「7.2 三层模型」）。迁移时注意两处必须同步改：
+- `deploy/k8s/devops.yaml` 中 Secret 的 `gateway.token` 与 Ingress 注解的
+  `X-Gateway-Token` 需逐字一致，否则全部 403；
+- `allow-observe-and-probe` 里的 `ipBlock.cidr` 要改成实际集群节点网段，
+  放 `0.0.0.0/0` 等于没放；网段写错会导致 kubelet 探针失败、Pod 被反复重启。
 
 迁移时需要调整的地址类配置：
 - `mcpbridges/default.yaml` 的 `domain` 改为实际 Nacos Service

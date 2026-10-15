@@ -52,3 +52,18 @@ server:
   trusted_proxies:
     - "172.16.0.0/12"
     - "192.168.0.0/16"
+
+# 流量入口收口：拒绝未经 Higress 的直连请求。
+# 网关侧以 request-header-control-update 覆盖注入 X-Gateway-Token（见
+# deploy/higress/ingresses/devops-system.yaml），客户端自带同名头会被网关覆盖，
+# 因此不可伪造。docker compose 无 NetworkPolicy，这是非 K8s 形态下唯一真正
+# 强制的手段——expose 只挡住宿主机，挡不住同网络内的其他容器。
+#
+# token 必须与 ingress 注解中的值逐字一致。生产禁止使用此默认值，
+# 由密钥管理注入（与下方 jwt.signing_key 同一原则）。
+gateway:
+  require_token: true
+  token: "shared-gateway-token-change-me"
+  # 追加放行名单（相对路径）：/healthz /readyz /metrics 与 apidoc.base_path
+  # 已由代码统一放行，此处仅列额外业务端点。
+  exempt_paths: []

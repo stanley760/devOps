@@ -1,0 +1,119 @@
+# 网络策略：强制流量入口统一（K8s 形态的第一层收口）
+#
+# 前置条件：集群 CNI 必须支持 NetworkPolicy（Calico / Cilium / Antrea 等）。
+# kind / k3s 默认的 kindnet 不支持，apply 后不会报错但**完全不生效**，
+# 用下面「验证」一节的方法确认，不要凭 apply 成功就认为已收口。
+#
+# 部署：
+#   kubectl apply -f deploy/k8s/devops.yaml
+#   kubectl apply -f deploy/k8s/networkpolicy.yaml
+#
+# 语义说明：
+#   NetworkPolicy 是「白名单」而非「黑名单」——一旦某个 Pod 被任何 policy 选中，
+#   该 Pod 就只接受 policy 中列出的入站流量，未列出的一律拒绝。
+#   因此必须同时给出「允许谁进」的规则，只写拒绝规则是无效的。
+#
+# 三条策略的分工：
+#   default-deny-all      兜底：namespace 内所有 Pod 拒绝一切入站
+#   allow-gateway-to-system  只有网关能访问 devops-system:9999（核心收口）
+#   allow-observe-and-probe   放行 Prometheus 抓取与 kubelet 探针，否则 Pod 起不来
+#
+# 前提：Higress 按官方 Helm 装在 higress-system namespace，Pod 带 app=higress 标签。
+# 若标签不同，用 kubectl -n higress-system get pod --show-labels 确认后改下面的
+# namespaceSelector + podSelector。同理 devops-system 需带 app=devops-system。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: devops
+spec:
+  # 不写 selector = 选中本 namespace 全部 Pod
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# 核心收口：devops-system 的业务端口只接受来自 Higress 的流量。
+# 效果：任何 Pod（哪怕同 namespace、哪怕拿到了数据库密码）都无法直连
+# devops-system:9999 绕过网关，绕行即断连。K8s 形态下这一层是真正强制的，
+# 应用层守卫退化为 defense-in-depth。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-system
+  namespace: devops
+spec:
+  podSelector:
+    matchLabels:
+      app: devops-system
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: higress-system
+          podSelector:
+            matchLabels:
+              app: higress
+      ports:
+        - protocol: TCP
+          port: 9999
+---
+# 放行 kubelet 探针与 Prometheus 抓取。
+# kubelet 探针源自节点 IP（不在任何 namespaceSelector 里），若不放行，
+# livenessProbe 会持续失败并导致 Pod 被反复重启——这是加 NetworkPolicy 最常见的事故。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-observe-and-probe
+  namespace: devops
+spec:
+  podSelector:
+    matchLabels:
+      app: devops-system
+  policyTypes:
+    - Ingress
+  ingress:
+    # 探针：来自节点，K8s 没有可用的 namespace 标签，用 ipBlock 放开私网网段。
+    # 按实际集群节点网段调整；网段收得越紧越好，放 0.0.0.0/0 等于没放。
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 9999
+    # Prometheus 抓取 /metrics。与网关同端口，故合并进上面规则，
+    # 若 Prometheus 在独立 namespace，把它的标签补进下面的 from 列表。
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           kubernetes.io/metadata.name: monitoring
+---
+# devops-id 只接受 devops-system 的 gRPC 调用。
+# 它不对外暴露任何 HTTP 接口，因此不放行任何网关入站。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-system-to-id
+  namespace: devops
+spec:
+  podSelector:
+    matchLabels:
+      app: devops-id
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: devops-system
+      ports:
+        - protocol: TCP
+          port: 9990
+    # 指标端口（9991）供 Prometheus 抓取，按需放开
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 9991

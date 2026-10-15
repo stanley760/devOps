@@ -21,6 +21,14 @@
 #     --endpoints=http://etcd:2379 get --prefix idgen/snowflake/
 #
 # 生产提示：本文件密码均为本地默认值；K8s 部署见 deploy/k8s/devops.yaml
+#
+# —— 网络隔离（流量入口收口第一层）——
+#   edge  ：仅网关 + 业务服务。基础设施容器不在此网络，无法直连 devops-system:9999。
+#   infra ：internal: true，无外网出口，所有中间件与业务服务在此通信。
+#   业务服务同时挂两个网络：既能被网关访问（edge），又能访问数据库等中间件（infra），
+#   同时经 edge 保留出网能力（对接第三方 API / webhook）。
+#   注意：所有服务均显式声明 networks，default 网络不会创建；
+#   新增服务若漏写 networks 会落到 default 网络而脱离隔离，务必显式声明。
 name: devops
 
 services:
@@ -43,6 +51,9 @@ services:
       retries: 30
       start_period: 15s
     restart: unless-stopped
+    networks:
+      - infra
+
   nacos:
     image: nacos/nacos-server:v2.4.3
     environment:
@@ -65,6 +76,8 @@ services:
       retries: 30
       start_period: 15s
     restart: unless-stopped
+    networks:
+      - infra
 
   redis:
     image: redis:7-alpine
@@ -77,6 +90,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    networks:
+      - infra
 
   # Higress all-in-one 仅适合本地/体验环境；生产请使用 Helm 部署到 K8s。
   higress:
@@ -92,6 +107,9 @@ services:
       nacos:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - edge                 # 流量入口：与业务服务同网，才能把请求转到 9999
+      - infra                # 同时需要访问 nacos / redis（McpBridge 服务来源）
 
   # devops-id snowflake worker 协调依赖
   etcd:
@@ -112,6 +130,8 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      - infra
 
   devops-id:
     build:
@@ -132,6 +152,8 @@ services:
     # 优雅退出：程序收到 SIGTERM 后 revoke lease 立即释放 worker 槽位
     stop_grace_period: 30s
     restart: unless-stopped
+    networks:
+      - infra                # 仅 ID 生成，无对外流量，无需 edge
 
   devops-system:
     build:
@@ -154,6 +176,9 @@ services:
       devops-id:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - edge                 # 网关唯一入口：只在此网络暴露 9999
+      - infra                # 访问 mysql/redis/nacos；同时经 edge 保留出网能力
 
   devops-system-gray:
     build:
@@ -176,6 +201,17 @@ services:
       devops-id:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - edge
+      - infra
+
+networks:
+  # 流量入口网络：只有网关与业务服务。基础设施容器不在此网络，
+  # 因此无法绕过网关直连 devops-system:9999。
+  edge:
+  # 中间件网络：internal: true 表示容器无外网出口，只能被同网络服务访问。
+  infra:
+    internal: true
 
 volumes:
   mysql-data:

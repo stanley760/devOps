@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stanley760/devops/devops-infra/config"
+	"github.com/stanley760/devops/devops-infra/security/gateway"
 	securityjwt "github.com/stanley760/devops/devops-infra/security/jwt"
 )
 
@@ -26,6 +27,7 @@ type Config struct {
 	Nacos         config.NacosConfig  `mapstructure:"nacos"`
 	Observability ObservabilityConfig `mapstructure:"observability"`
 	APIDoc        APIDocConfig        `mapstructure:"apidoc"`
+	Gateway       gateway.Config      `mapstructure:"gateway"`
 }
 
 // JWTConfig JWT 双 token 配置。

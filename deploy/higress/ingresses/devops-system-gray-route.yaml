@@ -8,6 +8,11 @@ metadata:
   namespace: higress-system
   annotations:
     higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
+    # 与主路由同口径注入网关身份头，否则灰度路由经网关的请求会被应用层守卫拦截。
+    # 必须是 control-update（覆盖），add 为拼接，客户端伪造头将生效。密钥须与
+    # devops-system 的 gateway.token 一致，生产由密管注入。
+    higress.io/request-header-control-update: |
+      X-Gateway-Token shared-gateway-token-change-me
 spec:
   ingressClassName: higress
   rules:

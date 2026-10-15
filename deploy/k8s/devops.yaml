@@ -17,6 +17,7 @@
 #   - devops-system 无状态（会话在 Redis），可任意水平扩
 #   - snowflake 强依赖时钟：节点须开 NTP/chrony，回拨会被拒绝发号
 #   - K8s ≥1.24 可用原生 grpc 探针探测 devops-id 健康状态
+#   - 网络隔离见同目录 networkpolicy.yaml（需 CNI 支持 NetworkPolicy，如 Calico/Cilium）
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -88,6 +89,12 @@ stringData:
     apidoc:
       enabled: false          # prod 必须关闭接口文档
       base_path: /apidoc
+    # 流量入口收口（应用层守卫）：必须与 Higress ingress 的
+    # higress.io/request-header-control-update 注入值逐字一致，否则全部 403。
+    gateway:
+      require_token: true
+      token: "CHANGE_ME_SHARED_GATEWAY_TOKEN"   # 与 ingress 注解同步替换
+      exempt_paths: []
     server:
       trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []
 ---
