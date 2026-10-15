@@ -28,7 +28,7 @@ type ReadinessCheck struct {
 }
 
 func Run(cfg config.ServerConfig, register Register, readiness ...ReadinessCheck) error {
-	return RunWithOptions(cfg, register, nil, readiness...)
+	return RunWithOptions(cfg, register, nil,nil, readiness...)
 }
 
 // GuardHooks 业务侧注入的全局中间件，在运维端点挂载之后、业务路由之前生效。
@@ -81,14 +81,14 @@ func RunWithOptions(cfg config.ServerConfig, register Register, obs *observabili
 	return nil
 }
 
-func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck, obs []*observability.Runtime, guard ...*GuardHooks) (*gin.Engine, error) {
+func newRouter(cfg config.ServerConfig, register Register, readiness []ReadinessCheck, obs *observability.Runtime, guard ...*GuardHooks) (*gin.Engine, error) {
 	r := gin.New()
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("配置可信代理失败: %w", err)
 	}
-	if len(obs) > 0 && obs[0] != nil {
-		r.Use(obs[0].Middleware())
-		r.Use(obs[0].MetricsMiddleware())
+	if obs != nil {
+		r.Use(obs.Middleware())
+		r.Use(obs.MetricsMiddleware())
 	}
 	r.Use(middleware.Recovery())
 	r.Use(middleware.AccessLog())
@@ -96,8 +96,8 @@ func newRouter(cfg config.ServerConfig, register Register, readiness []Readiness
 	r.NoRoute(func(c *gin.Context) { response.Fail(c, errs.CodeNotFound, "接口不存在") })
 	r.NoMethod(func(c *gin.Context) { response.Fail(c, errs.CodeMethodNotAllowed, errs.ErrMethodNotAllowed.Msg) })
 	r.GET("/healthz", func(c *gin.Context) { response.OK(c, gin.H{"status": "ok"}) })
-	if len(obs) > 0 && obs[0] != nil && obs[0].MetricsHandler != nil {
-		r.GET("/metrics", gin.WrapH(obs[0].MetricsHandler))
+	if obs != nil && obs.MetricsHandler != nil {
+		r.GET("/metrics", gin.WrapH(obs.MetricsHandler))
 	}
 	r.GET("/readyz", func(c *gin.Context) {
 		var ready, unready []string

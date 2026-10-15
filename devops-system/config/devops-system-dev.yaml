@@ -92,5 +92,5 @@ gateway:
   # 本地进程开发：流量入口守卫默认关闭，便于 curl 直连 127.0.0.1:9999 调试。
   # 验证守卫时置 require_token: true，并用
   # curl -H "X-Gateway-Token: shared-gateway-token-change-me" 直连。
-  require_token: false
+  require_token: true
   token: "shared-gateway-token-change-me"

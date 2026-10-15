@@ -20,7 +20,7 @@ func TestReadyZReportsCheckStatus(t *testing.T) {
 	router, err := newRouter(config.ServerConfig{}, nil, []ReadinessCheck{
 		{Name: "mysql", Check: func(context.Context) error { return nil }},
 		{Name: "redis", Check: func(context.Context) error { return errBoom }},
-	})
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestReadyZReportsCheckStatus(t *testing.T) {
 
 func TestRouterDoesNotHandleCORS(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, err := newRouter(config.ServerConfig{}, nil, nil)
+	router, err := newRouter(config.ServerConfig{}, nil, nil,nil,nil)
 	if err != nil {
 		t.Fatal(err)
 	}
