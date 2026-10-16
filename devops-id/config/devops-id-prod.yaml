@@ -6,7 +6,7 @@ log:
 
 idgen:
   leaf_name: devops-id
-  worker_cache: "data"
+  worker_cache: /app/data
   allow_local_fallback: false
   max_biz_tag_len: 64
   max_generators: 1024

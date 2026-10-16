@@ -6,7 +6,7 @@ log:
 
 idgen:
   leaf_name: devops-id
-  worker_cache: "data"
+  worker_cache: ../data
   allow_local_fallback: true   # dev 单实例：etcd 不可用时允许本地降级
 
 etcd:                    # snowflake worker 协调（dev compose 映射到宿主机 2379）

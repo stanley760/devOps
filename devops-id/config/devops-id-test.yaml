@@ -5,7 +5,7 @@ log:
   
 idgen:
   leaf_name: devops-id
-  worker_cache: "data"
+  worker_cache: /app/data
   allow_local_fallback: false  # fail-closed
 
 etcd:                    # snowflake worker 协调

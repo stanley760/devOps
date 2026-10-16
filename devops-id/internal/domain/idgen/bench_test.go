@@ -166,7 +166,7 @@ func BenchmarkNextSerial(b *testing.B) {
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := gen.next(ctx); err != nil {
 			b.Fatal(err)
 		}
@@ -183,7 +183,7 @@ func BenchmarkNextRawCPU(b *testing.B) {
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := gen.next(ctx); err != nil {
 			b.Fatal(err)
 		}

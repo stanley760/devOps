@@ -11,7 +11,7 @@ log:
 
 idgen:
   leaf_name: probe-leaf
-  worker_cache: data
+  worker_cache: /app/data
 
 etcd:
   endpoints:
