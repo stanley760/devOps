@@ -7,11 +7,10 @@ metadata:
     higress.io/canary: "true"
     higress.io/canary-weight: "10"
     higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
-    # canary 规则命中后走灰度实例，同样需要注入网关身份头。
-    # 注意：Higress 的 canary 分流与 header-control 都作用于最终选中的上游，
-    # 但若 canary 路由缺少本注解，命中灰度流量的请求将因缺少身份头被应用层 403。
-    higress.io/request-header-control-update: |
-      X-Gateway-Token shared-gateway-token-change-me
+    # 流量入口身份由 jwt-auth 插件注入的 JWT claims 表达，无需静态身份头注解。
+    #
+    # 注：jwt-auth 的 matchRules 按 Ingress 资源挂载，canary 路由由 Higress 合并进
+    # 主路由 devops-system，故主路由命中规则即覆盖灰度流量，无需在此重复配置插件。
 spec:
   ingressClassName: higress
   rules:
@@ -19,7 +18,9 @@ spec:
       http:
         paths:
           # 与 devops-system.yaml 同口径：仅业务 API 与 JWKS，运维端点不经公网网关暴露。
-          - path: /api
+          # ⚠️ 此前误写为 /api，但后端 huma 路由挂在 /system 前缀下（systemAPIPrefix），
+          # 该前缀匹配到的请求全被后端 404，canary 10% 权重分流实际从未生效。
+          - path: /system
             pathType: Prefix
             backend:
               resource:

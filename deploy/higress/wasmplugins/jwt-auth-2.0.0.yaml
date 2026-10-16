@@ -1,0 +1,106 @@
+# JWT 认证（替代静态 X-Gateway-Token 的流量入口身份校验）
+#
+# 为什么不用控制台路由面板的「认证方式」：那是内置 key-auth 的快捷入口，只能填
+# 静态消费者名列表，本质仍是静态密钥——正是本文件要替换的东西。jwt-auth 是独立
+# WasmPlugin，经 matchRules 的 ingress 字段挂到路由上。
+#
+# ⚠️ global_auth 必须为 false。这是本文件最关键的一行：
+#   true  = 插件对网关内所有路由全局生效，包括 /system/api/v1/auth/login →
+#           登录接口要求携带 JWT，而此时用户还没有 token → 无人能登录（系统自锁）；
+#           同理 refresh 也被拦，access token 过期后永远换不到新的。
+#   false = 只对 matchRules 命中的路由生效，devops-system-public 因此豁免。
+# 官方明确要求：同一规则内「鉴权配置」与「认证配置」不可共存，故此处不写 allow。
+#
+# 匿名端点靠独立 ingress + Higress 最长前缀匹配绕开（见
+# ingresses/devops-system-public.yaml）：插件 matchRules 不支持按 URL 路径匹配。
+#
+# 公钥来源：devops-system/config/devops-system-dev.yaml 的 jwt.signing_key
+# （PKCS#8 RSA 2048）经 `openssl rsa -noout -modulus` 导出 n，e=65537(AQAB)，
+# kid/iss 与签发方严格一致，并做「私钥签名→公钥验签」闭环自校验（Verified OK）。
+# 生产换密钥后必须重新导出本段，否则全量 401。插件仅含公钥，可入库。
+#
+# ⚠️ all-in-one（dev）形态的 url 必须用本地 plugin-server 地址，不能用官方文档的
+#   oci://...:2.0.0。oci:// 需 controller 主动拉取镜像并落盘，file 后端 + all-in-one
+#   下不触发。本目录其余插件（cors / geo-ip）同样都是 localhost:8002，保持一致。
+#   K8s 形态若 controller 能拉取镜像可换回 oci://。已实测 plugin-server 内置该
+#   插件（GET /plugins/jwt-auth/2.0.0/plugin.wasm 返回 200、约 2.9MB，
+#   大体积对应 wasm-go 实现，故 remote_jwks 可用）。
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: jwt-auth-2.0.0
+  namespace: higress-system
+  # 控制台「插件配置」页按 label 归类展示；与 cors 插件同结构，缺失不影响加载。
+  labels:
+    higress.io/resource-definer: higress
+    higress.io/wasm-plugin-name: jwt-auth
+    higress.io/wasm-plugin-built-in: "true"
+spec:
+  url: http://localhost:8002/plugins/jwt-auth/2.0.0/plugin.wasm
+  # 必须显式为 false（默认值即 false）：为 true 时 defaultConfig 整体失效，
+  # 配合下面的 matchRules.config: {} 会导致插件无 consumer 配置，真 token 也被
+  # 403 Access Denied。留此字段是为了把「与 defaultConfigDisable 的关系」写死在
+  # 配置里，避免后来者误加 true。
+  defaultConfigDisable: false
+  defaultConfig:
+    global_auth: false
+    consumers:
+      - name: devops-system
+        # 必须与 payload 里的 iss 逐字一致，否则 401 Jwt verification fails。
+        issuer: devops
+        jwks: |
+          {
+            "keys": [
+              {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "kid": "devops-system-rs256-1",
+                "alg": "RS256",
+                "n": "xxX85-SS5TQOGv5LICViCm-XbOeHzmaKhKxmikZOnN1vPHLTgALG3BNZUL6dAhJlQYs2Fi78vJQIZ5dx2luNrDrpeXjY7BR1dj5_1X_TMgKHOUDLC68E1n4SRLGsQ_YzEr3kXKwxUWWM0wPKFkp__Lk8Jb0iD7_J7krvEHZ4h4BkK_VzsDG41nL2lc8M-oDF3P3QN9WV0XRGDDnihgnvrvNkD1KCR5WDgoKHYjQ-QscI4aSUSoFkjeDpE1YLa4KcJ5KeZB00m26217AusJl6pzl9h_4nz10Y4TsswVkSC88fS_CqTpyyB2GWAvbPyDsnteR5MQySJXt0dQjn4JUUIQ"
+              }
+            ]
+          }
+        # claims → 内部请求头。override 默认 true，客户端伪造同名头会被覆盖，
+        # 与 request-header-control-update 同一原则。
+        claims_to_headers:
+          - claim: uid
+            header: X-Jwt-Uid
+          - claim: username
+            header: X-Jwt-Username
+          - claim: tid
+            header: X-Tenant-ID
+          - claim: tcode
+            header: X-Tenant-Code
+        # 从 Authorization: Bearer <token> 取 JWT（默认值，此处显式声明避免依赖隐式默认）。
+        from_headers:
+          - name: Authorization
+            value_prefix: "Bearer "
+        clock_skew_seconds: 60
+        # 必须为 true：后端仍要校验 Redis 会话吊销与租户状态，
+        # 不能仅凭网关注入的 X-Tenant-ID 信任租户身份。
+        keep_token: true
+  # ⚠️ ingress 名不带 namespace 前缀。all-in-one 的 file 后端以文件名作资源名，
+  #    写成 higress-system/devops-system 永远匹配不上，插件会静默不动作（无任何日志）。
+  matchRules:
+    # 只挂主路由与灰度定向路由；canary 由 Higress 合并进主路由，无需单列。
+    # 刻意不含 devops-system-public（login / refresh / jwks.json 必须匿名）。
+    - ingress:
+        - devops-system
+        - devops-system-gray-route
+      # 官方明确：同一规则内「鉴权配置」与「认证配置」不可共存。
+      # 因此规则里只写 allow（授权：允许哪个 consumer 访问本路由），
+      # 认证配置（consumers/jwks）统一放在实例级 defaultConfig。
+      #
+      # ⚠️ Higress 2.2.3 实测坑：matchRules.config 里若内联 consumers 数组，
+      #   pilot 解析失败并**静默跳过整个插件**——无错误日志，
+      #   gateway.log 不出现 fetching image plugins/jwt-auth，请求直接穿透到后端。
+      #   验证插件是否真的加载：grep 'fetching image plugins/jwt-auth' gateway.log，
+      #   或看无 token 请求是否返回 jwt-auth 的 "Jwt is missing"
+      #   （应用层 401 是信封格式 {"code":401,...}，插件 401 是纯文本 Jwt is missing）。
+      #
+      # ⚠️ config 里也不能只写 {}：那会整体替换 defaultConfig，consumer 名单变空，
+      #   真 token 也会被 403 Access Denied。必须带 allow 指回 defaultConfig 的 consumer。
+      config:
+        allow:
+          - devops-system

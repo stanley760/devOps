@@ -8,18 +8,17 @@ metadata:
   namespace: higress-system
   annotations:
     higress.io/destination: devops-system-gray.DEVOPS-GROUP.public.nacos
-    # 与主路由同口径注入网关身份头，否则灰度路由经网关的请求会被应用层守卫拦截。
-    # 必须是 control-update（覆盖），add 为拼接，客户端伪造头将生效。密钥须与
-    # devops-system 的 gateway.token 一致，生产由密管注入。
-    higress.io/request-header-control-update: |
-      X-Gateway-Token shared-gateway-token-change-me
+    # 流量入口身份由 jwt-auth 插件注入的 JWT claims 表达，无需静态身份头注解。
+    # 本 ingress 已在 jwt-auth 的 matchRules 中显式列出，故灰度定向流量同样受鉴权。
 spec:
   ingressClassName: higress
   rules:
     - host: gray.devops.local
       http:
         paths:
-          - path: /api
+          # ⚠️ 此前误写为 /api，但后端 huma 路由挂在 /system 前缀下（systemAPIPrefix），
+          # 该前缀匹配到的请求全被后端 404，灰度定向验证实际从未真正跑到灰度实例。
+          - path: /system
             pathType: Prefix
             backend:
               resource:

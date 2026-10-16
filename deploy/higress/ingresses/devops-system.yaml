@@ -5,19 +5,15 @@ metadata:
   namespace: higress-system
   annotations:
     higress.io/destination: devops-system.DEVOPS-GROUP.public.nacos:9999
-    # 流量入口强制收口（第二层）：以「覆盖」语义注入网关身份头，
-    # 应用层 devops-infra/security/gateway.Enforce 用常量时间比较校验该头，
-    # 不匹配一律 403。docker compose 无 NetworkPolicy，这是唯一在非 K8s
-    # 形态下也真正强制的手段。
+    # 流量入口收口已改为 JWT 化：
+    #   - 网关侧：wasmplugins/jwt-auth-2.0.0.yaml 验签 Authorization 头，
+    #     通过 claims_to_headers 覆盖注入 X-Tenant-ID / X-Jwt-Uid 等内部头；
+    #   - 应用侧：devops-infra/security/gateway.Enforce 独立校验 JWT。
     #
-    # 必须用 control-update 而非 control-add：add 是把值拼接在原值之后，
-    # 客户端自带 X-Gateway-Token 会与之共存并被应用侧比对命中；update 才会
-    # 无条件覆盖客户端同名头，使伪造失效。这是整套机制的成败点。
-    #
-    # 密钥必须与 devops-system 的 gateway.token 一致，生产由密管注入；
-    # 此处为本地默认值，禁止将生产密钥提交入库。
-    higress.io/request-header-control-update: |
-      X-Gateway-Token shared-gateway-token-change-me
+    # 原「注入静态 X-Gateway-Token + 常量时间比较」的机制已移除：该凭据不表达身份、
+    # 无过期、无吊销，泄露即无限重放，且需在 ingress 与配置间维护共享密钥。
+    # 登录/刷新/jwks.json 由 devops-system-public.yaml 承载（匿名），
+    # 靠 Higress 最长前缀匹配绕开 jwt-auth——插件按 Ingress 资源挂载，不支持路径匹配。
   creationTimestamp: "2026-09-28T09:06:38Z"
   labels:
     higress.io/domain_higress-default-domain: "true"

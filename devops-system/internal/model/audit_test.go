@@ -12,6 +12,13 @@ import (
 )
 
 func TestBaseModelAuditHooks(t *testing.T) {
+	// 显式装配审计操作者解析：共用 BaseModel 的 BeforeCreate/BeforeUpdate 经
+	// commonmodel 的进程级配置取认证用户名。不装的话 creator/updater 会退化为
+	// system——**静默失效且不报错**，正因如此本测试必须自己装配而不依赖其他测试的副作用。
+	//
+	// 本测试的记录显式指定 ID（model.BaseModel{ID: 1}），故不需要发号器。
+	model.ConfigureAuditActor(model.AuditActorFromContext)
+
 	db, err := gorm.Open(sqlite.Open("file:model_audit_hooks?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)

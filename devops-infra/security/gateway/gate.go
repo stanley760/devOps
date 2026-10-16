@@ -1,37 +1,28 @@
 // Package gateway 提供「流量必须经由网关进入」的应用层强制守卫。
 //
-// 背景：Higress 只是可绕过的旁路边由。仅靠 compose 的 expose（不发布宿主机端口）
-// 无法阻止同一 docker network 内的其他容器直连业务端口；即使限定为 K8s，Pod 内
-// 任意进程也能直连。docker compose 形态更无 NetworkPolicy 可用。因此在应用层做
-// 一次强制校验，使「未经过网关的直连请求」在进入业务逻辑前即被拒绝。
-//
-// 机制：网关侧以 override 语义注入 X-Gateway-Token（覆盖客户端同名头，见
-// deploy/higress/wasmplugins/gateway-identity.yaml），本中间件用常量时间比较校验。
-// 客户端自行携带该头无效——网关侧的覆盖语义保证到达这里的值只可能来自网关。
-//
-// 不变式：
-//   - secret 为空时中间件直通（不启用守卫），保持 dev/测试形态零改动；
-//   - 校验失败一律 403，且不泄露原因（避免探测者区分「头缺失」与「头错误」）；
-//   - 放行名单内的端点（健康检查、Prometheus 抓取等）不经网关，仍可直连。
 package gateway
 
 import (
-	"crypto/subtle"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	commonResp "github.com/stanley760/devops/devops-common/response"
+	securitymw "github.com/stanley760/devops/devops-infra/security/middleware"
 )
 
-// HeaderToken 网关注入的可信身份头。客户端同名头会被网关覆盖，故不可伪造。
-const HeaderToken = "X-Gateway-Token"
+// HeaderTenant 网关 jwt-auth 的 claims_to_headers 注入的租户头（override 语义）。
+// 本守卫只做「必须携带有效 JWT」的收口，不信任该头——租户身份一律以 token claims 为准。
+const HeaderTenant = "X-Tenant-ID"
 
 // Options 守卫配置。
 type Options struct {
-	// Secret 为网关与应用共享的密钥。空串表示不启用守卫（直通）。
-	Secret string
+	// RequireJWT 为 true 时启用守卫；false 时直通。
+	RequireJWT bool
+	// Authenticator 提供 Bearer JWT 的独立校验（签名 + 会话态）。
+	// 为 nil 且 RequireJWT 为 true 时 fail-closed。
+	Authenticator securitymw.BearerAuthenticator
 	// ExemptPaths 为免校验路径（精确匹配），如健康检查与指标端点。
 	ExemptPaths []string
 	// ExemptPrefixes 为免校验路径前缀（精确匹配），如 /apidoc。
@@ -40,22 +31,31 @@ type Options struct {
 
 // Config 由业务配置段映射而来，便于按环境开关。
 type Config struct {
-	// RequireToken 为 true 时启用守卫；false 时直通。
-	RequireToken bool `mapstructure:"require_token"`
-	// Token 为共享密钥，生产必须由密钥管理注入，禁止提交真实值。
-	Token string `mapstructure:"token"`
+	// RequireJWT 为 true 时启用守卫；false 时直通。
+	RequireJWT bool `mapstructure:"require_jwt"`
 	// ExemptPaths 追加免校验的精确路径。
 	ExemptPaths []string `mapstructure:"exempt_paths"`
 }
 
-// Enforce 返回流量入口守卫中间件。
+// Enforce 返回流量入口守卫中间件：要求请求携带可独立校验通过的 Bearer JWT。
 //
-// secret 为空时返回直通中间件：这样未启用守卫的环境（本地 go run、单测）
-// 无需任何额外配置，且不会因为漏配密钥导致全站 403。
-func Enforce(secret string, exemptPaths, exemptPrefixes []string) gin.HandlerFunc {
-	if secret == "" {
-		slog.Info("网关守卫未启用（未配置共享密钥），流量入口不做强制校验")
+// requireJWT 为 false 时返回直通中间件，使未启用守卫的环境（本地 go run、单测）
+// 无需任何额外配置，且不会因为漏配导致全站 401。
+func Enforce(requireJWT bool, authn securitymw.BearerAuthenticator, exemptPaths, exemptPrefixes []string) gin.HandlerFunc {
+	if !requireJWT {
+		slog.Info("网关守卫未启用（gateway.require_jwt=false），流量入口不做强制校验")
 		return func(c *gin.Context) { c.Next() }
+	}
+	if authn == nil {
+		// fail-closed：守卫已声明启用却没装配校验器时必须拒绝，
+		// 否则等于全站放行，收口形同虚设且无任何告警。
+		slog.Error("网关守卫已启用但未装配 JWT 校验器，将拒绝全部非放行请求")
+		return func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, commonResp.BaseResponse[any]{
+				Code: http.StatusUnauthorized,
+				Msg:  "请求必须经由网关访问",
+			})
+		}
 	}
 
 	exact := make(map[string]struct{}, len(exemptPaths))
@@ -90,18 +90,20 @@ func Enforce(secret string, exemptPaths, exemptPrefixes []string) gin.HandlerFun
 			return
 		}
 
-		got := c.GetHeader(HeaderToken)
-		// 常量时间比较：避免按字节短路带来的时序侧信道。
-		if subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
-			// WARN 而非 ERROR：这是绕过网关的流量，属可疑但未必是攻击
-			// （可能是运维误操作、内部探活配错）。记录足以定位的字段。
-			slog.Warn("拒绝未经网关的请求",
+		// 不信任网关注入的租户头：租户身份一律以 token claims 为准，
+		// 避免网关配置失误或被绕过时出现越权。此处仅记录，便于排查注入是否生效。
+		_, err := authn.Authenticate(c.Request.Context(), c.GetHeader("Authorization"))
+		if err != nil {
+			// WARN 而非 ERROR：多半是绕过网关的直连流量（内部探活未配网关、
+			// 运维误操作），可疑但未必是攻击。记录足以定位的字段，不记录凭据本身。
+			slog.Warn("拒绝未经有效身份凭据的请求",
 				"method", c.Request.Method,
 				"path", c.Request.URL.Path,
 				"client_ip", c.ClientIP(),
+				"gateway_tenant", c.GetHeader(HeaderTenant),
 			)
-			c.AbortWithStatusJSON(http.StatusForbidden, commonResp.BaseResponse[any]{
-				Code: http.StatusForbidden,
+			c.AbortWithStatusJSON(http.StatusUnauthorized, commonResp.BaseResponse[any]{
+				Code: http.StatusUnauthorized,
 				Msg:  "请求必须经由网关访问",
 			})
 			return
@@ -110,10 +112,7 @@ func Enforce(secret string, exemptPaths, exemptPrefixes []string) gin.HandlerFun
 	}
 }
 
-// EnforceFromConfig 由业务配置装配守卫。RequireToken 为 false 或 Token 为空时直通。
-func EnforceFromConfig(cfg Config, exemptPaths, exemptPrefixes []string) gin.HandlerFunc {
-	if !cfg.RequireToken {
-		return Enforce("", nil, nil)
-	}
-	return Enforce(cfg.Token, append(append([]string{}, exemptPaths...), cfg.ExemptPaths...), exemptPrefixes)
+// EnforceFromConfig 由业务配置装配守卫。RequireJWT 为 false 时直通。
+func EnforceFromConfig(cfg Config, authn securitymw.BearerAuthenticator, exemptPaths, exemptPrefixes []string) gin.HandlerFunc {
+	return Enforce(cfg.RequireJWT, authn, append(append([]string{}, exemptPaths...), cfg.ExemptPaths...), exemptPrefixes)
 }

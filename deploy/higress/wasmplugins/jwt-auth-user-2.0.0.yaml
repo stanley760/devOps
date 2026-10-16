@@ -1,0 +1,93 @@
+# JWT 认证（C 端 devops-user）—— 与 devops-system 的 jwt-auth-2.0.0.yaml 平行且独立
+#
+# ## 为什么必须是独立插件实例（而非合入 devops-system 那份）
+#
+# 两者签发方不同（issuer: devops vs devops-user，kid 也不同），若合进同一个
+# consumers 列表，则两边的 token 都会命中该插件的验签流程：
+#   - consumer 匹配是按 issuer + kid，理论上互不命中；
+#   - 但一旦配置写错（issuer 抄成同一个），就是 B 端 token 能访问 C 端接口，
+#     且**没有任何报错**——这是最危险的一类配置漂移。
+# 独立文件 + 独立 plugin-server 路径，也让 matchRules 能分别控制生效范围。
+#
+# ## 本插件的三个不可改项（都踩过坑）
+#
+# 1. `metadata.name` **不能叫 jwt-auth**：pilot 会走 Istio 原生分支
+#    （日志出现 `--tokenManagerPlugin=""` 与 `JwtRule: ""`），而 all-in-one 2.2.3
+#    既不识别 security.istio.io 资源、envoy 也无 jwt_authn filter，一律不加载。
+#    这里用 `jwt-auth-user-2.0.0`。
+# 2. `url` **必须用本地 plugin-server**：`oci://` 需 controller 主动拉取并落盘，
+#    file 后端 + all-in-one 下不触发。与本目录其余插件保持一致。
+# 3. `matchRules.config` 里**不能内联 consumers 数组**（pilot 解析失败并静默跳过整个
+#    插件，无任何日志）；也不能只写 `{}`（会整体替换 defaultConfig，真 token 也被
+#    403 Access Denied）。必须带 allow 指回 defaultConfig 的 consumer。
+#
+# 验证插件是否真的加载：
+#   docker compose -f deploy/docker-compose-dev.yml exec higress \
+#     sh -c 'grep -c "fetching image plugins/jwt-auth" /var/log/higress/gateway.log'
+# 或看无 token 请求是否返回**纯文本** `Jwt is missing`
+# （信封格式 {"code":401,...} 说明是应用层，插件没生效）。
+#
+# 公钥来源：devops-user/config/devops-user-dev.yaml 的 jwt.signing_key
+# （PKCS#8 RSA 2048）导出 n，e=65537(AQAB)，kid=devops-user-rs256-1、
+# iss=devops-user 与签发方严格一致，并做「私钥签名→公钥验签」闭环自校验
+# （Verified OK）。生产换密钥后必须重新导出本段，否则全量 401。
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: jwt-auth-user-2.0.0
+  namespace: higress-system
+  labels:
+    higress.io/resource-definer: higress
+    higress.io/wasm-plugin-name: jwt-auth
+    higress.io/wasm-plugin-built-in: "true"
+spec:
+  url: http://localhost:8002/plugins/jwt-auth/2.0.0/plugin.wasm
+  # 显式写 false：与 matchRules.config 的关系必须钉死在配置里，避免后来者误加 true。
+  defaultConfigDisable: false
+  defaultConfig:
+    # ⚠️ 必须为 false：true 会让插件对网关内**所有**路由全局生效，
+    #   包括 devops-user-public 承载的登录/注册 → 用户此时还没有 token → 无人能登录。
+    global_auth: false
+    consumers:
+      - name: devops-user
+        # 必须与 payload 里的 iss 逐字一致，否则 401 Jwt verification fails。
+        # ⚠️ 不可改成 devops：那会与 B 端 token 互相匹配，造成跨端越权。
+        issuer: devops-user
+        jwks: |
+          {
+            "keys": [
+              {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "kid": "devops-user-rs256-1",
+                "alg": "RS256",
+                "n": "zfxyyT7KcMsbAicxsv1GNQm-GkCVV1ogltuYDPD1JxN8V8VsvwLvmHolftqXTQaGh-85jaGPPD9_Y3Qc-Lwwz7bC2ej7ffnPdL07RHuublCaEGFvDjlZ8ZdX3H_UyCfatVmDfkNT0YIhm0nlvLXXEzAuFniMGO7WoAOZ8eQgloBdUxjhzbxYOOD0ATqw_JFUVW-5Dr5KYl5_j3oUFpTBgFilJNtnLAyGEm08mvdzZAuvFdbL6fo97aink7HP_moEvGPH3Xnk57rZ-FIEY3QI86jU2UcFskS9NZwyzaEnO6o2bUKO8lybecXOrknKNO34r2ikmOSrtmdsyHoM6ZKXdQ"
+              }
+            ]
+          }
+        # claims → 内部请求头。override 默认 true，客户端伪造同名头会被覆盖。
+        # ⚠️ C 端**刻意不注入 tid/tcode**：devops-user 无租户模型，
+        # 注入租户头反而会诱使后端误以为存在租户上下文。
+        claims_to_headers:
+          - claim: uid
+            header: X-Jwt-Uid
+          - claim: username
+            header: X-Jwt-Username
+        from_headers:
+          - name: Authorization
+            value_prefix: "Bearer "
+        clock_skew_seconds: 60
+        # 必须为 true：后端仍要校验 Redis 会话态（登出/封禁后立即失效），
+        # 不能仅凭网关注入的身份头信任请求。
+        keep_token: true
+  # ⚠️ ingress 名不带 namespace 前缀（all-in-one file 后端以文件名作资源名）。
+  matchRules:
+    # 只挂 C 端主路由；刻意不含 devops-user-public（登录/注册/jwks 必须匿名）。
+    - ingress:
+        - devops-user
+      # 官方明确：同一规则内「鉴权配置」与「认证配置」不可共存。
+      # 故规则内只写 allow，认证配置统一在 defaultConfig。
+      config:
+        allow:
+          - devops-user

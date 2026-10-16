@@ -84,10 +84,10 @@ server:
     - "192.168.0.0/16"
 
 # 流量入口守卫：dev 关闭。
-# 原因：dev 下业务服务以 go run 跑在宿主机（127.0.0.1:9999），容器内 Higress 发起
-# 的请求能通过校验，但本地 curl 直连调试会被 403，显著拖慢开发。
-# 需要验证守卫行为时改为 require_token: true 并用 curl -H 'X-Gateway-Token: ...'。
-# token 与 deploy/higress/ingresses/devops-system.yaml 的注解值保持一致。
+# 原因：dev 下业务服务以 go run 跑在宿主机（127.0.0.1:9999），本地 curl 直连调试
+# 会被 401，显著拖慢开发。
+# 需要验证守卫行为时改为 require_jwt: true，此时直连必须带有效 Bearer token：
+#   curl -H "Authorization: Bearer $(登录拿到的 access_token)" http://127.0.0.1:9999/system/api/v1/users
+# 经网关访问则由 Higress jwt-auth 插件先行验签，无需本地 token 配置。
 gateway:
-  require_token: false
-  token: "shared-gateway-token-change-me"
+  require_jwt: false

@@ -125,8 +125,8 @@ func TestRecordNormalizePreservesUnknownUserType(t *testing.T) {
 
 func TestClipClientMeta(t *testing.T) {
 	// 各字段造足够长的内容以真正触发截断（中文，验证按字符而非字节）。
-	longCN := strings.Repeat("城", 100)     // 100 字符，超过 MaxGeo(64)/MaxIP(50)
-	longUA := strings.Repeat("U", 600)      // 600 字符，超过 MaxUserAgent(512)
+	longCN := strings.Repeat("城", 100) // 100 字符，超过 MaxGeo(64)/MaxIP(50)
+	longUA := strings.Repeat("U", 600) // 600 字符，超过 MaxUserAgent(512)
 	meta := ClipClientMeta(ClientMeta{
 		IP:          longCN,
 		UserAgent:   longUA,

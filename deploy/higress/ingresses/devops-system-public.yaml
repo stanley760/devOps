@@ -1,0 +1,55 @@
+# 匿名端点专用路由：承载 jwt-auth 插件豁免的三个端点。
+#
+# 为什么必须独立成 ingress：jwt-auth 插件的 matchRules 只支持 ingress / domain /
+# service 三个字段，**不支持按 URL 路径匹配**。而主路由 devops-system 挂在 /system
+# 前缀下，登录接口 /system/api/v1/auth/login 正在该前缀之内。若把插件挂到主路由，
+# 登录会被强制校验 JWT → 无人能登录；且 access token 过期正是刷新的前提，
+# refresh 同样被拦将导致永远换不到新 token（系统自锁）。
+#
+# 解法：把三个匿名端点拆到独立 ingress，Higress 按**最长前缀匹配**命中它，
+# 从而绕开挂在 devops-system 上的 jwt-auth。
+#
+# 路径写全：前缀匹配下 /system/api/v1/auth/login 命中本路由，而
+# /system/api/v1/auth/refresh 同理。二者不可合并成 /system/api/v1/auth，
+# 否则该前缀下的其他端点（如改密）会一并被豁免。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-system-public
+  namespace: higress-system
+  annotations:
+    # 与主路由同目标。流量入口身份：匿名端点，由登录接口自身承担凭据校验。
+    # 旧注明的「刻意不注入 X-Gateway-Token」已无意义——静态身份头机制整体移除。
+    higress.io/destination: devops-system.DEVOPS-GROUP.public.nacos:9999
+  labels:
+    higress.io/resource-definer: higress
+spec:
+  ingressClassName: higress
+  rules:
+    - host: api.devops.local
+      http:
+        paths:
+          # 登录：签发 access + refresh token，必须匿名。
+          - path: /system/api/v1/auth/login
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 刷新：access token 过期后的唯一出路，必须匿名。
+          - path: /system/api/v1/auth/refresh
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 验签公钥：供其他服务自验签与人工排查，非业务流量。
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

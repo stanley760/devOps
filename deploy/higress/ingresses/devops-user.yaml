@@ -1,0 +1,43 @@
+# C 端主路由：只放需鉴权的业务接口。
+#
+# 与 B 端 devops-system.yaml 的差异：
+#   - 独立域名 user-api.devops.local：C 端与 B 端流量特征不同（用户量大、
+#     接口简单、几乎无后台审计），需要能分别限流、分别灰度、分别看访问日志。
+#     挂同一域名会导致灰度与限流策略难以区分。
+#   - 独立前缀 /user：与后端 systemAPIPrefix 对称（见 devops-user/internal/router）。
+#   - 目的地端口 10000。
+#
+# 鉴权：jwt-auth-user-2.0.0.yaml 通过 matchRules 的 ingress 名挂到本路由。
+# 登录/注册/jwks 由 devops-user-public.yaml 承载（匿名），靠最长前缀匹配绕开。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-user
+  namespace: higress-system
+  annotations:
+    higress.io/destination: devops-user.DEVOPS-GROUP.public.nacos:10000
+  labels:
+    higress.io/resource-definer: higress
+spec:
+  ingressClassName: higress
+  rules:
+    - host: user-api.devops.local
+      http:
+        paths:
+          # C 端业务接口（含 /user/api/v1/auth/logout 与 /user/api/v1/profile）。
+          # 运维端点（/metrics /apidoc /healthz /readyz）不经公网网关暴露。
+          - path: /user
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 验签公钥：供其他服务自验签与人工排查，非业务流量。
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

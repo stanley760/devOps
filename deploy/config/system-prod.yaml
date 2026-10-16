@@ -53,17 +53,17 @@ server:
     - "172.16.0.0/12"
     - "192.168.0.0/16"
 
-# 流量入口收口：拒绝未经 Higress 的直连请求。
-# 网关侧以 request-header-control-update 覆盖注入 X-Gateway-Token（见
-# deploy/higress/ingresses/devops-system.yaml），客户端自带同名头会被网关覆盖，
-# 因此不可伪造。docker compose 无 NetworkPolicy，这是非 K8s 形态下唯一真正
-# 强制的手段——expose 只挡住宿主机，挡不住同网络内的其他容器。
+# 流量入口收口：要求请求携带可独立校验通过的 Bearer JWT。
+# 网关侧已由 Higress jwt-auth 插件验签（deploy/higress/wasmplugins/jwt-auth-2.0.0.yaml），
+# 客户端伪造 Authorization 无效（签名验证 + Redis 会话吊销 + 租户状态检查）。
 #
-# token 必须与 ingress 注解中的值逐字一致。生产禁止使用此默认值，
-# 由密钥管理注入（与下方 jwt.signing_key 同一原则）。
+# docker compose 无 NetworkPolicy，网关可被同网络容器绕过且绕过时不经过任何插件，
+# 故应用层再校验一次（纵深防御）。K8s 形态下本层退化为 defense-in-depth。
+#
+# 旧配置 require_token / token（静态 X-Gateway-Token）已移除：该凭据不表达身份、
+# 无过期、无吊销，且明文散落，泄露即无限重放。改动见 .workbuddy/memory/2026-10-16.md。
 gateway:
-  require_token: true
-  token: "shared-gateway-token-change-me"
-  # 追加放行名单（相对路径）：/healthz /readyz /metrics 与 apidoc.base_path
-  # 已由代码统一放行，此处仅列额外业务端点。
+  require_jwt: true
+  # 追加放行名单（相对路径）：/healthz /readyz /metrics、login / refresh /
+  # jwks.json 与 apidoc.base_path 已由代码统一放行，此处仅列额外业务端点。
   exempt_paths: []

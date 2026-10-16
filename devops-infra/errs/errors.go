@@ -25,6 +25,7 @@ const (
 	CodeForbidden        = 403 // 无操作权限
 	CodeNotFound         = 404 // 资源不存在
 	CodeMethodNotAllowed = 405 // 请求方法不支持
+	CodeTooManyRequests  = 429 // 请求过于频繁（限流）
 	CodeInternal         = 500 // 服务器内部错误
 )
 
@@ -133,5 +134,6 @@ var (
 	ErrForbidden        = New(CodeForbidden, "无操作权限")
 	ErrNotFound         = New(CodeNotFound, "资源不存在")
 	ErrMethodNotAllowed = New(CodeMethodNotAllowed, "请求方法不支持")
+	ErrTooManyRequests  = New(CodeTooManyRequests, "请求过于频繁，请稍后再试")
 	ErrInternal         = New(CodeInternal, "服务器内部错误")
 )

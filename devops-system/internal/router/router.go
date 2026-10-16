@@ -18,8 +18,12 @@ import (
 // 模块及其依赖由 internal/app 装配；infra 不依赖任何业务类型。
 func NewRegister(docCfg config.APIDocConfig, authM *auth.Manager, modules Modules) httpinfra.Register {
 	return func(r *gin.Engine) {
-		// 验签公钥（RFC 7517 JWKS）：Higress jwt-auth 插件 jwksFromUrl / 服务自验签拉取
-		r.GET("/.well-known/jwks.json", jwksHandler(authM))
+		// 验签公钥（RFC 7517 JWKS）：供其他服务自验签与人工排查。
+		// 注意：Higress jwt-auth 插件**没有** jwksFromUrl 字段，公钥是内联在
+		// wasmplugins/jwt-auth-2.0.0.yaml 里的，故本端点对网关验签无用。
+		//（wasm-go 实现支持 remote_jwks，可指向此路径自动跟随轮换，但需该服务
+		//  先在 McpBridge 中可达，且拉取失败窗口内请求会被 fail-close 拒绝。）
+		r.GET(JWKSPath, jwksHandler(authM))
 
 		// huma API 恒装配（D5）：Enabled 只门控文档端点，路由注册不受影响。
 		humaAPI := apidoc.New(r, apidoc.Options{

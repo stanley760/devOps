@@ -298,19 +298,25 @@ AUTHN 阶段解析客户端 IP 归属地，URL 转义后注入 `X-Higress-Geo-Co
 `internal/dbinit/sql/data/t_system_menu.sql`）；落库前 dao 层按
 列宽截断 UA/Geo 头，超长头不会丢审计行。
 
-### 6.4 JWT 认证（生产必配，尚未落地）
+### 6.4 JWT 认证（已落地：`wasmplugins/jwt-auth-2.0.0.yaml`）
 
-生产环境应为 `api.devops.local` 配置 `jwt-auth` 插件，在网关完成第一道校验：
+网关侧第一道校验，由 `jwt-auth` 插件完成：
 
 1. 从 `Authorization: Bearer <token>` 读取 JWT，校验签名、`issuer=devops`、`exp`、`iat`；
-2. `claims_to_headers` 把 `tid`、`tcode` 等 Claims 转发为内部 Header，`override=true`
-   覆盖客户端同名 Header，防止伪造租户身份；
-3. 网关从 `/.well-known/jwks.json`（Ingress 已放行该路径）拉取验签公钥。
+2. `claims_to_headers` 把 `uid` / `username` / `tid` / `tcode` Claims 转发为内部 Header，
+   `override=true` 覆盖客户端同名 Header，防止伪造租户身份；
+3. 验签公钥**内联**在插件 yaml 的 `jwks` 字段中（RS256 公钥，插件文件仅含公钥可入库）。
+   ⚠️ Higress jwt-auth **没有 `jwksFromUrl` 字段**，故网关**不会**从
+   `/.well-known/jwks.json` 拉取——那个端点只服务「其他服务自验签」与人工排查。
 
-密钥策略：system 使用 HS256 时 Higress 配同一对称 JWK；生产推荐 **RS256**——
-system 持私钥签发，Higress 只配公钥 JWKS。**JWT 密钥不得写入本目录公开配置文件。**
+密钥策略：system 持 RS256 私钥签发，Higress 只配公钥 JWKS。
+**JWT 私钥不得写入本目录公开配置文件。**换密钥后必须重新导出插件里的公钥
+（`openssl rsa -noout -modulus` 导出 n，`e=65537`），否则全量 401。
+
 网关认证通过后，`devops-system` 的 JWT 中间件仍需保留：system 还负责 Redis 会话
 吊销检查、租户状态检查与租户上下文注入，不能仅凭 `X-Tenant-ID` 信任请求。
+
+插件配置里的三个坑与调试判据见「7.3 第二层：JWT 验签」。
 
 ---
 
@@ -335,8 +341,8 @@ system 持私钥签发，Higress 只配公钥 JWKS。**JWT 密钥不得写入本
 | --- | --- | --- | --- |
 | 第一层 网络 | K8s NetworkPolicy | **强制** | K8s |
 | 第一层 网络 | compose `edge`/`infra` 双网络 + `internal: true` | 部分强制（挡基础设施侧旁路） | Docker |
-| 第二层 网关 | `higress.io/request-header-control-update` 注入 `X-Gateway-Token` | 需配合第三层 | Docker / K8s |
-| 第三层 应用 | `devops-infra/security/gateway` 中间件校验，失败 403 | **强制** | Docker / K8s |
+| 第二层 网关 | `jwt-auth` 插件验签 JWT（`jwt-auth-2.0.0.yaml`） | 需配合第三层 | Docker / K8s |
+| 第三层 应用 | `devops-infra/security/gateway` 中间件独立校验 JWT，失败 401 | **强制** | Docker / K8s |
 
 **Docker 形态**：compose 里 `devops-system` 只 `expose: "9999"` 无 `ports`，宿主机层面
 已无法旁路；再叠加 `edge`/`infra` 网络隔离，MySQL/Redis/Nacos/etcd 容器不在业务网络内。
@@ -346,68 +352,125 @@ system 持私钥签发，Higress 只配公钥 JWKS。**JWT 密钥不得写入本
 `deploy/k8s/networkpolicy.yaml` 中 `allow-gateway-to-system` 让 9999 只接受来自
 `higress-system` namespace 的 `app=higress` Pod。
 
-### 7.3 第二层：身份头注入（成败点）
+### 7.3 第二层：JWT 验签（`jwt-auth` 插件）
 
-⚠️ **必须用 `request-header-control-update`，不能用 `request-header-control-add`。**
+插件配置见 `wasmplugins/jwt-auth-2.0.0.yaml`。要点：
 
-- `add`：把值**拼接在原值之后**。客户端自带 `X-Gateway-Token: xxx` 会与注入值共存，
-  应用侧比对仍可能命中 → 伪造头可通过整套机制。
-- `update`：**无条件覆盖**客户端同名头，客户端伪造失效。
+- `global_auth: false`（**必须**）：`true` 会让插件对网关内**所有**路由全局生效，
+  包括登录接口 → 用户还没有 token 却要求携带 → **无人能登录，系统自锁**。
+- `matchRules.ingress` = `[devops-system, devops-system-gray-route]`，
+  **刻意不含** `devops-system-public`。
+- `keep_token: true`：转发到后端时保留 JWT。后端仍要校验 Redis 会话吊销、
+  租户状态与租户上下文，不能仅凭网关注入的 `X-Tenant-ID` 信任租户身份。
+- 认证配置（`consumers` / `jwks`）放**实例级 `defaultConfig`**，规则内只写
+  鉴权 `config: { allow: [...] }`——官方要求同一规则内认证与鉴权不可共存。
 
-三份 ingress 都要注入（`devops-system.yaml` / `devops-system-canary.yaml` /
-`devops-system-gray-route.yaml`），漏掉任一份，命中该路由的请求会因缺少身份头被 403。
+#### Higress 2.2.3 all-in-one 的三个坑（均不报错误日志）
+
+1. **`url` 不能用 `oci://`**。file 后端 + all-in-one 下 controller 不拉镜像，
+   插件静默不加载。须用 `http://localhost:8002/plugins/jwt-auth/2.0.0/plugin.wasm`
+   （与本目录其余插件一致）。
+2. **`matchRules.config` 内联 `consumers` 数组 → 整个插件被静默跳过**。
+   pilot 解析失败不报错，请求直接穿透到后端。写 `config: {}` 也不行——
+   那会整体替换 `defaultConfig`，真 token 也会被 `403 Access Denied`。
+3. **`metadata.name` 不能叫 `jwt-auth`**。pilot 会走 Istio 原生分支
+   （日志出现 `--tokenManagerPlugin=""` 与 `JwtRule: ""`），而 all-in-one 2.2.3
+   既不识别 `security.istio.io` 资源、envoy 也无 `jwt_authn` filter，一律不加载。
+   改名为 `jwt-auth-2.0.0` 即可（wasm 文件路径不受影响）。
+
+#### 为什么匿名端点必须单独一个 ingress 文件
+
+插件按 **Ingress 资源**整体挂载，`matchRules` 只有 `ingress` / `domain` / `service`，
+**没有 path / prefix**。而主 ingress 的 `/system` 是 Prefix 前缀，本就覆盖登录路径——
+若登录写在同一文件里，插件一挂上去就把登录锁死。故 `login` / `refresh` / `jwks.json`
+拆到 `devops-system-public.yaml`，靠 Higress **最长前缀匹配**让这三个更精确的路径
+命中它，从而绕开插件。
+
+实测（同一 host `api.devops.local`）：`/system/api/v1/users` 无 token →
+`Jwt is missing`（被拦）；`/system/api/v1/auth/login` → 200（豁免成功）。
+
+#### 插件是否真的加载了
+
+**不要看 config_dump 的 ECDS**——all-in-one 下它始终为空，连生效的 cors 也一样。可靠判据：
+
+```bash
+docker compose -f deploy/docker-compose-dev.yml exec higress \
+  sh -c 'grep -c "fetching image plugins/jwt-auth" /var/log/higress/gateway.log'
+```
+
+或看无 token 请求的响应形态：**纯文本** `Jwt is missing` = 插件生效；
+信封格式 `{"code":401,"msg":"未登录或会话已过期"}` = 应用层，插件没生效。
 
 ### 7.4 第三层：应用守卫
 
-中间件位于 `devops-infra/security/gateway`，用 `crypto/subtle.ConstantTimeCompare`
-做**常数时间**比较（防时序侧信道），失败统一返回 403 且不区分「头缺失」与「头错误」
-（防探测）。挂载位置在 `devops-infra/http/server.go`：运维端点之后、业务路由之前，
-否则 `/healthz` `/readyz` `/metrics` 会被拦。
+中间件位于 `devops-infra/security/gateway`，要求请求携带**可独立校验通过**的
+Bearer JWT（签名 + Redis 会话态），失败统一返回 401 且不区分「缺凭据」与
+「凭据无效」（防探测）。挂载位置在 `devops-infra/http/server.go`：运维端点之后、
+业务路由之前，否则 `/healthz` `/readyz` `/metrics` 会被拦。
+
+**为什么网关验过了应用层还要再校验一次**：
+
+- jwt-auth 以 Ingress 资源为粒度挂载，无法表达「仅这些路径需鉴权」的细粒度策略，
+  本层承担细粒度收口；
+- compose 形态没有 NetworkPolicy，绕过网关时不经过任何插件；
+- K8s 形态下本层退化为 defense-in-depth，仍有价值。
 
 配置项（`deploy/config/system-prod.yaml`）：
 
 ```yaml
 gateway:
-  require_token: true
-  token: "shared-gateway-token-change-me"   # 必须与 ingress 注解逐字一致
-  exempt_paths: []
+  require_jwt: true
+  exempt_paths: []   # /healthz /readyz /metrics、login/refresh/jwks、apidoc 已由代码放行
 ```
 
-**secret 为空或 `require_token: false` 时守卫直通**，未启用环境零改动，也不会因
-漏配密钥导致全站 403。dev 环境刻意关闭：业务服务以 `go run` 跑在宿主机
-`127.0.0.1:9999`，本地 curl 直连调试会被 403 显著拖慢。
+**`require_jwt: false` 时守卫直通**，未启用环境零改动。dev 刻意关闭：业务服务以
+`go run` 跑在宿主机 `127.0.0.1:9999`，本地 curl 直连调试会被 401 显著拖慢。
+
+**fail-closed 不变式**：`require_jwt: true` 但未装配 JWT 校验器时**拒绝**而非放行，
+否则等于全站放行、收口形同虚设且无任何告警。
+
+放行名单中的匿名端点路径与 huma 注册同源（`devops-system/internal/router/operations.go`
+导出的 `AuthLoginPath` / `AuthRefreshPath` / `JWKSPath`），避免与
+`devops-system-public.yaml` 各写一份字符串而悄悄漂移——漂移后果是登录被锁死。
 
 ### 7.5 验证命令
 
 ```bash
-# 1) 确认 token 一致（两侧必须完全相同）
-grep -r "X-Gateway-Token" deploy/higress/ingresses/
-grep -A3 "^gateway:" deploy/config/system-prod.yaml
+# 1) 确认插件已加载（输出应为 1，非 0）
+docker compose -f deploy/docker-compose-dev.yml exec higress \
+  sh -c 'grep -c "fetching image plugins/jwt-auth" /var/log/higress/gateway.log'
 
-# 2) 经网关访问：应 200
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -H 'Host: api.devops.local' http://localhost:8080/system/actuator/health
+# 2) 匿名端点可访问（期望 200）
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: api.devops.local' \
+  http://localhost:8080/system/api/v1/auth/login
 
-# 3) 直连容器绕过网关：应 403（第三层守卫生效）
+# 3) 业务接口无 token：应 401（插件与应用层双重收口）
+curl -s -H 'Host: api.devops.local' \
+  http://localhost:8080/system/api/v1/users
+
+# 4) 登录拿 token
+TOKEN=$(curl -s -X POST -H 'Host: api.devops.local' -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<pwd>"}' \
+  http://localhost:8080/system/api/v1/auth/login | jq -r .data.access_token)
+
+# 5) 带 token：应 200
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: api.devops.local' \
+  -H "Authorization: Bearer $TOKEN" http://localhost:8080/system/api/v1/users
+
+# 6) 直连容器绕过网关：应 401（第三层守卫生效）
 docker compose -f deploy/docker-compose.yml exec devops-system \
-  wget -qO- --header='Host: x' http://127.0.0.1:9999/system/actuator/health
+  wget -qO- --header='Host: x' http://127.0.0.1:9999/system/api/v1/users
 
-# 4) 伪造身份头直连：仍应 403
-docker compose -f deploy/docker-compose.yml exec devops-system \
-  wget -qO- --header='X-Gateway-Token: shared-gateway-token-change-me' \
-  http://127.0.0.1:9999/system/actuator/health
-
-# 5) K8s 确认 NetworkPolicy 真的被 CNI 执行（见 networkpolicy.yaml 顶部警告）
+# 7) K8s 确认 NetworkPolicy 真的被 CNI 执行（见 networkpolicy.yaml 顶部警告）
 kubectl -n devops get networkpolicy
-# 判据：在 devops-system Pod 内 curl 其他 Pod（如 mysql:3306）应连接超时，
-#      仅网关来源可通。apply 成功不代表 CNI 执行，需实测。
 ```
 
 ### 7.6 常见误区
 
 - **只做 compose 网络隔离就以为收口了**：Docker 无端口级 ACL，同 edge 网络的容器
   仍可旁路。必须叠加第三层。
-- **用 `request-header-control-add`**：伪造头会生效，等于没做。必须 `update`。
+- **沿用静态共享密钥当流量入口凭据**（已废弃的 `X-Gateway-Token`）：不表达身份、
+  无过期、无吊销，明文散落在 ingress 与配置中，泄露即无限重放且审计无法归因。
 - **只改主 ingress 忘了 canary / gray 路由**：灰度流量全量 403。
 - **secret 配空**：`Enforce` 会直接直通（设计如此，避免误伤），但意味着收口静默失效。
   上生产前务必 grep 确认 token 非空。
@@ -588,9 +651,12 @@ kubectl apply -f deploy/k8s/networkpolicy.yaml
 ```
 
 K8s 形态下第一层收口是**真正强制**的，`devops-system` 被 NetworkPolicy 挡住后
-任何旁路都会连接超时（详见「7.2 三层模型」）。迁移时注意两处必须同步改：
-- `deploy/k8s/devops.yaml` 中 Secret 的 `gateway.token` 与 Ingress 注解的
-  `X-Gateway-Token` 需逐字一致，否则全部 403；
+任何旁路都会连接超时（详见「7.2 三层模型」）。迁移时注意三处必须同步改：
+- `deploy/higress/wasmplugins/jwt-auth-2.0.0.yaml` 里的内联公钥须与
+  `devops-system` 的 `jwt.signing_key` 对应（`kid` / `iss` 也要一致）。
+  wasm-go 实现也可改用 `remote_jwks` 指向 `/.well-known/jwks.json` 自动跟随轮换，
+  但要求该服务先在 McpBridge 中可达，且拉取失败窗口内请求会被 fail-close 拒绝；
+- `deploy/k8s/devops.yaml` 中 Secret 的 `gateway.require_jwt` 置 true；
 - `allow-observe-and-probe` 里的 `ipBlock.cidr` 要改成实际集群节点网段，
   放 `0.0.0.0/0` 等于没放；网段写错会导致 kubelet 探针失败、Pod 被反复重启。
 

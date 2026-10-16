@@ -1,0 +1,102 @@
+# C 端匿名端点路由：承载 jwt-auth-user 插件豁免的三个端点。
+#
+# 为什么必须独立成 ingress：jwt-auth 的 matchRules 只支持 ingress / domain /
+# service，**不支持按 URL 路径匹配**。而主路由 devops-user 挂在 /user 前缀下，
+# 登录 /user/api/v1/auth/login 正在该前缀之内。若把插件挂到主路由，登录会被强制
+# 校验 JWT → 用户此时还没有 token → 无人能注册/登录（系统自锁）。
+#
+# 解法：把匿名端点拆到独立 ingress，Higress 按**最长前缀匹配**命中它，
+# 从而绕开挂在 devops-user 上的 jwt-auth。
+#
+# 路径必须写全，不能合并：
+#   - 合并成 /user/api/v1/auth 会把 logout 一并豁免（logout 应需鉴权，
+#     否则任何人都能踢别人下线）；
+#   - 合并成 /user/api/v1 会把 profile 一并豁免（严重越权）。
+#
+# host 与 B 端的 api.devops.local 区分：两个服务都提供 /.well-known/jwks.json，
+# 同 host 下最长前缀匹配无法区分归属，会随机命中其中一个。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-user-public
+  namespace: higress-system
+  annotations:
+    # 匿名端点，凭据校验由登录接口自身承担。
+    higress.io/destination: devops-user.DEVOPS-GROUP.public.nacos:10000
+  labels:
+    higress.io/resource-definer: higress
+spec:
+  ingressClassName: higress
+  rules:
+    - host: user-api.devops.local
+      http:
+        paths:
+          # 登录：签发 access token，必须匿名。
+          - path: /user/api/v1/auth/login
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 注册：开放端点，必须匿名。
+          - path: /user/api/v1/auth/register
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 刷新：调用方此刻 access 已过期，要求携带 JWT 等于永远刷不出来，
+          # 必须与 login 同为匿名。
+          - path: /user/api/v1/auth/refresh
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 三方授权回调：三方平台重定向到此，用户此刻还没有本地 token，
+          # 必须匿名。安全性靠 state 一次性校验（防 CSRF），不靠登录态。
+          #
+          # ⚠️ 路径必须精确到 /user/api/v1/oauth/{provider}/callback。
+          # 若合并成 /user/api/v1/oauth，则 bind/start 等需要登录的接口
+          # 也会被豁免 → 未登录用户可发起绑定劫持。
+          - path: /user/api/v1/oauth/github/callback
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /user/api/v1/oauth/google/callback
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          - path: /user/api/v1/oauth/wechat/callback
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+          # 列出可用三方登录方式（前端据此渲染入口）。
+          - path: /user/api/v1/oauth/providers
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default
+
+          # 验签公钥：非业务流量。
+          - path: /.well-known/jwks.json
+            pathType: Prefix
+            backend:
+              resource:
+                apiGroup: networking.higress.io
+                kind: McpBridge
+                name: default

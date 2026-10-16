@@ -1,0 +1,151 @@
+# devops-user dev 环境覆盖：只保留差异项
+#
+# 本文件含 JWT 私钥（dev 用）。生产由密钥管理注入，禁止提交真实值。
+# devops-user 刻意使用**独立于 devops-system** 的密钥与 issuer/kid：
+# 两者 issuer 相同时，在网关 jwt-auth 的 consumers 里会互相匹配，
+# 导致 B 端 token 可访问 C 端接口（反之亦然）。
+# 对应网关插件：deploy/higress/wasmplugins/jwt-auth-user-2.0.0.yaml
+
+log:
+  level: debug            # debug | info | warn | error
+  dir: logs
+  console: true
+  format: text            # text | json
+  buffer: 4096
+  max_size: 50
+  max_backups: 10
+  max_age: 3
+  compress: gzip
+  rotation_interval: 24h
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  username: devops
+  password: devopspwd    # 与 docker-compose-dev.yml 的 MYSQL_PASSWORD 一致
+  database: devops
+  charset: utf8mb4
+  max_idle_conns: 20
+  max_open_conns: 100
+  conn_max_lifetime: 1h
+  conn_max_idletime: 10m
+  log_level: info
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: "123456"
+  db: 1                  # 与 devops-system 的 db 0 分隔，避免键空间互相污染
+  pool_size: 50
+
+jwt:
+  # RS256 私钥（PKCS#8 PEM）。C 端与 B 端必须不同密钥，见文件头说明。
+  signing_key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDN/HLJPspwyxsC
+    JzGy/UY1Cb4aQJVXWiCW25gM8PUnE3xXxWy/Au+YeiV+2pdNBoaH7zmNoY88P39j
+    dBz4vDDPtsLZ6Pt9+c90vTtEe65uUJoQYW8OOVnxl1fcf9TIJ9q1WYN+Q1PRgiGb
+    SeW8tdcTMC4WeIwY7tagA5nx5CCWgF1TGOHNvFg44PQBOrD8kVRVb7kOvkpiXn+P
+    ehQWlMGAWKUk22csDIYSbTya93NkC68V1svp+j3tqKeTsc/+agS8Y8fdeeTnutn4
+    UgRjdAjzqNTZRwWyRL01nDLNoSc7qjZtQo7yXJt5xc6uSco07fivaKSY5Ku2Z2zI
+    egzpkpd1AgMBAAECggEATZVD9qB7xzf4mDsC8ROMGfXtcB3bIeeEVs2m21j2PR2N
+    u9FUQC1u6NM4xCq4yf4nNZPY7YtoU5zm8iKNtvHKwLFpeoHSF4S7qpCLfiPHcy1Q
+    mdLY7VaUlfYW1aogDrNUIPHyIOBi9Yo59i9DJGyo8UU4VqZYvhtXIzW4Ce+OhqBs
+    xkVq+9W1ILjztgdrewvR+lLH45OtE/tj4MvwfUCcTdnWMoy8uuoQVxjdccgw5Ds/
+    TKmsoEUVrCOq0hN93CULgmbPtQHXrEnydPncadaNm/fZHrOZ2Ng4Y46WUfR3gxs5
+    4FYaKrdVU9+T8nidXbsTUFOdik7/S0mItOkK36DfkQKBgQD8SQxOZTNiaaIr2hgt
+    KJJ8h4FRzgTcKIP81Gmy6wSkkbGGT00guzeBuXcvYVkJJI1Eu1mv+nrSEhkaM3QU
+    FVlJIx8MCArccN2IwAW0h9wI105b5wwD4MH7nDgYV9Gu7gv+C01F9MjSns7uV1bR
+    c3SJ32G2z1r2jgMEO+1b1G1qywKBgQDRBOHgGZVFZJE/jjDk9XsJWyLbrMutSSgL
+    4EcASrTPfzQgEyEtwtvz3b12HJATQD009sqr6Fg9bIjiUV2i242Fd6Rf8p9lkxk7
+    0z0n3rc+b4OyVYldiSP+QGrtxqJxtiv2TXcQUH0s10NK2akW+TmJPo1xeuti/ru7
+    qIiLqCB+vwKBgQCUOLaqOHsADt/gs7oQjg3CbDpmPYxNbOBe4s1W+Q05Qv/x0RWX
+    bWcnKDgF9kPBQ2BcSVZgNeGDGm71HdXNFt3mQmQzRWZcLVN6zJaNgmScLSM0i4Jb
+    pOlTUm0CoFXpWKJjF3DG8RIr7HHXRikT1alad4uJRDpFMRpEmpDRqvS+EQKBgAdn
+    Bdza6xdvDVnT3lVtgDL/oEdpYjk72wg4pCsVejvTBHSSWN13BjUnyDrzngKghspm
+    Zx0ZeG6MdniVaxyGbAerCg4/2HdPc1hUDdlooNK8PkzFjLzcS4MIowDSxRQD4KCz
+    c6EHSLea1A5FkSB4KRp8NaQsN0PlQ57MxDE1/hifAoGAZ3dlb7fwGUF8RmoSPABc
+    9fKJsw5RkQi6nWCN9fe7kAYeptJd7bMUXTBlx7Pfg+7eyrXQyOCNW5d8uuj3AMKN
+    CN8iJ8ai75RnhgZDvBOJbycStr8OaLhhjDUVOiSIq0XL8/NlU1WMmBwsbRVxoB14
+    LkDuib6kJRvF6ubvmXmTO+o=
+    -----END PRIVATE KEY-----
+  key_id: devops-user-rs256-1
+  issuer: devops-user    # 须与网关 jwt-auth consumers[].issuer 逐字一致
+  access_expire: 2h
+  refresh_expire: 168h  # 会话 TTL；C 端首版无 refresh 端点，过期需重新登录
+
+idclient:
+  endpoint: "nacos:///devops-id"     # 三斜杠标准形式
+  batch: 100
+  low_water: 0.2
+  dial_timeout: 5s
+  call_timeout: 3s
+
+observability:
+  otlp_endpoint: "http://127.0.0.1:4318"
+  sampler_ratio: 1.0
+  metrics_enabled: true
+
+apidoc:
+  enabled: true          # dev 开启交互式文档（/apidoc），prod 必须关闭
+  base_path: /apidoc
+
+gateway:
+  # 本地进程开发：流量入口守卫默认关闭，便于 curl 直连 127.0.0.1:10000 调试。
+  # 验证守卫时置 require_jwt: true，此时直连业务接口必须带有效 Bearer token
+  #（登录拿到的 access_token）。
+  require_jwt: false
+
+# 登录失败限流与账号临时锁定。
+#
+# bcrypt 只能拖慢单次爆破，无法阻止高速尝试；C 端开放注册、用户名可枚举，
+# 必须叠加 IP 限流 + 账号锁定（两者缺一可被绕过）。
+#⚠️ 调大阈值前先评估：max_user_fails 过高会让撞库有收益，过低会误伤
+#   记不住密码的正常用户（他们应走 refresh 或找回密码）。
+login_lock:
+  enabled: true
+  max_ip_fails: 20           # 单 IP 5 分钟内最多 20 次失败
+  ip_window: 5m
+  max_user_fails: 5           # 同一账号 15 分钟内 5 次失败即锁定
+  user_window: 15m
+  lock_ttl: 15m
+
+# 三方登录（GitHub / Google / 微信）。
+#
+# ⚠️ client_secret 留空 = 该提供方「未配置」，前端隐藏入口。
+#    生产值必须由密钥管理注入，**禁止提交入库**。
+# ⚠️ redirect_url 必须与三方后台登记的完全一致（含协议、路径、尾斜杠）。
+oauth:
+  state_ttl: 10m
+  # 登录后跳回白名单（防 open redirect 钓鱼）。空列表 = 拒绝一切跳回地址。
+  redirect_whitelist:
+    - "https://app.example.com"
+    - "devops.local"
+  github:
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:10000/user/api/v1/oauth/github/callback"
+    auto_register: false      # 不自动建号：先登录再绑定，可做一致性校验
+    nickname_prefix: "GH:"
+  google:
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:10000/user/api/v1/oauth/google/callback"
+    scopes:
+      - openid
+      - https://www.googleapis.com/auth/userinfo.email
+      - https://www.googleapis.com/auth/userinfo.profile
+    auto_register: false
+    nickname_prefix: "Google:"
+  wechat:
+    #⚠️ 微信是**网站应用**扫码登录：填开放平台「网站应用」的 AppID，
+    #    不是公众号/小程序的 AppID（三套 AppID 互不相通，最常见的坑）。
+    client_id: ""
+    client_secret: ""          # AppSecret，开放平台可重置，泄露须立即重置
+    # ⚠️ 微信开放平台的「授权回调域」只填**域名**（不带协议/端口/路径），
+    #    且不接受 IP 与 localhost。本地调试须改 hosts 把域名指向 127.0.0.1。
+    #    本地 http 仅用于开发；生产必须 https。
+    redirect_url: "http://devops.local:10000/user/api/v1/oauth/wechat/callback"
+    # ⚠️ scopes 配了也会被忽略：网站应用只允许 snsapi_login（provider 内部强制）。
+    auto_register: false
+    nickname_prefix: "微信:"

@@ -1,0 +1,34 @@
+# devops-user（C端用户服务）基础配置
+#
+# 端口 10000：devops-system 用 9999、devops-id 用 9990(gRPC)/9991(metrics)，
+# 10000 避开已知占用（README 记录 9999、8848 曾被其他程序占用）。
+
+server:
+  port: 10000
+  read_timeout: 10s
+  write_timeout: 10s
+  trusted_proxies:          # 可信反向代理 IP 或 CIDR；不在代理后建议置空 []
+    - 127.0.0.1
+    - "::1"
+
+nacos:
+  enabled: true
+  endpoints:
+    - "127.0.0.1:8848"
+  namespace: ""
+  group: "DEVOPS_GROUP"
+  username: "nacos"
+  password: "nacos"
+  timeout: 5s
+  config:
+    data_ids:
+      - "devops-user.yaml"
+    group: "DEVOPS_GROUP"
+    timeout: 5s
+    required: false
+  registry:
+    service_name: "devops-user"
+    cluster: "DEFAULT"
+    weight: 1
+    meta:
+      service: "devops-user"

@@ -18,6 +18,22 @@ import (
 
 const systemAPIPrefix = "/system"
 
+// 匿名端点全路径。必须由 router 包导出、且与下方 huma 注册共用同一份定义，
+// 避免与 deploy/higress/ingresses/devops-system-public.yaml 或守卫放行名单
+// 各写一份字符串而悄悄漂移（漂移后果是登录被锁死或被误放行）。
+//
+// 这三个端点必须匿名：调用方此时还没有 token。Higress jwt-auth 的 matchRules
+// 以 Ingress 资源为粒度、不支持按路径匹配，故它们由独立 ingress 承载；
+// 应用层守卫也必须同步放行，否则直连（绕过网关）时登录同样会被拦。
+const (
+	// AuthLoginPath 登录端点，签发 access + refresh token。
+	AuthLoginPath = systemAPIPrefix + "/api/v1/auth/login"
+	// AuthRefreshPath 刷新端点，access token 过期后的唯一出路。
+	AuthRefreshPath = systemAPIPrefix + "/api/v1/auth/refresh"
+	// JWKSPath 验签公钥，供其他服务自验签与人工排查。
+	JWKSPath = "/.well-known/jwks.json"
+)
+
 // with 合并公共 Operation 字段并添加 devops-system 的接口前缀。
 func with(common huma.Operation, op huma.Operation) huma.Operation {
 	op.Path = systemAPIPrefix + op.Path

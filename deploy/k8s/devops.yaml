@@ -89,11 +89,12 @@ stringData:
     apidoc:
       enabled: false          # prod 必须关闭接口文档
       base_path: /apidoc
-    # 流量入口收口（应用层守卫）：必须与 Higress ingress 的
-    # higress.io/request-header-control-update 注入值逐字一致，否则全部 403。
+    # 流量入口收口（应用层守卫）：要求请求携带有效 Bearer JWT。
+    # 网关侧由 Higress jwt-auth 插件验签（deploy/higress/wasmplugins/jwt-auth-2.0.0.yaml），
+    # 应用层再校验一次作为纵深防御。K8s 下另有 NetworkPolicy 强制仅网关可访问 9999。
+    # 旧的静态 X-Gateway-Token（require_token / token）已移除。
     gateway:
-      require_token: true
-      token: "CHANGE_ME_SHARED_GATEWAY_TOKEN"   # 与 ingress 注解同步替换
+      require_jwt: true
       exempt_paths: []
     server:
       trusted_proxies: ["10.0.0.0/8"]   # 按实际 ingress/LB 网段调整；直连置 []

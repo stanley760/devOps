@@ -256,7 +256,7 @@ var serverCmd = &cobra.Command{
 			LowWater:    cfg.IDClient.LowWater,
 			CallTimeout: cfg.IDClient.CallTimeout,
 		})
-		model.SetIDGenerator(idc)
+		model.ConfigureModel(idc)
 
 		// 业务中间件套件（D7：业务依赖经 Deps 注入，nil 项由 NewKit 补生产默认绑定）。
 		kit := middleware.NewKit(authM, middleware.Deps{})
@@ -287,15 +287,24 @@ var serverCmd = &cobra.Command{
 		}
 		register := app.InitializeHTTP(cfg, kit, authM)
 
-		// 流量入口收口（第三层）：拒绝未经网关的直连请求。
-		// 网关侧以 request-header-control-update 覆盖注入 X-Gateway-Token
-		// （见 deploy/higress/ingresses/devops-system.yaml），客户端伪造无效。
-		// 运维端点不经网关，列入放行名单，否则健康检查与 Prometheus 抓取会被拦。
+		// 流量入口收口（第三层）：要求请求携带可独立校验通过的 Bearer JWT。
+		//
+		// 网关侧已由 Higress jwt-auth 插件验签（deploy/higress/wasmplugins/
+		// jwt-auth-2.0.0.yaml），本层是纵深防御：compose 形态没有 NetworkPolicy，
+		// 网关可被同网络容器绕过，绕过时不经过任何插件，故应用层再校验一次。
+		// jwt-auth 以 Ingress 资源为粒度挂载、无法按路径表达策略，本层承担细粒度收口。
+		//
+		// 放行名单内的端点不经网关，仍可直连：
+		//   - 健康检查与指标：容器编排探针与 Prometheus 抓取；
+		//   - login / refresh / jwks.json：匿名端点，用户此时尚无 token
+		//     （与 devops-system-public.yaml 保持同口径，否则无人能登录）；
+		//   - apidoc 挂载点：仅 dev/test 开启（apidoc.enabled 控制）。
 		guard := &httpinfra.GuardHooks{Guards: []gin.HandlerFunc{
-			gateway.EnforceFromConfig(cfg.Gateway,
-				// 健康检查与指标：容器编排与 Prometheus 直连抓取。
-				[]string{"/healthz", "/readyz", "/metrics"},
-				// 接口文档挂载点：仅 dev/test 开启（apidoc.enabled 控制）。
+			gateway.EnforceFromConfig(cfg.Gateway, authM,
+				[]string{
+					"/healthz", "/readyz", "/metrics",
+					router.AuthLoginPath, router.AuthRefreshPath, router.JWKSPath,
+				},
 				[]string{cfg.APIDoc.BasePath},
 			),
 		}}
